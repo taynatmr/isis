@@ -6,6 +6,8 @@
     <title>MeuSistema Pessoal</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Inter Font -->
@@ -149,6 +151,18 @@
         </div>
     </div>
 
+    <!-- LOGIN GOOGLE DRIVE -->
+    <div id="login-gate" class="hidden fixed inset-0 z-[60] bg-slate-900/95 items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center">
+            <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-teal-600 text-white flex items-center justify-center text-2xl"><i class="fa-solid fa-house-chimney"></i></div>
+            <h2 class="text-lg font-bold text-slate-800 mb-1">Meu Sistema</h2>
+            <p class="text-sm text-slate-500 mb-5">Entre com a conta Google do Drive para carregar suas informações.</p>
+            <button onclick="driveSignIn()" class="w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-xl font-bold text-sm shadow flex items-center justify-center space-x-2"><i class="fa-brands fa-google"></i><span>Entrar com Google</span></button>
+            <p id="login-gate-msg" class="text-xs text-rose-500 mt-3 min-h-[1rem]"></p>
+            <button onclick="showLoginGate(false)" class="text-[11px] text-slate-400 hover:text-slate-600 underline mt-2">Continuar sem entrar (dados só deste navegador)</button>
+        </div>
+    </div>
+
     <!-- GLOBAL MODAL CONTAINER -->
     <div id="global-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
         <div id="modal-content" class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-100 dark:border-slate-700 transform transition-all max-h-[90vh] overflow-y-auto">
@@ -262,7 +276,7 @@
             const db = await filesDB();
             return new Promise((resolve, reject) => {
                 const req = db.transaction('files').objectStore('files').get(id);
-                req.onsuccess = () => resolve(req.result);
+                req.onsuccess = () => { if (req.result) resolve(req.result); else driveFetchAttachment(id).then(resolve); };
                 req.onerror = () => reject(req.error);
             });
         }
@@ -278,6 +292,7 @@
                 const id = uid();
                 try {
                     await putFile(id, file);
+                    driveUploadAttachment(id, file).catch(console.error);
                     metas.push({ id, name: file.name, size: file.size, type: file.type || '', date: localDateStr() });
                 } catch (e) {
                     console.error(e);
@@ -370,6 +385,7 @@
 
         function saveAppData() {
             try {
+                appData._savedAt = new Date().toISOString();
                 localStorage.setItem('meusistema_pessoal_data', JSON.stringify(appData));
                 updateSyncStatus("Salvo localmente", "emerald");
             } catch (e) {
@@ -378,8 +394,9 @@
                 showToast("Armazenamento do navegador cheio. Remova anexos de orçamentos antigos.", "error");
             }
             if (directoryHandle) {
-                saveToFolderHandle();
+                scheduleFolderSave();
             }
+            scheduleDriveSave();
         }
 
         function updateSyncStatus(text, color) {
@@ -391,38 +408,306 @@
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full ${colorClass} animate-pulse"></span><span>${text}</span>`;
         }
 
+        // =====================================================
+        // BACKUP EM PASTA (vínculo persistente) + RESTAURAÇÃO
+        // =====================================================
+        const STORAGE_KEY = 'meusistema_pessoal_data';
+        const BACKUP_FILE = 'meusistema_backup.json';
+        const BACKUP_PREV = 'meusistema_backup_anterior.json';
+        let folderNeedsPermission = false;
+        let folderBackedUpOnce = false;
+        let folderSaveTimer = null;
+        let lastFolderSync = null;
+        let _pendingRestore = null; // { obj, label, onKeep }
+
+        // --- guarda o vínculo da pasta no IndexedDB (sobrevive ao recarregar) ---
+        function handlesDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open('meusistema_handles', 1);
+                req.onupgradeneeded = () => req.result.createObjectStore('handles');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+        async function persistHandle(h) {
+            try {
+                const db = await handlesDB();
+                await new Promise((res, rej) => {
+                    const tx = db.transaction('handles', 'readwrite');
+                    if (h) tx.objectStore('handles').put(h, 'backupDir');
+                    else tx.objectStore('handles').delete('backupDir');
+                    tx.oncomplete = res;
+                    tx.onerror = () => rej(tx.error);
+                });
+            } catch (e) { console.error('Não foi possível guardar o vínculo da pasta:', e); }
+        }
+        async function recoverHandle() {
+            try {
+                const db = await handlesDB();
+                return await new Promise((res, rej) => {
+                    const r = db.transaction('handles').objectStore('handles').get('backupDir');
+                    r.onsuccess = () => res(r.result || null);
+                    r.onerror = () => rej(r.error);
+                });
+            } catch (e) { return null; }
+        }
+
+        // --- utilidades ---
+        function dataCount(d) {
+            if (!d || typeof d !== 'object') return 0;
+            const h = d.habitacao || {};
+            const lists = [d.financeiro && d.financeiro.transactions, d.agenda, d.lembretes, d.hobbies, d.atalhos, d.metas,
+                           h.contributions, h.budgets, h.suppliers, h.docFolders, d.saude && d.saude.meds];
+            let n = lists.reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
+            n += Object.keys((d.saude && d.saude.waterLog) || {}).length;
+            n += Object.keys((d.saude && d.saude.medLog) || {}).length;
+            return n;
+        }
+        function looksLikeBackup(obj) {
+            return obj && typeof obj === 'object' && !Array.isArray(obj) &&
+                   (obj.profile || obj.financeiro || obj.habitacao || obj.saude || obj.agenda);
+        }
+        async function readFolderBackup() {
+            if (!directoryHandle) return null;
+            try {
+                const fh = await directoryHandle.getFileHandle(BACKUP_FILE);
+                const txt = await (await fh.getFile()).text();
+                return JSON.parse(txt);
+            } catch (e) { return null; }
+        }
+        async function hasFolderPermission(request = false) {
+            if (!directoryHandle) return false;
+            const opts = { mode: 'readwrite' };
+            if ((await directoryHandle.queryPermission(opts)) === 'granted') return true;
+            if (request && (await directoryHandle.requestPermission(opts)) === 'granted') return true;
+            return false;
+        }
+        function updateFolderLabel() {
+            const el = document.getElementById('current-folder-label');
+            if (!el) return;
+            if (driveToken) {
+                el.innerText = 'Google Drive conectado'; el.onclick = null; el.style.cursor = '';
+            } else if (!directoryHandle) {
+                el.innerText = driveAvailable() ? 'Drive desconectado' : 'Armazenamento Local Ativo';
+                el.onclick = null; el.style.cursor = '';
+            } else if (folderNeedsPermission) {
+                el.innerText = `Pasta: ${directoryHandle.name} — clique para reconectar`;
+                el.onclick = reconnectFolder; el.style.cursor = 'pointer';
+            } else {
+                el.innerText = `Pasta: ${directoryHandle.name}`;
+                el.onclick = null; el.style.cursor = '';
+            }
+        }
+        function refreshBackupTab() { if (currentActiveTab === 'backup') renderCurrentTabContent(); }
+
+        // --- gravação na pasta (com proteções) ---
+        function scheduleFolderSave() {
+            clearTimeout(folderSaveTimer);
+            folderSaveTimer = setTimeout(saveToFolderHandle, 300);
+        }
+        async function writeJsonFile(name, obj) {
+            const fh = await directoryHandle.getFileHandle(name, { create: true });
+            const w = await fh.createWritable();
+            await w.write(JSON.stringify(obj, null, 2));
+            await w.close();
+        }
+        async function saveToFolderHandle() {
+            if (!directoryHandle || folderNeedsPermission) return;
+            try {
+                const existing = await readFolderBackup();
+                // PROTEÇÃO: nunca troca um backup com dados por um estado vazio
+                if (existing && dataCount(existing) > 0 && dataCount(appData) === 0) {
+                    updateSyncStatus('Pasta tem dados: restaure antes', 'amber');
+                    return;
+                }
+                // guarda uma cópia do backup anterior (uma vez por sessão)
+                if (existing && !folderBackedUpOnce) {
+                    await writeJsonFile(BACKUP_PREV, existing);
+                    folderBackedUpOnce = true;
+                }
+                await writeJsonFile(BACKUP_FILE, appData);
+                lastFolderSync = new Date();
+                updateSyncStatus('Sincronizado na Pasta', 'emerald');
+                refreshBackupTab();
+            } catch (err) {
+                console.error(err);
+                if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+                    folderNeedsPermission = true;
+                    updateFolderLabel();
+                    updateSyncStatus('Reconectar pasta de backup', 'amber');
+                } else {
+                    updateSyncStatus('Erro ao gravar na pasta', 'rose');
+                }
+            }
+        }
+
+        // --- restauração ---
+        function applyTheme() {
+            if (appData.profile && appData.profile.theme === 'dark') document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+        }
+        function restoreFromObject(obj) {
+            if (!looksLikeBackup(obj)) throw new Error('Arquivo de backup inválido');
+            const clean = JSON.parse(JSON.stringify(obj));
+            if (!clean.profile) clean.profile = { name: 'Samuel & Tayná', theme: 'light' };
+            ['agenda', 'lembretes', 'hobbies', 'atalhos', 'metas'].forEach(k => { if (!Array.isArray(clean[k])) clean[k] = []; });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+            loadAppData();
+            saveAppData();
+            applyTheme();
+            renderCurrentTabContent();
+        }
+        function downloadCurrentData(prefix) {
+            const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${prefix}_${localDateStr()}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
+        function exportBackupDownload() {
+            downloadCurrentData('meusistema_backup');
+            showToast('Backup baixado!', 'success');
+        }
+        function showRestoreModal(obj, label, onKeep, keepText) {
+            _pendingRestore = { obj, label, onKeep };
+            const incoming = dataCount(obj), current = dataCount(appData);
+            const warn = incoming === 0
+                ? `<div class="p-3 rounded-xl bg-amber-50 text-amber-700 text-xs font-semibold mb-4">Atenção: este backup está vazio (0 registros). Restaurar vai apagar os dados atuais.</div>` : '';
+            showModal('Restaurar backup', `
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">Backup ${esc(label)}: <b>${incoming}</b> registros.<br>Dados atuais neste navegador: <b>${current}</b> registros.</p>
+                ${warn}
+                <p class="text-xs text-slate-500 mb-4">Antes de substituir, uma cópia dos dados atuais é baixada automaticamente.</p>
+                <div class="space-y-2">
+                    <button onclick="confirmPendingRestore()" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Carregar este backup</button>
+                    <button onclick="cancelPendingRestore()" class="w-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold text-sm">${esc(keepText || 'Cancelar')}</button>
+                </div>
+            `);
+        }
+        function confirmPendingRestore() {
+            if (!_pendingRestore) return;
+            const { obj } = _pendingRestore;
+            _pendingRestore = null;
+            try {
+                if (dataCount(appData) > 0) downloadCurrentData('meusistema_antes_de_restaurar');
+                restoreFromObject(obj);
+                closeModal();
+                showToast('Backup restaurado com sucesso!', 'success');
+            } catch (e) {
+                console.error(e);
+                showToast('Não foi possível restaurar: ' + e.message, 'error');
+            }
+        }
+        function cancelPendingRestore() {
+            const p = _pendingRestore;
+            _pendingRestore = null;
+            closeModal();
+            if (p && p.onKeep) p.onKeep();
+        }
+        function importBackupFile(input) {
+            const f = input.files && input.files[0];
+            input.value = '';
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const obj = JSON.parse(reader.result);
+                    if (!looksLikeBackup(obj)) throw new Error('formato não reconhecido');
+                    showRestoreModal(obj, `do arquivo "${f.name}"`, null, 'Cancelar');
+                } catch (e) {
+                    showToast('Arquivo inválido: ' + e.message, 'error');
+                }
+            };
+            reader.readAsText(f);
+        }
+        async function loadFromFolderManual() {
+            if (!directoryHandle) return;
+            if (!(await hasFolderPermission(true))) { showToast('Permissão da pasta negada.', 'warning'); return; }
+            folderNeedsPermission = false; updateFolderLabel();
+            const existing = await readFolderBackup();
+            if (!existing) { showToast('Nenhum backup encontrado nessa pasta.', 'warning'); return; }
+            showRestoreModal(existing, 'da pasta vinculada', null, 'Cancelar');
+        }
+
+        // --- vínculo / reconexão ---
+        async function reconcileWithFolder() {
+            const existing = await readFolderBackup();
+            const localN = dataCount(appData), folderN = dataCount(existing);
+            if (existing && folderN > 0 && localN === 0) {
+                restoreFromObject(existing);
+                showToast('Dados restaurados da pasta de backup!', 'success');
+                return;
+            }
+            if (existing && folderN > localN) {
+                showRestoreModal(existing, 'da pasta vinculada (tem mais dados que este navegador)',
+                    () => saveToFolderHandle(), 'Manter os dados atuais');
+                return;
+            }
+            await saveToFolderHandle();
+        }
         async function selectFolderForBackup() {
             try {
                 if (!window.showDirectoryPicker) {
-                    showToast("Seu navegador não suporta a API de Pastas.", "warning");
+                    showToast('Seu navegador não suporta a API de Pastas. Use o Chrome/Edge ou baixe o backup manualmente.', 'warning');
                     return;
                 }
-                directoryHandle = await window.showDirectoryPicker();
-                document.getElementById('current-folder-label').innerText = `Pasta: ${directoryHandle.name}`;
-                showToast(`Pasta "${directoryHandle.name}" vinculada!`, "success");
-                saveAppData();
+                const h = await window.showDirectoryPicker({ mode: 'readwrite' });
+                directoryHandle = h;
+                await persistHandle(h);
+                folderNeedsPermission = false;
+                folderBackedUpOnce = false;
+                updateFolderLabel();
+                showToast(`Pasta "${h.name}" vinculada!`, 'success');
+                await reconcileWithFolder();
+                refreshBackupTab();
             } catch (err) {
-                if (err.name !== 'AbortError') console.error(err);
+                if (err.name !== 'AbortError') { console.error(err); showToast('Erro ao vincular a pasta.', 'error'); }
             }
         }
-
-        async function saveToFolderHandle() {
-            if (!directoryHandle) return;
+        async function reconnectFolder() {
+            if (!directoryHandle) return selectFolderForBackup();
             try {
-                const fileHandle = await directoryHandle.getFileHandle('meusistema_backup.json', { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(JSON.stringify(appData, null, 2));
-                await writable.close();
-                updateSyncStatus("Sincronizado na Pasta", "emerald");
-            } catch (err) {
-                console.error(err);
+                if (await hasFolderPermission(true)) {
+                    folderNeedsPermission = false;
+                    updateFolderLabel();
+                    showToast('Pasta reconectada!', 'success');
+                    await reconcileWithFolder();
+                    refreshBackupTab();
+                } else {
+                    showToast('Permissão negada. A pasta continua desconectada.', 'warning');
+                }
+            } catch (e) {
+                console.error(e);
+                await selectFolderForBackup();
             }
         }
-
-        function triggerManualSave() {
-            saveAppData();
-            showToast("Dados salvos com sucesso!", "success");
+        async function initBackupFolder() {
+            if (!window.showDirectoryPicker) return;
+            const h = await recoverHandle();
+            if (!h) return;
+            directoryHandle = h;
+            try {
+                if (await hasFolderPermission(false)) {
+                    folderNeedsPermission = false;
+                    updateFolderLabel();
+                    await reconcileWithFolder();
+                } else {
+                    folderNeedsPermission = true;
+                    updateFolderLabel();
+                    updateSyncStatus('Reconectar pasta de backup', 'amber');
+                    showToast('Clique em "Salvar" para reconectar a pasta de backup.', 'warning');
+                }
+            } catch (e) { console.error(e); }
+            refreshBackupTab();
         }
+
+        async function triggerManualSave() {
+            if (directoryHandle && folderNeedsPermission) { await reconnectFolder(); return; }
+            saveAppData();
+            showToast('Dados salvos com sucesso!', 'success');
+        }
+
 
         function switchTab(tabId) {
             currentActiveTab = tabId;
@@ -518,6 +803,9 @@
                             <p class="text-xs text-slate-500 mt-0.5">Painel de controle integrado e rápido.</p>
                         </div>
                         <div class="flex items-center gap-2">
+                            <button onclick="openIsis()" title="Dicas da ISIS" class="bg-violet-100 hover:bg-violet-200 text-violet-700 font-bold px-3 py-2 rounded-xl text-xs shadow-sm transition flex items-center space-x-1.5">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i><span>ISIS</span>
+                            </button>
                             <button onclick="switchTab('agenda')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow transition-all flex items-center space-x-1.5">
                                 <i class="fa-solid fa-plus"></i>
                                 <span>Novo Compromisso</span>
@@ -1789,26 +2077,63 @@
                     </div>
                 </div>
             `;
+            container.firstElementChild.insertAdjacentHTML('beforeend', reportsCardHtml());
         }
 
         function renderBackup(container) {
+            const linked = !!directoryHandle;
+            const supported = !!window.showDirectoryPicker;
+            let statusHtml;
+            if (!supported) statusHtml = `<span class="text-amber-600">Este navegador não permite vincular pastas. Use o Chrome ou Edge, ou o backup manual abaixo.</span>`;
+            else if (!linked) statusHtml = `<span class="text-slate-500">Nenhuma pasta vinculada.</span>`;
+            else if (folderNeedsPermission) statusHtml = `<span class="text-amber-600">Pasta "${esc(directoryHandle.name)}" vinculada, mas precisa ser reconectada.</span>`;
+            else statusHtml = `<span class="text-emerald-600">Pasta "${esc(directoryHandle.name)}" sincronizando automaticamente${lastFolderSync ? ' (último: ' + lastFolderSync.toLocaleTimeString('pt-BR') + ')' : ''}.</span>`;
+
+            const btn = 'w-full sm:w-auto px-6 py-3 rounded-2xl text-sm font-bold shadow flex items-center justify-center space-x-2';
             container.innerHTML = `
                 <div class="space-y-6 max-w-3xl mx-auto">
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2">
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2">
                             <i class="fa-solid fa-cloud-arrow-down text-teal-500"></i>
                             <span>Backup & Sincronização com Pasta Local</span>
                         </h3>
-                        <p class="text-sm text-slate-500 mb-6">Selecione uma pasta no seu computador para sincronização automática em JSON.</p>
-                        <div class="space-y-4">
-                            <button onclick="selectFolderForBackup()" class="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow flex items-center justify-center space-x-2">
-                                <i class="fa-solid fa-folder-open"></i>
-                                <span>Selecionar Pasta de Backup Local</span>
+                        <p class="text-sm text-slate-500 mb-2">Escolha uma pasta no computador: o sistema grava <b>meusistema_backup.json</b> nela a cada alteração e lembra da pasta quando você reabre.</p>
+                        <p class="text-sm mb-5">${statusHtml}</p>
+                        <div class="flex flex-col sm:flex-row sm:flex-wrap gap-3">
+                            <button onclick="selectFolderForBackup()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white">
+                                <i class="fa-solid fa-folder-open"></i><span>${linked ? 'Trocar pasta' : 'Selecionar Pasta de Backup Local'}</span>
                             </button>
+                            ${linked && folderNeedsPermission ? `
+                            <button onclick="reconnectFolder()" class="${btn} bg-amber-500 hover:bg-amber-600 text-white">
+                                <i class="fa-solid fa-plug"></i><span>Reconectar pasta</span>
+                            </button>` : ''}
+                            ${linked ? `
+                            <button onclick="loadFromFolderManual()" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                                <i class="fa-solid fa-rotate-left"></i><span>Carregar dados da pasta</span>
+                            </button>` : ''}
                         </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2">
+                            <i class="fa-solid fa-file-arrow-down text-teal-500"></i>
+                            <span>Backup manual (arquivo)</span>
+                        </h3>
+                        <p class="text-sm text-slate-500 mb-5">Registros salvos neste navegador: <b>${dataCount(appData)}</b>. Baixe um arquivo para guardar onde quiser, ou restaure a partir de um arquivo .json.</p>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <button onclick="exportBackupDownload()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white">
+                                <i class="fa-solid fa-download"></i><span>Baixar backup agora</span>
+                            </button>
+                            <button onclick="document.getElementById('restore-file-input').click()" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                                <i class="fa-solid fa-upload"></i><span>Restaurar de arquivo .json</span>
+                            </button>
+                            <input type="file" id="restore-file-input" accept=".json,application/json" class="hidden" onchange="importBackupFile(this)">
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-4">Os anexos (orçamentos, documentos) ficam guardados no navegador e não vão dentro do arquivo .json, apenas o nome deles.</p>
                     </div>
                 </div>
             `;
+            container.firstElementChild.insertAdjacentHTML('afterbegin', driveCardHtml());
         }
 
         function saveProfileSettings() {
@@ -2279,6 +2604,449 @@
         function editHabitacaoContrib(id) { openHabitacaoContribModal(id); }
         function deleteHabitacaoContrib(id) { appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
 
+        // =====================================================
+        // RELATÓRIOS (XLSX) — exportar / importar
+        // =====================================================
+        function normKey(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+        function parseDateAny(v) {
+            if (v instanceof Date && !isNaN(v)) return localDateStr(new Date(v.getTime() + 12 * 3600 * 1000));
+            if (typeof v === 'number' && v > 20000 && v < 80000) { const d = new Date(Math.round((v - 25569) * 86400000)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`; }
+            const s = String(v == null ? '' : v).trim();
+            let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+            m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+            if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+            return '';
+        }
+        function parseAmount(v) {
+            if (typeof v === 'number') return v;
+            let s = String(v == null ? '' : v).replace(/R\$|\s/g, '');
+            if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+            const n = Number(s);
+            return isNaN(n) ? 0 : n;
+        }
+        function rowGet(row, ...aliases) {
+            for (const k of Object.keys(row)) { if (aliases.includes(normKey(k))) return row[k]; }
+            return '';
+        }
+        const REPORT_DEFS = {
+            financas: { label: 'Finanças', sheet: 'Finanças', alias: ['financas', 'financeiro'],
+                head: ['Tipo', 'Status', 'Descrição', 'Valor', 'Categoria', 'Data'],
+                example: ['despesa', 'pago', 'Mercado', 150.5, 'Alimentação', '10/10/2026'],
+                rows: () => appData.financeiro.transactions.map(t => [t.type === 'receita' ? 'receita' : 'despesa', t.status || 'pago', t.desc, Number(t.amount), t.category, fmtBR(t.date)]) },
+            hobbies: { label: 'Hobbies', sheet: 'Hobbies', alias: ['hobbies', 'hobby'],
+                head: ['Título', 'Categoria', 'Status', 'Observações'],
+                example: ['Aprender violão', 'Música', 'Em Andamento', ''],
+                rows: () => appData.hobbies.map(h => [h.title, h.category, h.status, h.obs || '']) },
+            orcamentos: { label: 'Orçamentos', sheet: 'Orçamentos', alias: ['orcamentos', 'orcamento'],
+                head: ['Título', 'Fornecedor', 'Valor', 'Data', 'Status'],
+                example: ['Piso da sala', 'Casa do Piso', 4200, '15/10/2026', 'Pendente'],
+                rows: () => appData.habitacao.budgets.map(b => [b.title, b.supplier, Number(b.amount), fmtBR(b.date), b.status]) },
+            habitacao: { label: 'Movimentações Habitação', sheet: 'Habitação', alias: ['habitacao', 'movimentacoes', 'movimentacoes habitacao'],
+                head: ['Pessoa', 'Tipo', 'Valor', 'Descrição', 'Data'],
+                example: ['Samuel', 'aporte', 1000, 'Entrada do mês', '05/10/2026'],
+                rows: () => appData.habitacao.contributions.map(c => {
+                    const pe = appData.habitacao.people.find(x => x.id === c.personId);
+                    return [pe ? pe.name : '', c.type === 'retirada' ? 'retirada' : 'aporte', Number(c.amount), c.desc || '', fmtBR(c.date)];
+                }) }
+        };
+        function buildWorkbook(keys, template) {
+            const wb = XLSX.utils.book_new();
+            keys.forEach(k => {
+                const d = REPORT_DEFS[k];
+                const data = [d.head].concat(template ? [d.example] : d.rows());
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                ws['!cols'] = d.head.map(() => ({ wch: 20 }));
+                XLSX.utils.book_append_sheet(wb, ws, d.sheet);
+            });
+            return wb;
+        }
+        function exportReports(keys, template) {
+            if (typeof XLSX === 'undefined') { showToast('Biblioteca de planilhas não carregou (verifique a internet).', 'error'); return; }
+            const list = keys || Object.keys(REPORT_DEFS);
+            XLSX.writeFile(buildWorkbook(list, !!template), `${template ? 'Modelo' : 'Relatorio'}_MeuSistema_${localDateStr()}.xlsx`);
+            showToast(template ? 'Modelo baixado!' : 'Relatório exportado!', 'success');
+        }
+        function importReport(kind, input) {
+            const f = input.files && input.files[0];
+            input.value = '';
+            if (!f) return;
+            if (typeof XLSX === 'undefined') { showToast('Biblioteca de planilhas não carregou (verifique a internet).', 'error'); return; }
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const wb = XLSX.read(new Uint8Array(reader.result), { type: 'array', cellDates: true });
+                    const d = REPORT_DEFS[kind];
+                    let name = wb.SheetNames.find(n => d.alias.includes(normKey(n)));
+                    if (!name && wb.SheetNames.length === 1) name = wb.SheetNames[0];
+                    if (!name) throw new Error(`não achei a aba "${d.sheet}" na planilha`);
+                    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true });
+                    const res = applyImport(kind, rows);
+                    if (res.added === 0 && res.skipped === 0) { showToast('Nenhuma linha válida encontrada.', 'warning'); return; }
+                    saveAppData(); renderCurrentTabContent();
+                    showToast(`${d.label}: ${res.added} importados${res.skipped ? `, ${res.skipped} ignorados (repetidos ou incompletos)` : ''}.`, res.added ? 'success' : 'warning');
+                } catch (e) { console.error(e); showToast('Erro ao importar: ' + e.message, 'error'); }
+            };
+            reader.readAsArrayBuffer(f);
+        }
+        function applyImport(kind, rows) {
+            let added = 0, skipped = 0;
+            const today = localDateStr();
+            rows.forEach(r => {
+                if (kind === 'financas') {
+                    const desc = String(rowGet(r, 'descricao', 'desc')).trim();
+                    const amount = parseAmount(rowGet(r, 'valor'));
+                    if (!desc || !(amount > 0)) { skipped++; return; }
+                    const type = normKey(rowGet(r, 'tipo')).startsWith('rec') ? 'receita' : 'despesa';
+                    const status = normKey(rowGet(r, 'status')).startsWith('pend') ? 'pendente' : 'pago';
+                    const category = String(rowGet(r, 'categoria')).trim() || 'Geral';
+                    const date = parseDateAny(rowGet(r, 'data')) || today;
+                    if (appData.financeiro.transactions.some(t => t.desc === desc && Number(t.amount) === amount && t.date === date && t.type === type)) { skipped++; return; }
+                    appData.financeiro.transactions.push({ id: uid(), type, status, desc, amount, category, date, attachments: [] }); added++;
+                } else if (kind === 'hobbies') {
+                    const title = String(rowGet(r, 'titulo', 'hobby', 'nome')).trim();
+                    if (!title) { skipped++; return; }
+                    const category = String(rowGet(r, 'categoria')).trim() || 'Geral';
+                    const status = normKey(rowGet(r, 'status')).startsWith('fin') ? 'Finalizado' : 'Em Andamento';
+                    const obs = String(rowGet(r, 'observacoes', 'obs')).trim();
+                    if (appData.hobbies.some(h => h.title === title && h.category === category)) { skipped++; return; }
+                    appData.hobbies.push({ id: uid(), title, category, status, obs }); added++;
+                } else if (kind === 'orcamentos') {
+                    const title = String(rowGet(r, 'titulo', 'descricao')).trim();
+                    if (!title) { skipped++; return; }
+                    const supplier = String(rowGet(r, 'fornecedor')).trim() || 'Geral';
+                    const amount = parseAmount(rowGet(r, 'valor'));
+                    const date = parseDateAny(rowGet(r, 'data')) || today;
+                    const status = normKey(rowGet(r, 'status')).startsWith('aprov') ? 'Aprovado' : 'Pendente';
+                    if (appData.habitacao.budgets.some(b => b.title === title && b.supplier === supplier && Number(b.amount) === amount && b.date === date)) { skipped++; return; }
+                    appData.habitacao.budgets.push({ id: uid(), title, supplier, amount, date, status, fileName: '', fileData: '' }); added++;
+                } else if (kind === 'habitacao') {
+                    const amount = parseAmount(rowGet(r, 'valor'));
+                    if (!(amount > 0)) { skipped++; return; }
+                    const pname = normKey(rowGet(r, 'pessoa', 'nome'));
+                    const person = appData.habitacao.people.find(x => normKey(x.name) === pname) || appData.habitacao.people[0];
+                    const type = normKey(rowGet(r, 'tipo')).startsWith('ret') ? 'retirada' : 'aporte';
+                    const desc = String(rowGet(r, 'descricao', 'desc')).trim();
+                    const date = parseDateAny(rowGet(r, 'data')) || today;
+                    if (!person) { skipped++; return; }
+                    if (appData.habitacao.contributions.some(c => c.personId === person.id && c.type === type && Number(c.amount) === amount && c.date === date && (c.desc || '') === desc)) { skipped++; return; }
+                    appData.habitacao.contributions.push({ id: uid(), personId: person.id, type, amount, desc, date }); added++;
+                }
+            });
+            return { added, skipped };
+        }
+        function reportsCardHtml() {
+            const btn = 'px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center justify-center space-x-2';
+            const imp = (k) => `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700">
+                    <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">${REPORT_DEFS[k].label}</span>
+                    <div class="flex gap-2">
+                        <button onclick="exportReports(['${k}'])" class="text-xs text-teal-600 font-bold hover:underline">Exportar</button>
+                        <button onclick="document.getElementById('imp-${k}').click()" class="text-xs text-teal-600 font-bold hover:underline">Importar</button>
+                        <input type="file" id="imp-${k}" accept=".xlsx,.xls" class="hidden" onchange="importReport('${k}', this)">
+                    </div>
+                </div>`;
+            return `
+                <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2">
+                        <i class="fa-solid fa-file-excel text-teal-500"></i><span>Relatórios (Excel)</span>
+                    </h3>
+                    <p class="text-sm text-slate-500 mb-4">Exporte tudo numa planilha .xlsx ou importe linhas para cada tela. A importação <b>adiciona</b> registros (não apaga os existentes) e ignora linhas repetidas.</p>
+                    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+                        <button onclick="exportReports()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-solid fa-download"></i><span>EXPORTAR RELATÓRIO (todos)</span></button>
+                        <button onclick="exportReports(null, true)" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-table"></i><span>Baixar modelo de importação</span></button>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Importar relatórios</p>
+                    <div class="space-y-2">${['financas', 'hobbies', 'orcamentos', 'habitacao'].map(imp).join('')}</div>
+                </div>`;
+        }
+
+        // =====================================================
+        // ISIS — dicas e sugestões (regras locais, sem internet)
+        // =====================================================
+        function isisTips() {
+            const tips = [];
+            const R = v => 'R$ ' + money(v);
+            const today = localDateStr(), month = today.slice(0, 7);
+            const add = (icon, area, text, tone) => tips.push({ icon, area, text, tone: tone || 'info' });
+
+            // Finanças
+            const tx = appData.financeiro.transactions;
+            const mtx = tx.filter(t => (t.date || '').startsWith(month));
+            const rec = mtx.filter(t => t.type === 'receita').reduce((s, t) => s + Number(t.amount), 0);
+            const des = mtx.filter(t => t.type !== 'receita').reduce((s, t) => s + Number(t.amount), 0);
+            if (!tx.length) add('fa-wallet', 'Finanças', 'Ainda não há lançamentos. Registre receitas e despesas do mês para eu conseguir analisar para onde o dinheiro vai.');
+            else if (!mtx.length) add('fa-wallet', 'Finanças', 'Nenhum lançamento neste mês até agora. Manter o registro em dia é a base de qualquer planejamento.');
+            else {
+                if (des > rec) add('fa-triangle-exclamation', 'Finanças', `Neste mês as despesas (${R(des)}) passam das receitas (${R(rec)}). Vale rever os maiores gastos e adiar o que não for essencial.`, 'warn');
+                else if (rec > 0 && des / rec > 0.8) add('fa-triangle-exclamation', 'Finanças', `Os gastos já consomem ${Math.round(des / rec * 100)}% da receita do mês. Uma referência comum é 50% necessidades, 30% desejos e 20% reserva/objetivos.`, 'warn');
+                else if (rec > 0) add('fa-circle-check', 'Finanças', `Sobraram ${R(rec - des)} neste mês. Que tal separar uma parte para a reserva de emergência ou para o fundo da casa?`, 'good');
+                const cat = {};
+                mtx.filter(t => t.type !== 'receita').forEach(t => { cat[t.category] = (cat[t.category] || 0) + Number(t.amount); });
+                const top = Object.entries(cat).sort((a, b) => b[1] - a[1])[0];
+                if (top) add('fa-chart-pie', 'Finanças', `Maior categoria de gasto no mês: ${esc(top[0])} (${R(top[1])}). É um bom ponto para buscar economia.`);
+            }
+            const pend = tx.filter(t => t.type !== 'receita' && t.status === 'pendente');
+            if (pend.length) add('fa-hourglass-half', 'Finanças', `${pend.length} despesa(s) pendente(s) somando ${R(pend.reduce((s, t) => s + Number(t.amount), 0))}. Priorize as que têm vencimento mais próximo para evitar juros e multas.`, 'warn');
+
+            // Habitação
+            const h = appData.habitacao;
+            const fundo = h.contributions.reduce((s, c) => s + (c.type === 'aporte' ? 1 : -1) * Number(c.amount), 0);
+            const aprov = h.budgets.filter(b => b.status === 'Aprovado').reduce((s, b) => s + Number(b.amount), 0);
+            const bPend = h.budgets.filter(b => b.status !== 'Aprovado');
+            if (aprov > 0 && aprov > fundo) add('fa-house-circle-exclamation', 'Habitação', `Os orçamentos aprovados somam ${R(aprov)}, acima do saldo do fundo (${R(fundo)}). Faltam ${R(aprov - fundo)}: combine aportes extras ou renegocie prazos.`, 'warn');
+            else if (aprov > 0) add('fa-house-circle-check', 'Habitação', `O fundo (${R(fundo)}) cobre os orçamentos aprovados (${R(aprov)}).`, 'good');
+            if (bPend.length) add('fa-file-invoice-dollar', 'Habitação', `${bPend.length} orçamento(s) pendente(s). Compare pelo menos 3 fornecedores e confira o que está incluso (material, mão de obra, prazo) antes de aprovar.`);
+            if (h.people.length >= 2) {
+                const tot = h.people.map(pe => ({ n: pe.name, v: Number(pe.initialBalance || 0) + h.contributions.filter(c => c.personId === pe.id).reduce((s, c) => s + (c.type === 'aporte' ? 1 : -1) * Number(c.amount), 0) }));
+                const s = tot.slice().sort((a, b) => b.v - a.v);
+                if (s[0].v - s[s.length - 1].v > 0) add('fa-scale-balanced', 'Habitação', `Aportes líquidos: ${tot.map(t => `${esc(t.n)} ${R(t.v)}`).join(' · ')}. Acompanhar a diferença ajuda a manter a divisão combinada em dia.`);
+            }
+
+            // Saúde
+            const goal = Number(appData.saude.waterGoal || 3000), w = getWater(today);
+            if (w < goal) add('fa-droplet', 'Saúde', `Água hoje: ${w} ml de ${goal} ml. Faltam ${goal - w} ml, que tal um copo agora?`, w < goal / 2 ? 'warn' : 'info');
+            else add('fa-droplet', 'Saúde', 'Meta de água de hoje batida. Parabéns!', 'good');
+            const taken = (appData.saude.medLog[today] || []);
+            const missing = appData.saude.meds.filter(m => !taken.includes(m.id));
+            if (appData.saude.meds.length && missing.length) add('fa-pills', 'Saúde', `Remédio(s) ainda não marcado(s) hoje: ${missing.map(m => esc(m.name) + ' (' + esc(m.time) + ')').join(', ')}.`, 'warn');
+
+            // Agenda / lembretes / hobbies
+            const late = appData.lembretes.filter(l => !l.completed && l.date && l.date < today);
+            if (late.length) add('fa-bell', 'Lembretes', `${late.length} lembrete(s) atrasado(s). Resolva ou reagende para não acumular.`, 'warn');
+            const ag = appData.agenda.filter(a => a.date === today && a.status !== 'Finalizado');
+            if (ag.length) add('fa-calendar-day', 'Agenda', `Você tem ${ag.length} compromisso(s) hoje.`);
+            const hb = appData.hobbies.filter(x => x.status !== 'Finalizado');
+            if (hb.length) add('fa-heart', 'Hobbies', `${hb.length} hobby(s) em andamento. Reservar um horário fixo na semana ajuda a tirá-los do papel.`);
+            return tips;
+        }
+        function openIsis() {
+            const tones = { warn: 'bg-amber-50 text-amber-800 border-amber-200', good: 'bg-emerald-50 text-emerald-800 border-emerald-200', info: 'bg-slate-50 text-slate-700 border-slate-200' };
+            const html = isisTips().map(t => `
+                <div class="flex items-start space-x-3 p-3 rounded-xl border ${tones[t.tone]}">
+                    <i class="fa-solid ${t.icon} mt-0.5"></i>
+                    <div><p class="text-[10px] font-bold uppercase opacity-70">${t.area}</p><p class="text-sm">${t.text}</p></div>
+                </div>`).join('');
+            showModal('ISIS · dicas e sugestões', `
+                <div class="space-y-2">${html}</div>
+                <p class="text-[10px] text-slate-400 mt-4">Sugestões automáticas baseadas nos seus registros. São orientações gerais e não substituem profissionais de finanças, engenharia ou saúde.</p>`);
+        }
+
+        // =====================================================
+        // GOOGLE DRIVE — login + sincronização automática
+        // =====================================================
+        const GOOGLE_CLIENT_ID = '737517508578-oh51pl1lmnav4c14cjqt3ptfikltjnm7.apps.googleusercontent.com';
+        const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+        const DRIVE_FOLDER = 'MeuSistema';
+        const DRIVE_DATA = 'meusistema_dados.json';
+        const DRIVE_LINK_KEY = 'meusistema_drive_linked';
+        const DRIVE_SYNC_KEY = 'meusistema_drive_sync';
+        let driveClient = null, driveToken = null, driveTokenExp = 0;
+        let driveFolderId = null, driveFileId = null, driveReconciled = false, driveHadData = false;
+        let driveSaveTimer = null, driveLastSync = null, driveErr = '';
+        let _tokRes = null, _tokRej = null;
+
+        function driveAvailable() { return location.protocol.indexOf('http') === 0; }
+        function showLoginGate(show, msg) {
+            const g = document.getElementById('login-gate');
+            if (!g) return;
+            g.classList.toggle('hidden', !show); g.classList.toggle('flex', !!show);
+            const m = document.getElementById('login-gate-msg'); if (m) m.innerText = msg || '';
+        }
+        function loadGis() {
+            return new Promise(res => {
+                let n = 0;
+                const t = setInterval(() => {
+                    if (window.google && google.accounts && google.accounts.oauth2) { clearInterval(t); res(true); }
+                    else if (++n > 50) { clearInterval(t); res(false); }
+                }, 200);
+            });
+        }
+        function driveRequestToken(prompt) {
+            return new Promise((resolve, reject) => {
+                const to = setTimeout(() => reject(new Error('tempo esgotado')), 20000);
+                _tokRes = v => { clearTimeout(to); resolve(v); };
+                _tokRej = e => { clearTimeout(to); reject(e); };
+                driveClient.requestAccessToken({ prompt });
+            });
+        }
+        async function driveFetch(url, opts = {}, retry = true) {
+            if (!driveToken || Date.now() > driveTokenExp) await driveRequestToken('none');
+            const r = await fetch(url, Object.assign({}, opts, { headers: Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + driveToken }) }));
+            if (r.status === 401 && retry) { driveToken = null; return driveFetch(url, opts, false); }
+            if (!r.ok) throw new Error('Drive ' + r.status);
+            return r;
+        }
+        const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
+        const DRIVE_UP = 'https://www.googleapis.com/upload/drive/v3/files';
+        async function driveList(q, fields) {
+            const r = await driveFetch(`${DRIVE_API}?q=${encodeURIComponent(q)}&fields=${encodeURIComponent('files(' + fields + ')')}&pageSize=1000`);
+            return (await r.json()).files || [];
+        }
+        async function driveEnsureFolder() {
+            if (driveFolderId) return;
+            const f = await driveList(`name='${DRIVE_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`, 'id');
+            if (f.length) { driveFolderId = f[0].id; return; }
+            const r = await driveFetch(DRIVE_API + '?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: DRIVE_FOLDER, mimeType: 'application/vnd.google-apps.folder' }) });
+            driveFolderId = (await r.json()).id;
+        }
+        async function driveCreateFile(name, blob, type) {
+            const b = 'ms' + uid();
+            const meta = JSON.stringify({ name, parents: [driveFolderId] });
+            const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: ${type}\r\n\r\n`, blob, `\r\n--${b}--`]);
+            const r = await driveFetch(`${DRIVE_UP}?uploadType=multipart&fields=id`, { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body });
+            return (await r.json()).id;
+        }
+        function dataBlob() { return new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' }); }
+        async function driveUpload() {
+            if (!driveReconciled || !driveToken && !driveClient) return;
+            if (dataCount(appData) === 0 && driveHadData) { updateSyncStatus('Drive tem dados: não sobrescrevi', 'amber'); return; }
+            try {
+                if (driveFileId) {
+                    await driveFetch(`${DRIVE_UP}/${driveFileId}?uploadType=media&fields=id`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: dataBlob() });
+                } else {
+                    await driveEnsureFolder();
+                    driveFileId = await driveCreateFile(DRIVE_DATA, dataBlob(), 'application/json');
+                }
+                driveHadData = dataCount(appData) > 0;
+                localStorage.setItem(DRIVE_SYNC_KEY, appData._savedAt || '');
+                driveLastSync = new Date(); driveErr = '';
+                updateSyncStatus('Sincronizado no Drive', 'emerald');
+                updateFolderLabel(); refreshBackupTab();
+            } catch (e) {
+                console.error(e); driveErr = e.message;
+                updateSyncStatus('Drive: falha ao salvar', 'rose');
+            }
+        }
+        function scheduleDriveSave() {
+            if (!driveReconciled) return;
+            clearTimeout(driveSaveTimer);
+            driveSaveTimer = setTimeout(driveUpload, 1500);
+        }
+        async function driveReconcile() {
+            await driveEnsureFolder();
+            const f = await driveList(`name='${DRIVE_DATA}' and '${driveFolderId}' in parents and trashed=false`, 'id,modifiedTime');
+            if (!f.length) { driveFileId = null; driveReconciled = true; await driveUpload(); await driveSyncAttachments(); return; }
+            driveFileId = f[0].id;
+            const cloud = await (await driveFetch(`${DRIVE_API}/${driveFileId}?alt=media`)).json();
+            const cN = dataCount(cloud), lN = dataCount(appData);
+            const cT = cloud._savedAt || '', lT = appData._savedAt || '';
+            driveHadData = cN > 0;
+            const localUnchanged = localStorage.getItem(DRIVE_SYNC_KEY) === lT;
+            if (cN > 0 && (lN === 0 || (cT > lT && localUnchanged))) {
+                restoreFromObject(cloud);
+                driveReconciled = true;
+                showToast('Dados carregados do Drive!', 'success');
+            } else if (cN > 0 && cT > lT) {
+                driveReconciled = false;
+                showRestoreModal(cloud, 'do Drive (mais recente que este navegador)', () => { driveReconciled = true; driveUpload(); }, 'Manter os dados deste navegador');
+                return;
+            } else {
+                driveReconciled = true;
+                if (cT !== lT) await driveUpload(); else { localStorage.setItem(DRIVE_SYNC_KEY, lT); updateSyncStatus('Sincronizado no Drive', 'emerald'); }
+            }
+            driveLastSync = new Date();
+            await driveSyncAttachments();
+            updateFolderLabel(); refreshBackupTab();
+        }
+
+        // --- anexos (arquivos) no Drive ---
+        function attachmentIds() {
+            const ids = [];
+            appData.financeiro.transactions.forEach(t => (t.attachments || []).forEach(a => ids.push(a.id)));
+            appData.habitacao.docFolders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
+            return ids;
+        }
+        async function driveUploadAttachment(id, blob) {
+            if (!driveToken || !driveFolderId) return;
+            await driveCreateFile('anexo_' + id, blob, blob.type || 'application/octet-stream');
+        }
+        async function driveSyncAttachments() {
+            try {
+                const remote = new Set((await driveList(`name contains 'anexo_' and '${driveFolderId}' in parents and trashed=false`, 'name')).map(x => x.name));
+                for (const id of attachmentIds()) {
+                    if (remote.has('anexo_' + id)) continue;
+                    const blob = await getFile(id);
+                    if (blob) await driveUploadAttachment(id, blob);
+                }
+            } catch (e) { console.error('Anexos:', e); }
+        }
+        async function driveFetchAttachment(id) {
+            if (!driveToken || !driveFolderId) return null;
+            try {
+                const f = await driveList(`name='anexo_${id}' and '${driveFolderId}' in parents and trashed=false`, 'id');
+                if (!f.length) return null;
+                const blob = await (await driveFetch(`${DRIVE_API}/${f[0].id}?alt=media`)).blob();
+                await putFile(id, blob);
+                return blob;
+            } catch (e) { console.error(e); return null; }
+        }
+
+        // --- login / logout ---
+        async function driveSignIn() {
+            if (!driveAvailable()) { showLoginGate(true, 'Abra o sistema pelo endereço hospedado (https://...) para entrar com o Google.'); return; }
+            try {
+                if (!driveClient) throw new Error('Google não carregou. Verifique a internet.');
+                await driveRequestToken('');
+                localStorage.setItem(DRIVE_LINK_KEY, '1');
+                showLoginGate(false);
+                updateSyncStatus('Conectando ao Drive...', 'amber');
+                await driveReconcile();
+            } catch (e) {
+                console.error(e);
+                showLoginGate(true, 'Não foi possível entrar: ' + e.message);
+                updateSyncStatus('Drive desconectado', 'amber');
+            }
+        }
+        function driveSignOut() {
+            if (driveToken && window.google) google.accounts.oauth2.revoke(driveToken, () => {});
+            driveToken = null; driveFolderId = null; driveFileId = null; driveReconciled = false;
+            localStorage.removeItem(DRIVE_LINK_KEY);
+            updateSyncStatus('Drive desconectado', 'amber');
+            updateFolderLabel(); refreshBackupTab();
+        }
+        async function driveSyncManual() {
+            if (!driveToken) { await driveSignIn(); return; }
+            try { await driveReconcile(); showToast('Drive sincronizado!', 'success'); }
+            catch (e) { console.error(e); showToast('Falha ao sincronizar: ' + e.message, 'error'); }
+        }
+        async function initDrive() {
+            if (!driveAvailable()) return;
+            if (!(await loadGis())) { showLoginGate(true, 'Google não carregou. Verifique a internet.'); return; }
+            driveClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID, scope: DRIVE_SCOPE,
+                callback: r => {
+                    if (r.error) { _tokRej && _tokRej(new Error(r.error)); return; }
+                    driveToken = r.access_token; driveTokenExp = Date.now() + (Number(r.expires_in) - 60) * 1000;
+                    _tokRes && _tokRes(driveToken);
+                },
+                error_callback: e => { _tokRej && _tokRej(new Error(e.type || 'erro de login')); }
+            });
+            if (localStorage.getItem(DRIVE_LINK_KEY) === '1') {
+                try { await driveRequestToken('none'); await driveReconcile(); return; }
+                catch (e) { console.warn('Login automático falhou:', e); }
+            }
+            showLoginGate(true);
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && driveToken && driveReconciled && Date.now() < driveTokenExp) driveReconcile().catch(console.error);
+        });
+        function driveCardHtml() {
+            const btn = 'w-full sm:w-auto px-6 py-3 rounded-2xl text-sm font-bold shadow flex items-center justify-center space-x-2';
+            let st, actions;
+            if (!driveAvailable()) { st = '<span class="text-amber-600">Disponível só quando o sistema é aberto por um endereço web (https://...), não pelo arquivo no computador.</span>'; actions = ''; }
+            else if (driveToken) {
+                st = `<span class="text-emerald-600">Conectado ao Drive (pasta "${DRIVE_FOLDER}")${driveLastSync ? ' · última sincronização ' + driveLastSync.toLocaleTimeString('pt-BR') : ''}.${driveErr ? ' <b class="text-rose-500">Erro: ' + esc(driveErr) + '</b>' : ''}</span>`;
+                actions = `<button onclick="driveSyncManual()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-solid fa-rotate"></i><span>Sincronizar agora</span></button>
+                           <button onclick="driveSignOut()" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-right-from-bracket"></i><span>Sair do Drive</span></button>`;
+            } else { st = '<span class="text-slate-500">Não conectado.</span>'; actions = `<button onclick="driveSignIn()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-brands fa-google"></i><span>Entrar com Google</span></button>`; }
+            return `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2"><i class="fa-brands fa-google-drive text-teal-500"></i><span>Google Drive</span></h3>
+                <p class="text-sm text-slate-500 mb-2">Salva automaticamente dados e anexos no seu Drive, na pasta <b>${DRIVE_FOLDER}</b>, e carrega em qualquer computador ao entrar com a mesma conta.</p>
+                <p class="text-sm mb-5">${st}</p>
+                <div class="flex flex-col sm:flex-row gap-3">${actions}</div></div>`;
+        }
+
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -2292,10 +3060,12 @@
             setTimeout(() => { toast.classList.add('translate-y-2', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
         }
 
-        window.onload = function() {
+        window.onload = async function() {
             loadAppData();
             if (appData.profile.theme === 'dark') document.documentElement.classList.add('dark');
             switchTab('dashboard');
+            await initBackupFolder();
+            initDrive();
         };
     </script>
 </body>
