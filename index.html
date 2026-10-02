@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MeuSistema Pessoal</title>
+    <title>Sistema ISIS</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23FFD54A'/%3E%3Cstop offset='.55' stop-color='%23FFB800'/%3E%3Cstop offset='1' stop-color='%23E89B00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='16' r='4.2' fill='%23fff'/%3E%3Crect x='28.8' y='25' width='6.4' height='24' rx='3.2' fill='%23fff'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round'%3E%3Cpath d='M29 31C21 31 14.500 28 10 21'/%3E%3Cpath d='M29 38C22.500 38 17 35.500 12.500 30'/%3E%3Cpath d='M29 45C24 45 19.500 43 15.500 39'/%3E%3Cpath d='M35 31C43 31 49.500 28 54 21'/%3E%3Cpath d='M35 38C41.500 38 47 35.500 51.500 30'/%3E%3Cpath d='M35 45C40 45 44.500 43 48.500 39'/%3E%3C/g%3E%3C/svg%3E">
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -13,17 +14,12 @@
     <!-- Inter Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
+        const __mk = p => { const o = {}; [50,100,200,300,400,500,600,700,800,850,900,950].forEach(k => o[k] = `rgb(var(--${p}-${k}) / <alpha-value>)`); return o; };
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
-                    colors: {
-                        teal: {
-                            850: '#134e4a',
-                            900: '#115e59',
-                            950: '#042f2e',
-                        }
-                    },
+                    colors: { teal: __mk('ac'), slate: __mk('bg'), side: __mk('sd') },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
                     }
@@ -31,6 +27,58 @@
             }
         }
     </script>
+    <script>
+        // ===== Personalização de cores (aplicada antes da tela aparecer) =====
+        const THEME_DEFAULT = { accent: '#9C7020', sidebar: '#2E1F12', bg: '#FAF7F2' };
+        const _W = [255, 255, 255], _K = [0, 0, 0], _KEYS = [50,100,200,300,400,500,600,700,800,850,900,950];
+        function _hex2rgb(h) { h = String(h).replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16) || 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+        function _mix(a, b, t) { return a.map((v, i) => Math.round(v + (b[i] - v) * t)); }
+        function _lum(c) { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
+        function _rgb2hsl(c) { let [r, g, b] = c.map(v => v / 255); const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h = 0, s = 0; const l = (mx + mn) / 2; if (mx !== mn) { const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); if (mx === r) h = (g - b) / d + (g < b ? 6 : 0); else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h /= 6; } return [h, s, l]; }
+        function _hsl2rgb(h, s, l) { const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q; const f = t => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; }; return [f(h + 1 / 3), f(h), f(h - 1 / 3)].map(v => Math.round(v * 255)); }
+        function _setVars(prefix, map) { const st = document.documentElement.style; _KEYS.forEach(k => st.setProperty(`--${prefix}-${k}`, map[k].join(' '))); }
+        function applyColors(c) {
+            c = Object.assign({}, THEME_DEFAULT, c || {});
+            try { localStorage.setItem('meusistema_colors', JSON.stringify(c)); } catch (e) {}
+            const st = document.documentElement.style;
+            // 1) botões, abas e ícones
+            const ab = _hex2rgb(c.accent), ac = {};
+            const tint = { 50: .92, 100: .84, 200: .68, 300: .5, 400: .3, 500: .14 }, shade = { 700: .18, 800: .34, 850: .42, 900: .5, 950: .66 };
+            Object.keys(tint).forEach(k => ac[k] = _mix(ab, _W, tint[k]));
+            ac[600] = ab;
+            Object.keys(shade).forEach(k => ac[k] = _mix(ab, _K, shade[k]));
+            _setVars('ac', ac);
+            st.setProperty('--on-ac', _lum(ab) > 0.5 ? '#1F1408' : '#FFFFFF');
+            // 2) menu lateral
+            const sb = _hex2rgb(c.sidebar), sdark = _lum(sb) < 0.4, sd = {};
+            _KEYS.forEach((k, i) => sd[k] = _mix(sb, sdark ? _W : _K, 0.04 * i));
+            sd[950] = sb; sd[900] = _mix(sb, sdark ? _W : _K, sdark ? .10 : .08);
+            sd[800] = _mix(sb, sdark ? _W : _K, sdark ? .18 : .14); sd[700] = _mix(sb, sdark ? _W : _K, sdark ? .26 : .22);
+            _setVars('sd', sd);
+            st.setProperty('--sd-text', sdark ? '#E2E8F0' : '#3A2C1E');
+            st.setProperty('--sd-strong', sdark ? '#FFFFFF' : '#1A1209');
+            // 3) fundo das telas
+            const bb = _hex2rgb(c.bg), bl = _lum(bb) >= 0.4, [h, sat] = _rgb2hsl(bb), hs = Math.min(sat, 0.3), bg = {};
+            const gray = l => _hsl2rgb(h, Math.min(sat, 0.12), l);
+            bg[300] = gray(.78); bg[400] = gray(.62); bg[500] = gray(.45); bg[600] = gray(.34); bg[850] = _hsl2rgb(h, hs * .6, .14);
+            if (bl) {
+                bg[50] = bb; bg[100] = _mix(bb, _K, .035); bg[200] = _mix(bb, _K, .09);
+                bg[900] = _hsl2rgb(h, hs * .6, .11); bg[800] = _hsl2rgb(h, hs * .6, .17); bg[700] = _hsl2rgb(h, hs * .6, .24); bg[950] = _hsl2rgb(h, hs * .6, .07);
+            } else {
+                bg[50] = _hsl2rgb(h, hs * .5, .97); bg[100] = _hsl2rgb(h, hs * .5, .94); bg[200] = _hsl2rgb(h, hs * .5, .88);
+                bg[900] = bb; bg[800] = _mix(bb, _W, .06); bg[700] = _mix(bb, _W, .12); bg[950] = _mix(bb, _K, .4);
+            }
+            _setVars('bg', bg);
+        }
+        try { applyColors(JSON.parse(localStorage.getItem('meusistema_colors') || 'null')); } catch (e) { applyColors(null); }
+    </script>
+    <style>
+        /* texto sobre botões coloridos e menu lateral claro/escuro */
+        .bg-teal-500.text-white, .bg-teal-600.text-white, .bg-teal-700.text-white { color: var(--on-ac) !important; }
+        #sidebar { color: var(--sd-text); }
+        #sidebar .text-slate-200, #sidebar .text-slate-300 { color: var(--sd-text) !important; }
+        #sidebar .text-white, #sidebar .hover\:text-white:hover { color: var(--sd-strong) !important; }
+    </style>
     <style>
         /* Custom scrollbar */
         ::-webkit-scrollbar {
@@ -41,27 +89,26 @@
             background: rgba(0,0,0,0.05);
         }
         ::-webkit-scrollbar-thumb {
-            background: rgba(13, 148, 136, 0.4);
+            background: rgba(192, 143, 38, 0.45);
             border-radius: 9999px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(13, 148, 136, 0.7);
+            background: rgba(156, 112, 32, 0.8);
         }
     </style>
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="isisGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD54A"/><stop offset=".55" stop-color="#FFB800"/><stop offset="1" stop-color="#E89B00"/></linearGradient></defs></svg>
     <div id="app" class="flex h-full w-full">
         
         <!-- SIDEBAR (Dark Teal Theme) -->
-        <aside id="sidebar" class="w-64 bg-teal-950 text-slate-200 flex flex-col h-full flex-shrink-0 transition-all duration-300 z-20 shadow-xl">
+        <aside id="sidebar" class="w-64 bg-side-950 text-slate-200 flex flex-col h-full flex-shrink-0 transition-all duration-300 z-20 shadow-xl">
             <!-- Sidebar Header -->
-            <div class="p-5 flex items-center justify-between border-b border-teal-800/60">
+            <div class="p-5 flex items-center justify-between border-b border-side-800/60">
                 <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center text-teal-950 font-bold shadow-lg">
-                        <i class="fa-solid fa-house-chimney text-lg"></i>
-                    </div>
+                    <div class="w-10 h-10 flex-shrink-0 drop-shadow"><svg viewBox="0 0 64 64" class="w-full h-full" role="img" aria-label="Logo ISIS"><rect width="64" height="64" rx="16" fill="url(#isisGold)"/><circle cx="32" cy="16" r="4.2" fill="#fff"/><rect x="28.8" y="25" width="6.4" height="24" rx="3.2" fill="#fff"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"><path d="M29 31C21 31 14.500 28 10 21"/><path d="M29 38C22.500 38 17 35.500 12.500 30"/><path d="M29 45C24 45 19.500 43 15.500 39"/><path d="M35 31C43 31 49.500 28 54 21"/><path d="M35 38C41.500 38 47 35.500 51.500 30"/><path d="M35 45C40 45 44.500 43 48.500 39"/></g></svg></div>
                     <div>
-                        <h1 class="font-bold text-base tracking-wide text-white">MeuSistema</h1>
+                        <h1 class="font-bold text-base tracking-wide text-white">Sistema ISIS</h1>
                         <p class="text-xs text-teal-300">Gestão Pessoal</p>
                     </div>
                 </div>
@@ -72,46 +119,46 @@
 
             <!-- Navigation Links -->
             <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
-                <a href="#" onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-sun w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Meu Dia</span>
                 </a>
-                <a href="#" onclick="switchTab('saude')" id="nav-saude" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('saude')" id="nav-saude" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-heart-pulse w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Saúde</span>
                 </a>
-                <a href="#" onclick="switchTab('financeiro')" id="nav-financeiro" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('financeiro')" id="nav-financeiro" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-wallet w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Financeiro</span>
                 </a>
-                <a href="#" onclick="switchTab('agenda')" id="nav-agenda" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('agenda')" id="nav-agenda" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-calendar-days w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Agenda</span>
                 </a>
-                <a href="#" onclick="switchTab('lembretes')" id="nav-lembretes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('lembretes')" id="nav-lembretes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-bell w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Lembretes</span>
                 </a>
-                <a href="#" onclick="switchTab('hobbies')" id="nav-hobbies" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('hobbies')" id="nav-hobbies" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-puzzle-piece w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Hobbies</span>
                 </a>
-                <a href="#" onclick="switchTab('habitacao')" id="nav-habitacao" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('habitacao')" id="nav-habitacao" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-hammer w-5 text-center text-amber-400 group-hover:scale-110 transition-transform"></i>
                     <span>Habitação (Obra)</span>
                 </a>
-                <a href="#" onclick="switchTab('configuracoes')" id="nav-configuracoes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('configuracoes')" id="nav-configuracoes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-gear w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Configurações</span>
                 </a>
-                <a href="#" onclick="switchTab('backup')" id="nav-backup" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-teal-900/80 text-slate-300 hover:text-white">
+                <a href="#" onclick="switchTab('backup')" id="nav-backup" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-cloud-arrow-down w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Backup & Pasta</span>
                 </a>
             </nav>
 
             <!-- Sidebar Footer / Sync Status -->
-            <div class="p-4 border-t border-teal-800/60 bg-teal-950/60">
+            <div class="p-4 border-t border-side-800/60 bg-side-950/60">
                 <div class="flex items-center justify-between text-xs text-teal-300 mb-2">
                     <span id="sync-status-text" class="flex items-center space-x-1.5">
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -154,8 +201,8 @@
     <!-- LOGIN GOOGLE DRIVE -->
     <div id="login-gate" class="hidden fixed inset-0 z-[60] bg-slate-900/95 items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center">
-            <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-teal-600 text-white flex items-center justify-center text-2xl"><i class="fa-solid fa-house-chimney"></i></div>
-            <h2 class="text-lg font-bold text-slate-800 mb-1">Meu Sistema</h2>
+            <div class="w-16 h-16 mx-auto mb-4 drop-shadow"><svg viewBox="0 0 64 64" class="w-full h-full" role="img" aria-label="Logo ISIS"><rect width="64" height="64" rx="16" fill="url(#isisGold)"/><circle cx="32" cy="16" r="4.2" fill="#fff"/><rect x="28.8" y="25" width="6.4" height="24" rx="3.2" fill="#fff"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"><path d="M29 31C21 31 14.500 28 10 21"/><path d="M29 38C22.500 38 17 35.500 12.500 30"/><path d="M29 45C24 45 19.500 43 15.500 39"/><path d="M35 31C43 31 49.500 28 54 21"/><path d="M35 38C41.500 38 47 35.500 51.500 30"/><path d="M35 45C40 45 44.500 43 48.500 39"/></g></svg></div>
+            <h2 class="text-lg font-bold text-slate-800 mb-1">Sistema ISIS</h2>
             <p class="text-sm text-slate-500 mb-5">Entre com a conta Google do Drive para carregar suas informações.</p>
             <button onclick="driveSignIn()" class="w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-xl font-bold text-sm shadow flex items-center justify-center space-x-2"><i class="fa-brands fa-google"></i><span>Entrar com Google</span></button>
             <p id="login-gate-msg" class="text-xs text-rose-500 mt-3 min-h-[1rem]"></p>
@@ -543,6 +590,7 @@
 
         // --- restauração ---
         function applyTheme() {
+            applyColors(getColors());
             if (appData.profile && appData.profile.theme === 'dark') document.documentElement.classList.add('dark');
             else document.documentElement.classList.remove('dark');
         }
@@ -713,12 +761,12 @@
             currentActiveTab = tabId;
             if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; }
             document.querySelectorAll('.nav-item').forEach(el => {
-                el.classList.remove('bg-teal-900', 'text-white', 'shadow-inner');
+                el.classList.remove('bg-side-900', 'text-white', 'shadow-inner');
                 el.classList.add('text-slate-300');
             });
             const activeEl = document.getElementById(`nav-${tabId}`);
             if (activeEl) {
-                activeEl.classList.add('bg-teal-900', 'text-white', 'shadow-inner');
+                activeEl.classList.add('bg-side-900', 'text-white', 'shadow-inner');
                 activeEl.classList.remove('text-slate-300');
             }
 
@@ -803,7 +851,7 @@
                             <p class="text-xs text-slate-500 mt-0.5">Painel de controle integrado e rápido.</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="openIsis()" title="Dicas da ISIS" class="bg-violet-100 hover:bg-violet-200 text-violet-700 font-bold px-3 py-2 rounded-xl text-xs shadow-sm transition flex items-center space-x-1.5">
+                            <button onclick="openIsis()" title="Dicas da ISIS" class="bg-teal-100 hover:bg-teal-200 text-teal-800 font-bold px-3 py-2 rounded-xl text-xs shadow-sm transition flex items-center space-x-1.5">
                                 <i class="fa-solid fa-wand-magic-sparkles"></i><span>ISIS</span>
                             </button>
                             <button onclick="switchTab('agenda')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow transition-all flex items-center space-x-1.5">
@@ -2077,7 +2125,7 @@
                     </div>
                 </div>
             `;
-            container.firstElementChild.insertAdjacentHTML('beforeend', reportsCardHtml());
+            container.firstElementChild.insertAdjacentHTML('beforeend', colorsCardHtml() + reportsCardHtml());
         }
 
         function renderBackup(container) {
@@ -3047,6 +3095,59 @@
                 <div class="flex flex-col sm:flex-row gap-3">${actions}</div></div>`;
         }
 
+        // =====================================================
+        // APARÊNCIA — cores personalizáveis
+        // =====================================================
+        const COLOR_PRESETS = ['#FFB800', '#F5C518', '#D4AF37', '#B8860B', '#FFE08A', '#FFF8E1', '#FFFFFF', '#F5F5F4', '#D6D3D1', '#9CA3AF', '#4B5563', '#1F2937', '#111111',
+            '#6B4423', '#4A2C17', '#2E1F12', '#F97316', '#FDBA74', '#EF4444', '#BE123C', '#EC4899', '#FBCFE8', '#8B5CF6', '#C4B5FD', '#4C1D95',
+            '#3B82F6', '#BFDBFE', '#1E3A8A', '#06B6D4', '#0D9488', '#99F6E4', '#22C55E', '#BBF7D0', '#14532D', '#84CC16'];
+        function getColors() { return Object.assign({}, THEME_DEFAULT, (appData.profile && appData.profile.colors) || {}); }
+        function setColor(kind, hex, commit) {
+            if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+            appData.profile.colors = Object.assign(getColors(), { [kind]: hex });
+            applyColors(appData.profile.colors);
+            if (!commit) return;
+            if (kind === 'bg') {
+                const dark = _lum(_hex2rgb(hex)) < 0.4;
+                document.documentElement.classList.toggle('dark', dark);
+                appData.profile.theme = dark ? 'dark' : 'light';
+            }
+            saveAppData(); renderCurrentTabContent();
+        }
+        function resetColors() {
+            delete appData.profile.colors;
+            appData.profile.theme = 'light'; document.documentElement.classList.remove('dark');
+            applyColors(THEME_DEFAULT);
+            saveAppData(); renderCurrentTabContent();
+            showToast('Cores padrão restauradas.', 'success');
+        }
+        function colorsCardHtml() {
+            const cur = getColors();
+            const section = (kind, title, desc) => `
+                <div class="mb-5">
+                    <p class="text-sm font-bold text-slate-700 dark:text-slate-200">${title}</p>
+                    <p class="text-xs text-slate-500 mb-2">${desc}</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                        ${COLOR_PRESETS.map(c => `<button type="button" onclick="setColor('${kind}','${c}',true)" title="${c}" class="w-7 h-7 rounded-full border border-slate-300 transition hover:scale-110 ${cur[kind].toLowerCase() === c.toLowerCase() ? 'ring-2 ring-offset-2 ring-teal-600' : ''}" style="background:${c}"></button>`).join('')}
+                        <label class="flex items-center gap-2 ml-1 text-xs text-slate-500 cursor-pointer" title="Escolher qualquer cor">
+                            <input type="color" value="${cur[kind]}" oninput="setColor('${kind}', this.value, false)" onchange="setColor('${kind}', this.value, true)" class="w-9 h-8 rounded cursor-pointer border border-slate-300 p-0 bg-transparent">
+                            <span>Outra cor <b class="font-mono">${cur[kind].toUpperCase()}</b></span>
+                        </label>
+                    </div>
+                </div>`;
+            return `
+                <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2">
+                        <i class="fa-solid fa-palette text-teal-500"></i><span>Cores do sistema</span>
+                    </h3>
+                    <p class="text-sm text-slate-500 mb-5">Escolha cada cor separadamente, entre as sugestões ou qualquer cor no seletor. A escolha fica salva e vale em qualquer computador.</p>
+                    ${section('sidebar', 'Menu lateral', 'Cor de fundo do menu à esquerda. Cores claras ou escuras ajustam o texto automaticamente.')}
+                    ${section('accent', 'Botões, abas e ícones', 'Cor dos botões, destaques e ícones. Cores muito claras deixam links e ícones sobre fundo branco menos legíveis.')}
+                    ${section('bg', 'Fundo das telas', 'Cor de fundo atrás dos cartões. Uma cor escura ativa o modo escuro automaticamente.')}
+                    <button onclick="resetColors()" class="text-xs font-bold text-teal-700 hover:underline"><i class="fa-solid fa-rotate-left mr-1"></i>Restaurar cores padrão</button>
+                </div>`;
+        }
+
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -3062,6 +3163,7 @@
 
         window.onload = async function() {
             loadAppData();
+            applyColors(getColors());
             if (appData.profile.theme === 'dark') document.documentElement.classList.add('dark');
             switchTab('dashboard');
             await initBackupFolder();
