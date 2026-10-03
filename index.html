@@ -2,7 +2,15 @@
 <html lang="pt-BR" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#9C7020">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="ISIS">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <style>body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);-webkit-tap-highlight-color:transparent}input,select,textarea{font-size:16px}</style>
     <title>Sistema ISIS</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23FFD54A'/%3E%3Cstop offset='.55' stop-color='%23FFB800'/%3E%3Cstop offset='1' stop-color='%23E89B00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='16' r='4.2' fill='%23fff'/%3E%3Crect x='28.8' y='25' width='6.4' height='24' rx='3.2' fill='%23fff'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round'%3E%3Cpath d='M29 31C21 31 14.500 28 10 21'/%3E%3Cpath d='M29 38C22.500 38 17 35.500 12.500 30'/%3E%3Cpath d='M29 45C24 45 19.500 43 15.500 39'/%3E%3Cpath d='M35 31C43 31 49.500 28 54 21'/%3E%3Cpath d='M35 38C41.500 38 47 35.500 51.500 30'/%3E%3Cpath d='M35 45C40 45 44.500 43 48.500 39'/%3E%3C/g%3E%3C/svg%3E">
     <!-- Tailwind CSS -->
@@ -104,14 +112,34 @@
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(156, 112, 32, 0.8);
         }
+        /* Celular: menu vira gaveta sobreposta (não ocupa espaço quando recuado). Computador não muda. */
+        #sidebar-backdrop { display: none; }
+        @media (max-width: 767px) {
+            #app { height: 100dvh; }
+            #sidebar { position: fixed; top: 0; left: 0; bottom: 0; height: 100dvh; width: min(82vw, 18rem); z-index: 50; padding-top: env(safe-area-inset-top); }
+            #sidebar.-translate-x-full { box-shadow: none; }
+            #sidebar-backdrop.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; }
+        }
+        #current-page-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+        @media (max-width: 767px) {
+            html, body { overflow-x: hidden; overscroll-behavior-x: none; max-width: 100%; }
+            #app { overflow: hidden; width: 100%; max-width: 100%; }
+            #main-content-container { overflow-x: hidden; overscroll-behavior-x: none; }
+            header { padding-left: 1rem !important; padding-right: 1rem !important; gap: .5rem; }
+            header > div:first-child { min-width: 0; flex: 1 1 auto; gap: .75rem; }
+            header > div:last-child { flex-shrink: 0; }
+            #current-page-title { font-size: 1.1rem; }
+        }
+        @media (min-width: 768px) { #sidebar.-translate-x-full { transform: none !important; } }
     </style>
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="isisGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD54A"/><stop offset=".55" stop-color="#FFB800"/><stop offset="1" stop-color="#E89B00"/></linearGradient></defs></svg>
     <div id="app" class="flex h-full w-full">
+        <div id="sidebar-backdrop" onclick="toggleSidebarMobile()"></div>
         
         <!-- SIDEBAR (Dark Teal Theme) -->
-        <aside id="sidebar" class="fixed inset-y-0 left-0 -translate-x-full md:translate-x-0 md:static w-64 max-w-[85vw] bg-side-950 text-slate-200 flex flex-col h-full flex-shrink-0 transition-transform duration-300 z-40 md:z-20 shadow-xl">
+        <aside id="sidebar" class="w-64 bg-side-950 text-slate-200 flex flex-col h-full flex-shrink-0 transition-all duration-300 z-20 shadow-xl">
             <!-- Sidebar Header -->
             <div class="p-5 flex items-center justify-between border-b border-side-800/60">
                 <div class="flex items-center space-x-3">
@@ -130,7 +158,7 @@
             <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
                 <a href="#" onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-sun w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
-                    <span>Meu Dia</span>
+                    <span>Resumo</span>
                 </a>
                 <a href="#" onclick="switchTab('saude')" id="nav-saude" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-heart-pulse w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
@@ -144,9 +172,17 @@
                     <i class="fa-solid fa-credit-card w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Cartão de Crédito</span>
                 </a>
+                <a href="#" onclick="switchTab('contas')" id="nav-contas" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-piggy-bank w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
+                    <span>Cartão</span>
+                </a>
                 <a href="#" onclick="switchTab('agenda')" id="nav-agenda" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-calendar-days w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Agenda</span>
+                </a>
+                <a href="#" onclick="switchTab('notas')" id="nav-notas" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-note-sticky w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
+                    <span>Notas</span>
                 </a>
                 <a href="#" onclick="switchTab('lembretes')" id="nav-lembretes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-bell w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
@@ -183,17 +219,15 @@
             </div>
         </aside>
 
-        <div id="sidebar-backdrop" onclick="toggleSidebarMobile()" class="hidden fixed inset-0 bg-black/50 z-30 md:hidden"></div>
-
         <!-- MAIN CONTENT WRAPPER -->
         <div class="flex-1 min-w-0 flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900">
             <!-- Top Header -->
-            <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 sm:px-6 flex-shrink-0 shadow-sm">
+            <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-6 flex-shrink-0 shadow-sm">
                 <div class="flex items-center space-x-4">
                     <button onclick="toggleSidebarMobile()" class="md:hidden text-slate-600 dark:text-slate-300 hover:text-teal-600">
                         <i class="fa-solid fa-bars text-xl"></i>
                     </button>
-                    <h2 id="current-page-title" class="text-lg sm:text-xl font-bold text-slate-800 dark:text-white whitespace-nowrap">Meu Dia</h2>
+                    <h2 id="current-page-title" class="text-xl font-bold text-slate-800 dark:text-white">Resumo</h2>
                 </div>
                 <div class="flex items-center space-x-3">
                     <span id="current-date-badge" class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
@@ -207,7 +241,7 @@
             </header>
 
             <!-- Scrollable Content Area -->
-            <main id="main-content-container" class="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 md:p-8">
+            <main id="main-content-container" class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
                 <!-- Content injected dynamically via JavaScript -->
             </main>
         </div>
@@ -295,6 +329,10 @@
         let obraSortKey = 'date', obraSortDir = 'desc';
         let budgetView = 'bloco', budgetSelectMode = false, budgetSelected = [], budgetGroupOpen = {};
         let cardSelectedId = null, cardInvMonth = '';
+        let finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' };
+        let contaSel = null;
+        let dashAcc = '', dashMode = 'saldo';
+        let agView = 'calendario', agMonth = localDateStr().slice(0, 7), agSel = localDateStr();
         let catRankQuery = '', catRankPeriod = 'all';
         let muralView = 'bloco', muralScope = 'mes', muralMonth = localDateStr().slice(0, 7), muralPhotos = true;
         function uiLoad() {
@@ -481,11 +519,14 @@
             if (!Array.isArray(appData.cartao.cards)) appData.cartao.cards = [];
             if (!Array.isArray(appData.cartao.entries)) appData.cartao.entries = [];
             if (!Array.isArray(appData.cartao.categories) || !appData.cartao.categories.length) appData.cartao.categories = CARD_DEFAULT_CATS.slice();
+            contasData();
+            syncHabTransfers();
             syncCardInvoices();
             uiLoad();
         }
 
         function saveAppData() {
+            try { syncHabTransfers(); } catch (e) { console.error(e); }
             try {
                 appData._savedAt = new Date().toISOString();
                 localStorage.setItem('meusistema_pessoal_data', JSON.stringify(appData));
@@ -560,7 +601,7 @@
             const h = d.habitacao || {};
             const lists = [d.financeiro && d.financeiro.transactions, d.agenda, d.lembretes, d.hobbies, d.atalhos, d.metas,
                            h.contributions, h.budgets, h.suppliers, h.docFolders, d.saude && d.saude.meds,
-                           d.aniversarios, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups];
+                           d.aniversarios, d.notas, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups];
             let n = lists.reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
             n += Object.keys((d.saude && d.saude.waterLog) || {}).length;
             n += Object.keys((d.saude && d.saude.medLog) || {}).length;
@@ -827,10 +868,12 @@
             }
 
             const titles = {
-                dashboard: 'Meu Dia',
+                dashboard: 'Resumo',
                 saude: 'Saúde & Bem-estar',
                 financeiro: 'Controle Financeiro',
                 cartao: 'Cartão de Crédito',
+                contas: 'Cartão (Débito e Poupança)',
+                notas: 'Notas',
                 agenda: 'Agenda Pessoal',
                 lembretes: 'Lembretes & Tarefas',
                 hobbies: 'Hobbies & Projetos',
@@ -844,17 +887,18 @@
             
             const sidebar = document.getElementById('sidebar');
             if (window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) {
-                sidebar.classList.add('-translate-x-full');
+                sidebar.classList.add('-translate-x-full'); syncSidebarBackdrop();
             }
-            const bd = document.getElementById('sidebar-backdrop');
-            if (bd) bd.classList.add('hidden');
         }
 
         function toggleSidebarMobile() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('-translate-x-full');
-            const bd = document.getElementById('sidebar-backdrop');
-            if (bd) bd.classList.toggle('hidden', sidebar.classList.contains('-translate-x-full'));
+            syncSidebarBackdrop();
+        }
+        function syncSidebarBackdrop() {
+            const b = document.getElementById('sidebar-backdrop'), sb = document.getElementById('sidebar');
+            if (b && sb) b.classList.toggle('show', window.innerWidth < 768 && !sb.classList.contains('-translate-x-full'));
         }
 
         function toggleDarkMode() {
@@ -874,6 +918,8 @@
                 case 'saude': renderSaude(container); break;
                 case 'financeiro': renderFinanceiro(container); break;
                 case 'cartao': renderCartao(container); break;
+                case 'contas': renderContas(container); break;
+                case 'notas': renderNotas(container); break;
                 case 'agenda': renderAgenda(container); break;
                 case 'lembretes': renderLembretes(container); break;
                 case 'hobbies': renderHobbies(container); break;
@@ -885,24 +931,18 @@
         }
 
         function renderDashboard(container) {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const todaysAgenda = appData.agenda.filter(item => item.date === todayStr && item.status !== 'Finalizado');
+            const todayStr = localDateStr();
+            const todaysAgenda = appData.agenda.filter(item => item.status !== 'Finalizado' && agOcc(item, todayStr));
             const pendingLembretes = appData.lembretes.filter(item => !item.completed);
             
             let totalHabitacaoFundos = 0;
             appData.habitacao.contributions.forEach(c => {
+                if (c.type === 'pendente') return;
                 if (c.type === 'aporte') totalHabitacaoFundos += Number(c.amount);
                 else totalHabitacaoFundos -= Number(c.amount);
             });
 
-            // Resumo Financeiro para Dashboard
-            let totalReceitas = 0;
-            let totalDespesas = 0;
-            appData.financeiro.transactions.forEach(t => {
-                if (t.type === 'receita') totalReceitas += Number(t.amount);
-                else totalDespesas += Number(t.amount);
-            });
-            const saldoFin = totalReceitas - totalDespesas;
+            const saldoFin = finDash().value;
 
             container.innerHTML = `
                 <div class="space-y-6 max-w-7xl mx-auto">
@@ -924,7 +964,7 @@
                     </div>
 
                     <!-- Quick Metrics Grid -->
-                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
                         <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
                                 <p class="text-xs font-medium text-slate-400 uppercase">Água Hoje</p>
@@ -940,9 +980,7 @@
 
                         <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
-                                <p class="text-xs font-medium text-slate-400 uppercase">Saldo Financeiro</p>
-                                <h3 class="text-xl font-bold ${saldoFin >= 0 ? 'text-emerald-600' : 'text-rose-600'} mt-1">R$ ${saldoFin.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
-                                <p class="text-[10px] text-slate-400 mt-1">Geral acumulado</p>
+                                ${finDashHtml()}
                             </div>
                             <div class="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-500 flex items-center justify-center text-xl">
                                 <i class="fa-solid fa-wallet"></i>
@@ -960,6 +998,7 @@
                             </div>
                         </div>
 
+                        ${dashCreditHtml()}
                         <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
                                 <p class="text-xs font-medium text-slate-400 uppercase">Lembretes</p>
@@ -999,7 +1038,7 @@
                                         <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 flex justify-between items-center">
                                             <div>
                                                 <div class="flex items-center space-x-2">
-                                                    <span class="text-xs font-bold px-2 py-0.5 bg-teal-100 dark:bg-teal-900 text-teal-700 rounded-md">${item.time || 'Todo dia'}</span>
+                                                    <span class="text-xs font-bold px-2 py-0.5 bg-teal-100 dark:bg-teal-900 text-teal-700 rounded-md">${item.allDay ? 'Dia todo' : (item.time || 'Todo dia')}</span>
                                                     <h4 class="font-semibold text-slate-800 dark:text-white text-sm">${item.title}</h4>
                                                 </div>
                                                 ${item.address ? `<p class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-location-dot mr-1"></i> ${item.address}</p>` : ''}
@@ -1251,139 +1290,8 @@
 
         
         // --- FINANCEIRO COM FILTRO POR DATA / MOVIMENTAÇÃO GERAL ---
-        function renderFinanceiro(container) {
-            let filteredTransactions = appData.financeiro.transactions;
-            if (financeFilterDate) {
-                filteredTransactions = filteredTransactions.filter(t => t.date && t.date.startsWith(financeFilterDate));
-            }
-            if (financeFilterStatus !== 'todos') {
-                filteredTransactions = filteredTransactions.filter(t => (t.status || 'pago') === financeFilterStatus);
-            }
-            filteredTransactions = [...filteredTransactions].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-
-            let totalReceitas = 0;
-            let totalDespesas = 0;
-            let totalPendente = 0;
-            filteredTransactions.forEach(t => {
-                if (t.type === 'receita') totalReceitas += Number(t.amount);
-                else totalDespesas += Number(t.amount);
-                if ((t.status || 'pago') === 'pendente') totalPendente += Number(t.amount);
-            });
-            const saldo = totalReceitas - totalDespesas;
-
-            container.innerHTML = `
-                <div class="space-y-6 max-w-7xl mx-auto">
-                    <!-- Filtro por Data / Movimentação Geral -->
-                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
-                        <div class="flex flex-wrap items-center gap-3">
-                            <span class="text-xs font-bold text-slate-500 uppercase"><i class="fa-solid fa-filter mr-1"></i> Filtrar Período:</span>
-                            <input type="month" id="fin-filter-month" value="${financeFilterDate}" onchange="changeFinanceFilter(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                            <select onchange="changeFinanceStatusFilter(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                                <option value="todos" ${financeFilterStatus === 'todos' ? 'selected' : ''}>Todos os status</option>
-                                <option value="pago" ${financeFilterStatus === 'pago' ? 'selected' : ''}>Pagos</option>
-                                <option value="pendente" ${financeFilterStatus === 'pendente' ? 'selected' : ''}>Pendentes</option>
-                            </select>
-                            <button onclick="changeFinanceFilter('')" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Ver Movimentação Geral</button>
-                        </div>
-                        <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
-                            <i class="fa-solid fa-plus"></i>
-                            <span>Inserir Transação</span>
-                        </button>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                            <p class="text-xs font-semibold text-slate-400 uppercase">Receitas</p>
-                            <h3 class="text-2xl font-bold text-emerald-600 mt-1">R$ ${money(totalReceitas)}</h3>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                            <p class="text-xs font-semibold text-slate-400 uppercase">Despesas</p>
-                            <h3 class="text-2xl font-bold text-rose-600 mt-1">R$ ${money(totalDespesas)}</h3>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                            <p class="text-xs font-semibold text-slate-400 uppercase">Saldo do Período</p>
-                            <h3 class="text-2xl font-bold ${saldo >= 0 ? 'text-teal-600' : 'text-rose-600'} mt-1">R$ ${money(saldo)}</h3>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                            <p class="text-xs font-semibold text-slate-400 uppercase">Pendente</p>
-                            <h3 class="text-2xl font-bold text-amber-600 mt-1">R$ ${money(totalPendente)}</h3>
-                        </div>
-                    </div>
-
-                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2">
-                            <i class="fa-solid fa-wallet text-teal-500"></i>
-                            <span>Lançamentos Financeiros</span>
-                        </h3>
-                        ${filteredTransactions.length === 0 ? `
-                            <div class="text-center py-12 text-slate-400">
-                                <i class="fa-solid fa-receipt text-4xl mb-2"></i>
-                                <p class="text-sm">Nenhuma transação encontrada para este filtro.</p>
-                            </div>
-                        ` : `
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left text-sm">
-                                    <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]">
-                                        <tr>
-                                            <th class="p-3.5 rounded-l-xl">Descrição</th>
-                                            <th class="p-3.5">Categoria</th>
-                                            <th class="p-3.5">Data</th>
-                                            <th class="p-3.5">Valor</th>
-                                            <th class="p-3.5">Status</th>
-                                            <th class="p-3.5">Anexos</th>
-                                            <th class="p-3.5 text-right rounded-r-xl">Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                                        ${filteredTransactions.map(t => {
-                                            const st = t.status || 'pago';
-                                            const nAtt = (t.attachments || []).length;
-                                            return `
-                                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
-                                                <td class="p-3.5 font-medium text-slate-800 dark:text-white">
-                                                    ${esc(t.desc)}
-                                                    ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
-                                                    ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}
-                                                </td>
-                                                <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>
-                                                <td class="p-3.5 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td>
-                                                <td class="p-3.5 font-bold whitespace-nowrap ${t.type === 'receita' ? 'text-emerald-600' : 'text-rose-600'}">
-                                                    ${t.type === 'receita' ? '+' : '-'} R$ ${money(t.amount)}
-                                                </td>
-                                                <td class="p-3.5">
-                                                    <button onclick="toggleFinanceStatus('${t.id}')" title="Clique para alternar entre Pago e Pendente" class="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${st === 'pago' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}">
-                                                        <i class="fa-solid ${st === 'pago' ? 'fa-circle-check' : 'fa-clock'} mr-1"></i>${st === 'pago' ? 'Pago' : 'Pendente'}
-                                                    </button>
-                                                </td>
-                                                <td class="p-3.5">
-                                                    <button onclick="openAttachmentsModal('${t.id}')" title="Ver / adicionar anexos (recibos)" class="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${nAtt ? 'bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}">
-                                                        <i class="fa-solid fa-paperclip mr-1"></i>${nAtt || 'Anexar'}
-                                                    </button>
-                                                </td>
-                                                <td class="p-3.5 text-right space-x-1 whitespace-nowrap">
-                                                    <button onclick="editFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
-                                                    <button onclick="deleteFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
-                                                </td>
-                                            </tr>`;
-                                        }).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `;
-        }
-
         function changeFinanceStatusFilter(val) {
             financeFilterStatus = val;
-            renderCurrentTabContent();
-        }
-        function toggleFinanceStatus(id) {
-            const t = appData.financeiro.transactions.find(x => x.id === id);
-            if (!t) return;
-            t.status = (t.status || 'pago') === 'pago' ? 'pendente' : 'pago';
-            saveAppData();
             renderCurrentTabContent();
         }
 
@@ -1394,6 +1302,7 @@
 
         // --- AGENDA COM SUBPASTA CINZA DE FINALIZADOS E FILTROS ---
         function renderAgenda(container) {
+            if (agView === 'calendario') { renderAgendaCal(container); return; }
             let filteredAgenda = appData.agenda;
             if (agendaFilter === 'ativos') {
                 filteredAgenda = appData.agenda.filter(i => i.status !== 'Finalizado');
@@ -1407,6 +1316,7 @@
             container.innerHTML = `
                 <div class="space-y-6 max-w-7xl mx-auto">
                     <!-- Filtros e Botão Novo -->
+                    ${agViewToggle()}
                     <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
                         <div class="flex items-center space-x-2">
                             <span class="text-xs font-bold text-slate-500 uppercase"><i class="fa-solid fa-filter mr-1"></i> Filtro:</span>
@@ -1460,7 +1370,7 @@
                 <div class="p-5 rounded-2xl ${isFinalized ? 'bg-slate-300/60 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700' : 'bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700'} flex flex-col justify-between">
                     <div>
                         <div class="flex justify-between items-start mb-2">
-                            <span class="text-xs font-bold px-2.5 py-1 ${isFinalized ? 'bg-slate-400 text-slate-900 dark:bg-slate-700 dark:text-slate-300' : 'bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300'} rounded-lg">${item.date} ${item.time ? 'às ' + item.time : ''}</span>
+                            <span class="text-xs font-bold px-2.5 py-1 ${isFinalized ? 'bg-slate-400 text-slate-900 dark:bg-slate-700 dark:text-slate-300' : 'bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300'} rounded-lg">${item.date} ${item.allDay ? '· dia todo' : (item.time ? 'às ' + item.time : '')}${agRepeatLabel(item)}</span>
                             <div class="space-x-1">
                                 <button onclick="toggleAgendaStatus('${item.id}')" class="p-1.5 text-slate-500 hover:text-emerald-600 bg-white dark:bg-slate-800 rounded-lg shadow-sm" title="${isFinalized ? 'Reativar' : 'Finalizar'}"><i class="fa-solid ${isFinalized ? 'fa-rotate-left' : 'fa-check'} text-xs"></i></button>
                                 <button onclick="editAgenda('${item.id}')" class="p-1.5 text-slate-400 hover:text-teal-600 bg-white dark:bg-slate-800 rounded-lg shadow-sm" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
@@ -1620,7 +1530,9 @@
             
             let totalAportes = 0;
             let totalRetiradas = 0;
+            const spent = {}; let totalPrev = 0;
             appData.habitacao.contributions.forEach(c => {
+                if (c.type === 'pendente') { totalPrev += Number(c.amount) || 0; return; }
                 if (!balances[c.personId]) balances[c.personId] = 0;
                 if (c.type === 'aporte') {
                     balances[c.personId] += Number(c.amount);
@@ -1628,6 +1540,7 @@
                 } else {
                     balances[c.personId] -= Number(c.amount);
                     totalRetiradas += Number(c.amount);
+                    spent[c.personId] = (spent[c.personId] || 0) + Number(c.amount);
                 }
             });
             const saldoCaixaObra = totalAportes - totalRetiradas;
@@ -1684,6 +1597,7 @@
                                     </div>
                                     <h3 class="font-bold text-xl text-slate-800 dark:text-white">${p.name}</h3>
                                     <p class="text-2xl font-extrabold text-amber-600 mt-2">R$ ${(balances[p.id] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                    <p class="text-[10px] text-slate-400 mt-0.5">gasto até agora: R$ ${money(spent[p.id] || 0)}</p>
                                 </div>
                                 <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center text-xs">
                                     <button onclick="editPerson('${p.id}')" class="text-slate-500 hover:text-teal-600 font-semibold"><i class="fa-solid fa-pen mr-1"></i> Editar Nome</button>
@@ -1700,6 +1614,7 @@
                                 </div>
                                 <h3 class="font-bold text-xl text-white">Saldo em Caixa</h3>
                                 <p class="text-3xl font-extrabold text-emerald-400 mt-2">R$ ${saldoCaixaObra.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                ${totalPrev > 0 ? `<p class="text-[11px] text-amber-300 mt-1">Previsto a pagar: R$ ${money(totalPrev)}</p>` : ''}
                             </div>
                         </div>
                     </div>
@@ -1718,6 +1633,7 @@
                                     <option value="todos" ${obraFilterStatus === 'todos' ? 'selected' : ''}>Todos os Tipos</option>
                                     <option value="aporte" ${obraFilterStatus === 'aporte' ? 'selected' : ''}>Aportes</option>
                                     <option value="retirada" ${obraFilterStatus === 'retirada' ? 'selected' : ''}>Retiradas</option>
+                                    <option value="pendente" ${obraFilterStatus === 'pendente' ? 'selected' : ''}>Pendentes (previsão)</option>
                                 </select>
                             </div>
                         </div>
@@ -1737,14 +1653,14 @@
                                     </thead>
                                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                                         ${contributionsList.map(c => {
-                                            const person = appData.habitacao.people.find(p => p.id === c.personId) || {name: 'Desconhecido'};
+                                            const person = appData.habitacao.people.find(p => p.id === c.personId) || {name: c.type === 'pendente' ? '—' : 'Desconhecido'};
                                             return `
                                                 <tr class="hover:bg-slate-50/50">
                                                     <td class="p-3.5 font-bold text-slate-800 dark:text-white">${person.name}</td>
-                                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : 'Retirada'}</span></td>
-                                                    <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}</td>
+                                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? 'Pendente' : 'Retirada'}</span></td>
+                                                    <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}${c.linkKey ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">via Financeiro</span>' : ''}</td>
                                                     <td class="p-3.5 text-slate-500">${c.date}</td>
-                                                    <td class="p-3.5 font-bold ${c.type === 'aporte' ? 'text-emerald-600' : 'text-rose-600'}">R$ ${Number(c.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                    <td class="p-3.5 font-bold ${c.type === 'aporte' ? 'text-emerald-600' : c.type === 'pendente' ? 'text-amber-600' : 'text-rose-600'}">R$ ${Number(c.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                                                     <td class="p-3.5 text-right space-x-1">
                                                         <button onclick="editHabitacaoContrib('${c.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
                                                         <button onclick="deleteHabitacaoContrib('${c.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
@@ -1991,7 +1907,7 @@
             </tr>`;
         }
         function groupHeaderInner(g, all) {
-            const open = budgetGroupOpen[g.id] !== false;
+            const open = budgetGroupOpen[g.id] === true;
             return `
                 <button onclick="toggleBudgetGroup('${g.id}')" class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs flex-shrink-0"><i class="fa-solid ${open ? 'fa-chevron-down' : 'fa-chevron-right'}"></i></button>
                 <div class="min-w-0 flex-1">
@@ -2031,7 +1947,7 @@
             } else if (budgetView === 'bloco') {
                 body = `<div class="space-y-4">
                     ${blocks.map(({ g, all, shown }) => {
-                        const open = budgetGroupOpen[g.id] !== false;
+                        const open = budgetGroupOpen[g.id] === true;
                         return `<div class="rounded-2xl border-2 border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/10 p-4">
                             <div class="flex items-center gap-3">${groupHeaderInner(g, all)}</div>
                             ${open ? `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">${shown.length ? shown.map(budgetCardHtml).join('') : '<p class="text-xs text-slate-400 italic">Grupo sem orçamentos neste filtro.</p>'}</div>` : ''}
@@ -2046,7 +1962,7 @@
                     </tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         ${blocks.map(({ g, all, shown }) => {
-                            const open = budgetGroupOpen[g.id] !== false;
+                            const open = budgetGroupOpen[g.id] === true;
                             return `<tr class="bg-amber-50 dark:bg-amber-950/20"><td colspan="8" class="p-3"><div class="flex items-center gap-3">${groupHeaderInner(g, all)}</div></td></tr>
                                 ${open ? shown.map(b => budgetRowHtml(b, true)).join('') : ''}`;
                         }).join('')}
@@ -2089,7 +2005,7 @@
         }
 
         // --- ORÇAMENTOS: MODAL ---
-        function toggleBudgetGroup(id) { budgetGroupOpen[id] = budgetGroupOpen[id] === false; renderCurrentTabContent(); }
+        function toggleBudgetGroup(id) { budgetGroupOpen[id] = budgetGroupOpen[id] !== true; renderCurrentTabContent(); }
         function toggleBudgetSelectMode() { budgetSelectMode = !budgetSelectMode; budgetSelected = []; renderCurrentTabContent(); }
         function toggleBudgetSel(id) {
             const i = budgetSelected.indexOf(id);
@@ -2540,16 +2456,16 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Tipo</label>
-                            <select id="fin-type" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            <select id="fin-type" onchange="finTypeChange()" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                                 <option value="despesa" ${t.type === 'despesa' ? 'selected' : ''}>Despesa</option>
                                 <option value="receita" ${t.type === 'receita' ? 'selected' : ''}>Receita</option>
+                                <option value="transferencia" ${t.type === 'transferencia' ? 'selected' : ''}>Transf. entre Contas</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Status</label>
                             <select id="fin-status" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                                <option value="pago" ${st === 'pago' ? 'selected' : ''}>Pago</option>
-                                <option value="pendente" ${st === 'pendente' ? 'selected' : ''}>Pendente</option>
+                                ${finStatusOpts(t.type, st)}
                             </select>
                         </div>
                     </div>
@@ -2557,6 +2473,7 @@
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Descrição</label>
                         <input type="text" id="fin-desc" value="${esc(t.desc)}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                     </div>
+                    ${finAccHtml(t)}
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">${!id ? 'Valor total (R$)' : 'Valor (R$)'}</label>
@@ -2618,12 +2535,15 @@
             const amount = document.getElementById('fin-amount').value;
             const category = document.getElementById('fin-category').value;
             const date = document.getElementById('fin-date').value;
+            const accId = document.getElementById('fin-acc').value;
+            const toAccId = type === 'transferencia' ? document.getElementById('fin-to').value : '';
+            if (type === 'transferencia' && (!accId || !toAccId || accId === toAccId)) { showToast('Na transferência, escolha duas contas diferentes (origem e destino).', 'warning'); return; }
             const newAtts = await storeFiles(document.getElementById('fin-files').files);
 
             if (id) {
                 const tr = appData.financeiro.transactions.find(x => x.id === id);
                 if (tr) {
-                    tr.type = type; tr.status = status; tr.desc = desc; tr.amount = amount; tr.category = category; tr.date = date;
+                    tr.type = type; tr.status = status; tr.desc = desc; tr.amount = amount; tr.category = category; tr.date = date; tr.accId = accId; tr.toAccId = toAccId;
                     const toRemove = Array.from(document.querySelectorAll('.fin-remove-att:checked')).map(c => c.value);
                     toRemove.forEach(rid => deleteStoredFile(rid));
                     tr.attachments = (tr.attachments || []).filter(a => !toRemove.includes(a.id)).concat(newAtts);
@@ -2631,7 +2551,7 @@
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(document.getElementById('fin-installments').value) || 1));
                 if (n === 1) {
-                    appData.financeiro.transactions.push({ id: uid(), type, status, desc, amount, category, date, attachments: newAtts });
+                    appData.financeiro.transactions.push({ id: uid(), type, status, desc, amount, category, date, accId, toAccId, attachments: newAtts });
                 } else {
                     const totalCents = Math.round(Number(amount) * 100);
                     const base = Math.floor(totalCents / n);
@@ -2639,7 +2559,7 @@
                     for (let i = 0; i < n; i++) {
                         const cents = i === n - 1 ? totalCents - base * (n - 1) : base;
                         appData.financeiro.transactions.push({
-                            id: uid(), type, desc, category,
+                            id: uid(), type, desc, category, accId, toAccId,
                             amount: (cents / 100).toFixed(2),
                             date: addMonthsToDate(date, i),
                             status: i === 0 ? status : 'pendente',
@@ -2728,53 +2648,6 @@
             saveAppData();
             renderCurrentTabContent();
             openAttachmentsModal(txId);
-        }
-
-                function openAgendaModal(id = null) {
-            let item = { title: '', date: new Date().toISOString().split('T')[0], time: '09:00', address: '', desc: '', status: 'Ativo' };
-            if (id) item = appData.agenda.find(a => a.id === id) || item;
-            showModal(id ? 'Editar Compromisso' : 'Inserir Compromisso', `
-                <form onsubmit="saveAgenda(event, '${id || ''}')" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Título</label>
-                        <input type="text" id="ag-title" value="${item.title}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Data</label>
-                            <input type="date" id="ag-date" value="${item.date}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Horário</label>
-                            <input type="time" id="ag-time" value="${item.time}" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Local</label>
-                        <input type="text" id="ag-address" value="${item.address || ''}" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Descrição</label>
-                        <textarea id="ag-desc" rows="2" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">${item.desc || ''}</textarea>
-                    </div>
-                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
-                </form>
-            `);
-        }
-        function saveAgenda(e, id) {
-            e.preventDefault();
-            const title = document.getElementById('ag-title').value;
-            const date = document.getElementById('ag-date').value;
-            const time = document.getElementById('ag-time').value;
-            const address = document.getElementById('ag-address').value;
-            const desc = document.getElementById('ag-desc').value;
-            if (id) {
-                const ag = appData.agenda.find(x => x.id === id);
-                if (ag) { ag.title = title; ag.date = date; ag.time = time; ag.address = address; ag.desc = desc; }
-            } else {
-                appData.agenda.push({ id: Date.now().toString(), title, date, time, address, desc, status: 'Ativo' });
-            }
-            saveAppData(); closeModal(); renderCurrentTabContent(); showToast("Salvo!", "success");
         }
         function editAgenda(id) { openAgendaModal(id); }
         function deleteAgenda(id) { appData.agenda = appData.agenda.filter(a => a.id !== id); saveAppData(); renderCurrentTabContent(); }
@@ -2896,12 +2769,13 @@
             showModal('Movimentação de Obra', `
                 <form onsubmit="saveHabitacaoContrib(event, '${contribId || ''}')" class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">
-                        <select id="hab-contrib-person" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        <select id="hab-contrib-person" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm"><option value="">Sem nome (previsão)</option>
                             ${appData.habitacao.people.map(p => `<option value="${p.id}" ${c.personId === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
                         </select>
                         <select id="hab-contrib-type" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                             <option value="aporte" ${c.type === 'aporte' ? 'selected' : ''}>Aporte</option>
                             <option value="retirada" ${c.type === 'retirada' ? 'selected' : ''}>Retirada</option>
+                            <option value="pendente" ${c.type === 'pendente' ? 'selected' : ''}>Pendente (previsão)</option>
                         </select>
                     </div>
                     <input type="number" step="0.01" id="hab-contrib-amount" value="${c.amount}" placeholder="Valor (R$)" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
@@ -2922,6 +2796,7 @@
             const amount = document.getElementById('hab-contrib-amount').value;
             const desc = document.getElementById('hab-contrib-desc').value;
             const date = document.getElementById('hab-contrib-date').value;
+            if (type !== 'pendente' && !personId) { showToast('Escolha o nome para aporte ou retirada.', 'warning'); return; }
             if (id) {
                 const c = appData.habitacao.contributions.find(x => x.id === id);
                 if (c) { c.personId = personId; c.type = type; c.amount = amount; c.desc = desc; c.date = date; }
@@ -2930,8 +2805,15 @@
             }
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast("Salvo!", "success");
         }
-        function editHabitacaoContrib(id) { openHabitacaoContribModal(id); }
-        function deleteHabitacaoContrib(id) { appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
+        function editHabitacaoContrib(id) {
+            const c = appData.habitacao.contributions.find(x => x.id === id);
+            if (c && c.linkKey) { showToast('Esta movimentação vem de uma Transferência no Financeiro. Edite por lá.', 'warning'); return; }
+            openHabitacaoContribModal(id);
+        }
+        function deleteHabitacaoContrib(id) {
+            const c = appData.habitacao.contributions.find(x => x.id === id);
+            if (c && c.linkKey) { showToast('Esta movimentação vem de uma Transferência no Financeiro. Exclua por lá.', 'warning'); return; }
+            appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
 
         // =====================================================
         // CARTÃO DE CRÉDITO
@@ -3412,7 +3294,7 @@
             const now = localDateStr(), ym = now.slice(0, 7), yr = now.slice(0, 4);
             const rows = [];
             appData.financeiro.transactions.forEach(t => {
-                if (t.type === 'receita' || t.cardInvoice) return; // fatura já é contada pelos lançamentos do cartão
+                if (t.type !== 'despesa' || t.cardInvoice) return; // fatura já é contada pelos lançamentos do cartão
                 rows.push({ cat: (t.category || 'Sem categoria').trim(), amount: Number(t.amount) || 0, date: t.date || '', src: 'fin' });
             });
             appData.cartao.entries.forEach(e => rows.push({ cat: (e.category || 'Outros').trim(), amount: Number(e.amount) || 0, date: e.date || '', src: 'card' }));
@@ -3641,7 +3523,7 @@
             financas: { label: 'Finanças', sheet: 'Finanças', alias: ['financas', 'financeiro'],
                 head: ['Tipo', 'Status', 'Descrição', 'Valor', 'Categoria', 'Data'],
                 example: ['despesa', 'pago', 'Mercado', 150.5, 'Alimentação', '10/10/2026'],
-                rows: () => appData.financeiro.transactions.map(t => [t.type === 'receita' ? 'receita' : 'despesa', t.status || 'pago', t.desc, Number(t.amount), t.category, fmtBR(t.date)]) },
+                rows: () => appData.financeiro.transactions.filter(t => t.type !== 'transferencia').map(t => [t.type === 'receita' ? 'receita' : 'despesa', t.status || 'pago', t.desc, Number(t.amount), t.category, fmtBR(t.date)]) },
             hobbies: { label: 'Hobbies', sheet: 'Hobbies', alias: ['hobbies', 'hobby'],
                 head: ['Título', 'Categoria', 'Status', 'Observações'],
                 example: ['Aprender violão', 'Música', 'Em Andamento', ''],
@@ -3655,7 +3537,7 @@
                 example: ['Samuel', 'aporte', 1000, 'Entrada do mês', '05/10/2026'],
                 rows: () => appData.habitacao.contributions.map(c => {
                     const pe = appData.habitacao.people.find(x => x.id === c.personId);
-                    return [pe ? pe.name : '', c.type === 'retirada' ? 'retirada' : 'aporte', Number(c.amount), c.desc || '', fmtBR(c.date)];
+                    return [pe ? pe.name : '', c.type === 'retirada' ? 'retirada' : c.type === 'pendente' ? 'pendente' : 'aporte', Number(c.amount), c.desc || '', fmtBR(c.date)];
                 }) }
         };
         function buildWorkbook(keys, template) {
@@ -3733,7 +3615,7 @@
                     if (!(amount > 0)) { skipped++; return; }
                     const pname = normKey(rowGet(r, 'pessoa', 'nome'));
                     const person = appData.habitacao.people.find(x => normKey(x.name) === pname) || appData.habitacao.people[0];
-                    const type = normKey(rowGet(r, 'tipo')).startsWith('ret') ? 'retirada' : 'aporte';
+                    const tpk = normKey(rowGet(r, 'tipo')); const type = tpk.startsWith('ret') ? 'retirada' : tpk.startsWith('pen') ? 'pendente' : 'aporte';
                     const desc = String(rowGet(r, 'descricao', 'desc')).trim();
                     const date = parseDateAny(rowGet(r, 'data')) || today;
                     if (!person) { skipped++; return; }
@@ -3782,7 +3664,7 @@
             const tx = appData.financeiro.transactions;
             const mtx = tx.filter(t => (t.date || '').startsWith(month));
             const rec = mtx.filter(t => t.type === 'receita').reduce((s, t) => s + Number(t.amount), 0);
-            const des = mtx.filter(t => t.type !== 'receita').reduce((s, t) => s + Number(t.amount), 0);
+            const des = mtx.filter(t => t.type === 'despesa').reduce((s, t) => s + Number(t.amount), 0);
             if (!tx.length) add('fa-wallet', 'Finanças', 'Ainda não há lançamentos. Registre receitas e despesas do mês para eu conseguir analisar para onde o dinheiro vai.');
             else if (!mtx.length) add('fa-wallet', 'Finanças', 'Nenhum lançamento neste mês até agora. Manter o registro em dia é a base de qualquer planejamento.');
             else {
@@ -3790,23 +3672,23 @@
                 else if (rec > 0 && des / rec > 0.8) add('fa-triangle-exclamation', 'Finanças', `Os gastos já consomem ${Math.round(des / rec * 100)}% da receita do mês. Uma referência comum é 50% necessidades, 30% desejos e 20% reserva/objetivos.`, 'warn');
                 else if (rec > 0) add('fa-circle-check', 'Finanças', `Sobraram ${R(rec - des)} neste mês. Que tal separar uma parte para a reserva de emergência ou para o fundo da casa?`, 'good');
                 const cat = {};
-                mtx.filter(t => t.type !== 'receita').forEach(t => { cat[t.category] = (cat[t.category] || 0) + Number(t.amount); });
+                mtx.filter(t => t.type === 'despesa').forEach(t => { cat[t.category] = (cat[t.category] || 0) + Number(t.amount); });
                 const top = Object.entries(cat).sort((a, b) => b[1] - a[1])[0];
                 if (top) add('fa-chart-pie', 'Finanças', `Maior categoria de gasto no mês: ${esc(top[0])} (${R(top[1])}). É um bom ponto para buscar economia.`);
             }
-            const pend = tx.filter(t => t.type !== 'receita' && t.status === 'pendente');
+            const pend = tx.filter(t => t.type === 'despesa' && t.status === 'pendente');
             if (pend.length) add('fa-hourglass-half', 'Finanças', `${pend.length} despesa(s) pendente(s) somando ${R(pend.reduce((s, t) => s + Number(t.amount), 0))}. Priorize as que têm vencimento mais próximo para evitar juros e multas.`, 'warn');
 
             // Habitação
             const h = appData.habitacao;
-            const fundo = h.contributions.reduce((s, c) => s + (c.type === 'aporte' ? 1 : -1) * Number(c.amount), 0);
+            const fundo = h.contributions.reduce((s, c) => s + (c.type === 'aporte' ? 1 : c.type === 'pendente' ? 0 : -1) * Number(c.amount), 0);
             const aprov = h.budgets.filter(b => b.status === 'Aprovado').reduce((s, b) => s + Number(b.amount), 0);
             const bPend = h.budgets.filter(b => b.status !== 'Aprovado');
             if (aprov > 0 && aprov > fundo) add('fa-house-circle-exclamation', 'Habitação', `Os orçamentos aprovados somam ${R(aprov)}, acima do saldo do fundo (${R(fundo)}). Faltam ${R(aprov - fundo)}: combine aportes extras ou renegocie prazos.`, 'warn');
             else if (aprov > 0) add('fa-house-circle-check', 'Habitação', `O fundo (${R(fundo)}) cobre os orçamentos aprovados (${R(aprov)}).`, 'good');
             if (bPend.length) add('fa-file-invoice-dollar', 'Habitação', `${bPend.length} orçamento(s) pendente(s). Compare pelo menos 3 fornecedores e confira o que está incluso (material, mão de obra, prazo) antes de aprovar.`);
             if (h.people.length >= 2) {
-                const tot = h.people.map(pe => ({ n: pe.name, v: Number(pe.initialBalance || 0) + h.contributions.filter(c => c.personId === pe.id).reduce((s, c) => s + (c.type === 'aporte' ? 1 : -1) * Number(c.amount), 0) }));
+                const tot = h.people.map(pe => ({ n: pe.name, v: Number(pe.initialBalance || 0) + h.contributions.filter(c => c.personId === pe.id).reduce((s, c) => s + (c.type === 'aporte' ? 1 : c.type === 'pendente' ? 0 : -1) * Number(c.amount), 0) }));
                 const s = tot.slice().sort((a, b) => b.v - a.v);
                 if (s[0].v - s[s.length - 1].v > 0) add('fa-scale-balanced', 'Habitação', `Aportes líquidos: ${tot.map(t => `${esc(t.n)} ${R(t.v)}`).join(' · ')}. Acompanhar a diferença ajuda a manter a divisão combinada em dia.`);
             }
@@ -3822,7 +3704,7 @@
             // Agenda / lembretes / hobbies
             const late = appData.lembretes.filter(l => !l.completed && l.date && l.date < today);
             if (late.length) add('fa-bell', 'Lembretes', `${late.length} lembrete(s) atrasado(s). Resolva ou reagende para não acumular.`, 'warn');
-            const ag = appData.agenda.filter(a => a.date === today && a.status !== 'Finalizado');
+            const ag = appData.agenda.filter(a => a.status !== 'Finalizado' && agOcc(a, today));
             if (ag.length) add('fa-calendar-day', 'Agenda', `Você tem ${ag.length} compromisso(s) hoje.`);
             const hb = appData.hobbies.filter(x => x.status !== 'Finalizado');
             if (hb.length) add('fa-heart', 'Hobbies', `${hb.length} hobby(s) em andamento. Reservar um horário fixo na semana ajuda a tirá-los do papel.`);
@@ -3844,7 +3726,7 @@
         // GOOGLE DRIVE — login + sincronização automática
         // =====================================================
         const GOOGLE_CLIENT_ID = '737517508578-oh51pl1lmnav4c14cjqt3ptfikltjnm7.apps.googleusercontent.com';
-        const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+        const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive'; // acesso completo: necessário para ler a pasta compartilhada pela outra conta
         const DRIVE_FOLDER = 'MeuSistema';
         const DRIVE_DATA = 'meusistema_dados.json';
         const DRIVE_LINK_KEY = 'meusistema_drive_linked';
@@ -3883,22 +3765,9 @@
             const r = await fetch(url, Object.assign({}, opts, { headers: Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + driveToken }) }));
             if (r.status === 401 && retry) { driveToken = null; return driveFetch(url, opts, false); }
             if (!r.ok) {
-                let reason = '', gmsg = '';
-                try { const j = await r.clone().json(); const er = j.error || {}; reason = (er.errors && er.errors[0] && er.errors[0].reason) || er.status || ''; gmsg = er.message || ''; } catch (_) { try { gmsg = (await r.clone().text()).slice(0, 120); } catch (__) {} }
-                const op = (opts.method || 'GET') + ' ' + (url.includes('alt=media') ? 'ler arquivo' : (url.includes('/upload/') ? 'gravar' : 'listar'));
-                const map = {
-                    accessNotConfigured: 'a API do Google Drive não está ativada no projeto do Google Cloud',
-                    SERVICE_DISABLED: 'a API do Google Drive não está ativada no projeto do Google Cloud',
-                    insufficientPermissions: 'o acesso ao Drive não foi concedido. Saia, entre de novo e MARQUE a caixa de permissão do Drive',
-                    ACCESS_TOKEN_SCOPE_INSUFFICIENT: 'o acesso ao Drive não foi concedido. Saia, entre de novo e MARQUE a caixa de permissão do Drive',
-                    forbidden: 'sem permissão neste arquivo/pasta (precisa ser editor e o app só enxerga arquivos que ele mesmo criou)',
-                    appNotAuthorizedToFile: 'este arquivo/pasta não foi criado por este app nesta conta',
-                    userRateLimitExceeded: 'limite de requisições do Google, tente em instantes',
-                    rateLimitExceeded: 'limite de requisições do Google, tente em instantes'
-                };
-                const e = new Error('Drive ' + r.status + (reason ? ' [' + reason + ']' : '') + (map[reason] ? ': ' + map[reason] : '') + ' | ' + op + (gmsg ? ' | Google: ' + gmsg.slice(0, 140) : ''));
-                e.reason = reason; console.error('Drive erro', r.status, reason);
-                throw e;
+                let det = '';
+                try { const j = await r.clone().json(); det = (j.error && ((j.error.errors && j.error.errors[0] && j.error.errors[0].reason) || j.error.status)) || ''; } catch (e) {}
+                throw new Error('Drive ' + r.status + (det ? ' (' + det + ')' : ''));
             }
             return r;
         }
@@ -3910,16 +3779,16 @@
         }
         async function driveEnsureFolder() {
             if (driveFolderId) return;
-            const folders = await driveList(`name='${DRIVE_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`, 'id,ownedByMe');
-            if (folders.length) {
-                // Pode haver mais de uma "MeuSistema" (própria vazia + compartilhada): usa a que tem o arquivo de dados mais recente
-                let best = null;
-                for (const fo of folders) {
+            // Pode haver mais de uma pasta "MeuSistema" (a sua e a compartilhada). Usa a que tem os dados;
+            // se houver mais de uma com dados, prefere a compartilhada por outra conta.
+            const f = await driveList(`name='${DRIVE_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`, 'id,ownedByMe');
+            if (f.length) {
+                for (const fo of f) {
                     const d = await driveList(`name='${DRIVE_DATA}' and '${fo.id}' in parents and trashed=false`, 'id,modifiedTime');
-                    if (d.length) { const t = d.map(x => x.modifiedTime || '').sort().pop(); if (!best || t > best.t) best = { id: fo.id, t }; }
+                    fo._t = d.length ? d[0].modifiedTime : '';
                 }
-                driveFolderId = best ? best.id : (folders.find(fo => fo.ownedByMe) || folders[0]).id;
-                return;
+                f.sort((a, b) => (!!b._t - !!a._t) || ((a.ownedByMe ? 1 : 0) - (b.ownedByMe ? 1 : 0)) || (b._t || '').localeCompare(a._t || ''));
+                driveFolderId = f[0].id; return;
             }
             const r = await driveFetch(DRIVE_API + '?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: DRIVE_FOLDER, mimeType: 'application/vnd.google-apps.folder' }) });
             driveFolderId = (await r.json()).id;
@@ -3961,7 +3830,6 @@
             await driveEnsureFolder();
             const f = await driveList(`name='${DRIVE_DATA}' and '${driveFolderId}' in parents and trashed=false`, 'id,modifiedTime');
             if (!f.length) { driveFileId = null; driveReconciled = true; await driveUpload(); await driveSyncAttachments(); return; }
-            f.sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
             driveFileId = f[0].id;
             const cloud = await (await driveFetch(`${DRIVE_API}/${driveFileId}?alt=media`)).json();
             const cN = dataCount(cloud), lN = dataCount(appData);
@@ -4052,10 +3920,6 @@
                 client_id: GOOGLE_CLIENT_ID, scope: DRIVE_SCOPE,
                 callback: r => {
                     if (r.error) { _tokRej && _tokRej(new Error(r.error)); return; }
-                    if (google.accounts.oauth2.hasGrantedAllScopes && !google.accounts.oauth2.hasGrantedAllScopes(r, DRIVE_SCOPE)) {
-                        _tokRej && _tokRej(new Error('você não concedeu a permissão do Drive. Entre de novo e marque a caixa de acesso ao Drive'));
-                        return;
-                    }
                     driveToken = r.access_token; driveTokenExp = Date.now() + (Number(r.expires_in) - 60) * 1000;
                     _tokRes && _tokRes(driveToken);
                 },
@@ -4070,47 +3934,6 @@
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && driveToken && driveReconciled && Date.now() < driveTokenExp) driveReconcile().catch(console.error);
         });
-        async function driveDiagnose() {
-            const out = [];
-            const add = (k, v) => out.push(k + ': ' + v);
-            showModal('Diagnóstico do Drive', '<p class="text-sm text-slate-500">Executando testes…</p>');
-            const show = () => showModal('Diagnóstico do Drive', `<pre class="text-[11px] whitespace-pre-wrap break-words bg-slate-50 dark:bg-slate-900 rounded-xl p-3 max-h-[60vh] overflow-auto">${esc(out.join('\n'))}</pre><p class="text-xs text-slate-400 mt-3">Tire uma captura desta tela e envie. Não há senhas aqui.</p>`);
-            const call = async (label, url) => {
-                try { const r = await driveFetch(url); const j = await r.json(); return j; }
-                catch (e) { add(label, 'ERRO -> ' + e.message); return null; }
-            };
-            try {
-                add('Versão do teste', 'escopo pedido = ' + DRIVE_SCOPE.split('/').pop());
-                add('Endereço do app', location.origin);
-                if (!driveToken) { add('Token', 'sem login. Entre com o Google primeiro.'); show(); return; }
-                try {
-                    const ti = await (await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + driveToken)).json();
-                    add('Escopos concedidos', String(ti.scope || ti.error_description || '?').replace(/https:\/\/www\.googleapis\.com\/auth\//g, ''));
-                    add('Conta (email)', ti.email || '(não informado)');
-                } catch (e) { add('tokeninfo', 'falhou: ' + e.message); }
-                const ab = await call('Sobre a conta', `${DRIVE_API.replace('/files', '/about')}?fields=user(emailAddress,displayName)`);
-                if (ab && ab.user) add('Usuário do Drive', ab.user.emailAddress);
-                const fo = await call('Pastas', `${DRIVE_API}?q=${encodeURIComponent("name='" + DRIVE_FOLDER + "' and mimeType='application/vnd.google-apps.folder' and trashed=false")}&fields=${encodeURIComponent('files(id,ownedByMe,owners(emailAddress),capabilities(canEdit,canAddChildren))')}`);
-                if (fo) {
-                    add('Pastas "' + DRIVE_FOLDER + '" visíveis', String(fo.files.length));
-                    for (const f of fo.files) {
-                        add('  pasta ' + f.id.slice(0, 8) + '…', `dono=${(f.owners || [{}])[0].emailAddress || '?'} | minha=${f.ownedByMe} | posso editar=${f.capabilities && f.capabilities.canEdit} | posso adicionar=${f.capabilities && f.capabilities.canAddChildren}`);
-                        const fl = await call('  arquivos', `${DRIVE_API}?q=${encodeURIComponent("'" + f.id + "' in parents and trashed=false")}&fields=${encodeURIComponent('files(id,name,ownedByMe,modifiedTime,capabilities(canEdit))')}&pageSize=50`);
-                        if (fl) {
-                            const data = fl.files.filter(x => x.name === DRIVE_DATA);
-                            add('    arquivos na pasta', `${fl.files.length} (dados: ${data.length}, anexos: ${fl.files.filter(x => x.name.startsWith('anexo_')).length})`);
-                            for (const d of data) {
-                                add('    ' + DRIVE_DATA, `modificado=${d.modifiedTime} | meu=${d.ownedByMe} | posso editar=${d.capabilities && d.capabilities.canEdit}`);
-                                try { const r = await driveFetch(`${DRIVE_API}/${d.id}?alt=media`); const j = await r.json(); add('    leitura', 'OK, itens=' + dataCount(j)); }
-                                catch (e) { add('    leitura', 'ERRO -> ' + e.message); }
-                            }
-                        }
-                    }
-                }
-                add('Pasta escolhida pelo app', driveFolderId || '(ainda nenhuma)');
-            } catch (e) { add('Falha geral', e.message); }
-            show();
-        }
         function driveCardHtml() {
             const btn = 'w-full sm:w-auto px-6 py-3 rounded-2xl text-sm font-bold shadow flex items-center justify-center space-x-2';
             let st, actions;
@@ -4118,9 +3941,8 @@
             else if (driveToken) {
                 st = `<span class="text-emerald-600">Conectado ao Drive (pasta "${DRIVE_FOLDER}")${driveLastSync ? ' · última sincronização ' + driveLastSync.toLocaleTimeString('pt-BR') : ''}.${driveErr ? ' <b class="text-rose-500">Erro: ' + esc(driveErr) + '</b>' : ''}</span>`;
                 actions = `<button onclick="driveSyncManual()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-solid fa-rotate"></i><span>Sincronizar agora</span></button>
-                           <button onclick="driveSignOut()" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-right-from-bracket"></i><span>Sair do Drive</span></button>
-                           <button onclick=\"driveDiagnose()\" class=\"${btn} bg-amber-100 text-amber-900\"><i class=\"fa-solid fa-stethoscope\"></i><span>Diagnóstico</span></button>`;
-            } else { st = '<span class=\"text-slate-500\">Não conectado.</span>'; actions = `<button onclick="driveSignIn()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-brands fa-google"></i><span>Entrar com Google</span></button>`; }
+                           <button onclick="driveSignOut()" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-right-from-bracket"></i><span>Sair do Drive</span></button>`;
+            } else { st = '<span class="text-slate-500">Não conectado.</span>'; actions = `<button onclick="driveSignIn()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-brands fa-google"></i><span>Entrar com Google</span></button>`; }
             return `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                 <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2"><i class="fa-brands fa-google-drive text-teal-500"></i><span>Google Drive</span></h3>
                 <p class="text-sm text-slate-500 mb-2">Salva automaticamente dados e anexos no seu Drive, na pasta <b>${DRIVE_FOLDER}</b>, e carrega em qualquer computador ao entrar com a mesma conta.</p>
@@ -4181,6 +4003,562 @@
                 </div>`;
         }
 
+        // =====================================================
+        // AJUSTES V2: CONTAS (CARTÃO DÉBITO/POUPANÇA), FINANCEIRO, TELA INICIAL, AGENDA
+        // =====================================================
+        // Transferências com "Habitacional X" geram aporte/retirada no Fundo de Obra (só estas; nada mais do Habitacional vai ao Financeiro)
+        function syncHabTransfers() {
+            const H = appData.habitacao; if (!H || !appData.financeiro) return;
+            const want = {};
+            appData.financeiro.transactions.forEach(t => {
+                if (t.type !== 'transferencia') return;
+                [['from', t.accId, 'retirada'], ['to', t.toAccId, 'aporte']].forEach(([side, id, ty]) => {
+                    if (!isHabId(id)) return;
+                    const pid = id.slice(4); if (!H.people.some(p => p.id === pid)) return;
+                    want[t.id + '|' + side] = { personId: pid, type: t.status === 'pendente' ? 'pendente' : ty, amount: t.amount, date: t.date, desc: 'Transf. Financeiro: ' + (t.desc || '') };
+                });
+            });
+            H.contributions = H.contributions.filter(c => !c.linkKey || want[c.linkKey]);
+            Object.keys(want).forEach(k => {
+                const c = H.contributions.find(x => x.linkKey === k);
+                if (c) Object.assign(c, want[k]); else H.contributions.push(Object.assign({ id: uid(), linkKey: k }, want[k]));
+            });
+        }
+        // =====================================================
+        // NOTAS (texto ou lista) COM SENHA OPCIONAL — criptografia AES-GCM no próprio aparelho
+        // =====================================================
+        let nEd = {}, nQuery = '';
+        function notasData() { if (!Array.isArray(appData.notas)) appData.notas = []; return appData.notas; }
+        function nB64(buf) { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
+        function nUnB64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+        async function nKey(pw, salt) {
+            const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+            return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+        }
+        async function nEncrypt(obj, pw) {
+            const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+            const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await nKey(pw, salt), new TextEncoder().encode(JSON.stringify(obj)));
+            return { salt: nB64(salt), iv: nB64(iv), data: nB64(ct) };
+        }
+        async function nDecrypt(enc, pw) {
+            const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nUnB64(enc.iv) }, await nKey(pw, nUnB64(enc.salt)), nUnB64(enc.data));
+            return JSON.parse(new TextDecoder().decode(pt));
+        }
+        function nCryptoOk() { if (window.crypto && crypto.subtle) return true; showToast('Este navegador não permite criptografia aqui. Abra pelo endereço https do sistema.', 'error'); return false; }
+
+        function renderNotas(container) {
+            const q = normKey(nQuery);
+            const list = notasData().slice().sort((a, b) => (b.updated || 0) - (a.updated || 0)).filter(n => {
+                if (!q) return true;
+                if (normKey(n.title || '').includes(q)) return true;
+                if (n.locked) return false;
+                return normKey((n.text || '') + ' ' + (n.items || []).map(i => i.t).join(' ')).includes(q);
+            });
+            const prev = n => {
+                if (n.locked) return `<p class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mt-2"><i class="fa-solid fa-lock"></i>Protegida por senha</p>`;
+                if (n.kind === 'lista') {
+                    const it = n.items || [], done = it.filter(i => i.done).length;
+                    return `<div class="mt-2 space-y-0.5 text-xs text-slate-500">${it.slice(0, 4).map(i => `<p class="truncate ${i.done ? 'line-through opacity-60' : ''}"><i class="fa-regular ${i.done ? 'fa-square-check' : 'fa-square'} mr-1.5"></i>${esc(i.t)}</p>`).join('')}${it.length > 4 ? `<p class="text-[11px] text-slate-400">+${it.length - 4} itens</p>` : ''}${it.length ? `<p class="text-[11px] text-slate-400 pt-1">${done}/${it.length} concluídos</p>` : '<p class="text-slate-400">Lista vazia</p>'}</div>`;
+                }
+                return `<p class="mt-2 text-xs text-slate-500 line-clamp-4 whitespace-pre-line">${esc((n.text || '').slice(0, 220)) || '<span class="text-slate-400">Nota vazia</span>'}</p>`;
+            };
+            container.innerHTML = `<div class="space-y-5 max-w-7xl mx-auto">
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                    <input type="text" placeholder="Buscar notas..." value="${esc(nQuery)}" onchange="nQuery=this.value;renderCurrentTabContent()" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm w-full sm:w-64">
+                    <button onclick="openNoteEditor(null)" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Nova nota</span></button>
+                </div>
+                ${list.length ? `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">${list.map(n => `
+                    <button onclick="openNote('${n.id}')" class="text-left bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700 hover:border-teal-400 transition">
+                        <div class="flex items-start justify-between gap-2"><h4 class="font-bold text-sm text-slate-800 dark:text-white break-words">${esc(n.title || 'Sem título')}</h4>
+                            <i class="fa-solid ${n.locked ? 'fa-lock text-amber-500' : n.kind === 'lista' ? 'fa-list-check text-teal-500' : 'fa-note-sticky text-teal-500'} text-sm mt-0.5"></i></div>
+                        ${prev(n)}
+                        <p class="text-[10px] text-slate-400 mt-3">${n.updated ? new Date(n.updated).toLocaleDateString('pt-BR') : ''}</p>
+                    </button>`).join('')}</div>` : `<div class="text-center py-16 text-slate-400"><i class="fa-regular fa-note-sticky text-5xl mb-3"></i><p class="text-sm">${nQuery ? 'Nenhuma nota encontrada.' : 'Nenhuma nota ainda. Toque em "Nova nota" para criar texto ou lista.'}</p></div>`}
+            </div>`;
+        }
+        function openNote(id) {
+            const n = notasData().find(x => x.id === id); if (!n) return;
+            if (!n.locked) { openNoteEditor(id); return; }
+            showModal('Nota protegida', `<form onsubmit="unlockNote(event,'${id}')" class="space-y-4">
+                <p class="text-sm text-slate-500"><i class="fa-solid fa-lock text-amber-500 mr-1"></i>${esc(n.title || 'Sem título')}</p>
+                <div><label class="${LBL}">Senha</label><input type="password" id="nt-unlock" autocomplete="off" required class="${INP}"></div>
+                <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Abrir nota</button></form>`);
+            setTimeout(() => { const e = document.getElementById('nt-unlock'); if (e) e.focus(); }, 50);
+        }
+        async function unlockNote(e, id) {
+            e.preventDefault(); if (!nCryptoOk()) return;
+            const n = notasData().find(x => x.id === id), pw = document.getElementById('nt-unlock').value;
+            try { openNoteEditor(id, await nDecrypt(n.enc, pw), pw); }
+            catch (err) { showToast('Senha incorreta.', 'error'); document.getElementById('nt-unlock').value = ''; }
+        }
+        function noteItemRow(it) {
+            return `<div class="nt-row flex items-center gap-2"><input type="checkbox" class="nt-done" ${it.done ? 'checked' : ''}><input type="text" class="nt-it ${INP} flex-1" value="${esc(it.t || '')}" placeholder="Item" onkeydown="if(event.key==='Enter'){event.preventDefault();noteAddItem();}"><button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1"><i class="fa-solid fa-xmark"></i></button></div>`;
+        }
+        function noteAddItem() {
+            document.getElementById('nt-items').insertAdjacentHTML('beforeend', noteItemRow({}));
+            const r = document.querySelectorAll('#nt-items .nt-it'); r[r.length - 1].focus();
+        }
+        function noteKindChange() {
+            const k = document.getElementById('nt-kind').value;
+            document.getElementById('nt-text-wrap').classList.toggle('hidden', k !== 'texto');
+            document.getElementById('nt-list-wrap').classList.toggle('hidden', k !== 'lista');
+            if (k === 'lista' && !document.querySelector('#nt-items .nt-row')) noteAddItem();
+        }
+        function notePwChange() { document.getElementById('nt-pw-wrap').classList.toggle('hidden', document.getElementById('nt-protect').value !== 'sim'); }
+        function openNoteEditor(id, data, pw) {
+            const base = id ? notasData().find(n => n.id === id) : null;
+            const kind = base ? base.kind : 'texto';
+            const c = data || { text: base ? (base.text || '') : '', items: base ? (base.items || []) : [] };
+            nEd = { id: id || '', pw: pw || '' };
+            const locked = !!(base && base.locked);
+            showModal(id ? 'Editar nota' : 'Nova nota', `
+                <form onsubmit="saveNote(event)" class="space-y-4">
+                    <div><label class="${LBL}">Título</label><input type="text" id="nt-title" value="${esc(base ? base.title : '')}" required class="${INP}"></div>
+                    ${base ? `<input type="hidden" id="nt-kind" value="${kind}">` : `<div><label class="${LBL}">Tipo</label><select id="nt-kind" onchange="noteKindChange()" class="${INP}"><option value="texto">Texto</option><option value="lista">Lista (com itens marcáveis)</option></select></div>`}
+                    <div id="nt-text-wrap" class="${kind === 'texto' ? '' : 'hidden'}"><label class="${LBL}">Texto</label><textarea id="nt-text" rows="8" class="${INP}">${esc(c.text || '')}</textarea></div>
+                    <div id="nt-list-wrap" class="${kind === 'lista' ? '' : 'hidden'} space-y-2"><label class="${LBL}">Itens</label>
+                        <div id="nt-items" class="space-y-2">${(c.items || []).map(noteItemRow).join('')}</div>
+                        <button type="button" onclick="noteAddItem()" class="text-xs font-bold text-teal-600"><i class="fa-solid fa-plus mr-1"></i>Adicionar item</button></div>
+                    <div><label class="${LBL}">Proteger com senha?</label><select id="nt-protect" onchange="notePwChange()" class="${INP}"><option value="nao" ${locked ? '' : 'selected'}>Não</option><option value="sim" ${locked ? 'selected' : ''}>Sim</option></select></div>
+                    <div id="nt-pw-wrap" class="${locked ? '' : 'hidden'} space-y-3">
+                        <div class="grid grid-cols-2 gap-3"><div><label class="${LBL}">${locked ? 'Nova senha' : 'Senha'}</label><input type="password" id="nt-pw" autocomplete="new-password" placeholder="${locked ? 'Em branco = manter' : 'Mín. 4 caracteres'}" class="${INP}"></div>
+                        <div><label class="${LBL}">Repetir senha</label><input type="password" id="nt-pw2" autocomplete="new-password" class="${INP}"></div></div>
+                        <p class="text-[11px] text-amber-600">Atenção: não há como recuperar a senha. Se esquecer, o conteúdo da nota não poderá ser aberto. O título continua visível na lista.</p></div>
+                    <div class="flex gap-3"><button type="submit" class="flex-1 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar nota</button>
+                    ${base ? `<button type="button" onclick="deleteNote('${id}')" class="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-rose-600 text-sm font-bold"><i class="fa-solid fa-trash"></i></button>` : ''}</div>
+                </form>`);
+            if (!base) setTimeout(() => { const e = document.getElementById('nt-title'); if (e) e.focus(); }, 50);
+        }
+        async function saveNote(e) {
+            e.preventDefault();
+            const g = k => document.getElementById(k).value;
+            const base = nEd.id ? notasData().find(n => n.id === nEd.id) : null;
+            const kind = base ? base.kind : g('nt-kind');
+            const payload = kind === 'lista'
+                ? { text: '', items: Array.from(document.querySelectorAll('#nt-items .nt-row')).map(r => ({ t: r.querySelector('.nt-it').value.trim(), done: r.querySelector('.nt-done').checked })).filter(i => i.t) }
+                : { text: g('nt-text'), items: [] };
+            const protect = g('nt-protect') === 'sim';
+            let pw = '';
+            if (protect) {
+                if (!nCryptoOk()) return;
+                const np = g('nt-pw'), cp = g('nt-pw2');
+                if (np) {
+                    if (np.length < 4) { showToast('A senha precisa ter ao menos 4 caracteres.', 'warning'); return; }
+                    if (np !== cp) { showToast('As senhas não conferem.', 'warning'); return; }
+                    pw = np;
+                } else pw = nEd.pw;
+                if (!pw) { showToast('Defina uma senha para proteger a nota.', 'warning'); return; }
+            }
+            const n = base || { id: uid(), kind, created: Date.now() };
+            n.title = g('nt-title').trim(); n.updated = Date.now();
+            if (protect) { n.enc = await nEncrypt(payload, pw); n.locked = true; delete n.text; delete n.items; }
+            else { n.locked = false; delete n.enc; n.text = payload.text; n.items = payload.items; }
+            if (!base) notasData().push(n);
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Nota salva!', 'success');
+        }
+        function deleteNote(id) {
+            if (!confirm('Excluir esta nota? Não dá para desfazer.')) return;
+            appData.notas = notasData().filter(n => n.id !== id);
+            saveAppData(); closeModal(); renderCurrentTabContent();
+        }
+
+        function contasData() {
+            if (!appData.contas) appData.contas = { cards: [] };
+            if (!Array.isArray(appData.contas.cards)) appData.contas.cards = [];
+            return appData.contas.cards;
+        }
+        function isHabId(id) { return typeof id === 'string' && id.startsWith('hab:'); }
+        function accById(id) {
+            if (!id) return null;
+            if (isHabId(id)) { const p = appData.habitacao.people.find(x => x.id === id.slice(4)); return p ? { id, name: 'Habitacional ' + p.name, type: 'hab' } : null; }
+            return contasData().find(a => a.id === id);
+        }
+        function accLabel(a) { return a && a.type === 'hab' ? a.name : a ? `${a.name} (${a.type === 'poupanca' ? 'Poupança' : 'Débito'})` : ''; }
+        function finCounted(id) { if (isHabId(id)) return false; const a = accById(id); return !(a && a.noSum); }
+
+        // Efeito de um lançamento (receita / despesa) no total geral ou em uma conta específica
+        function finEffect(t, acc) {
+            const v = Number(t.amount) || 0, z = { r: 0, d: 0 };
+            if (t.type === 'transferencia') {
+                let out, inn;
+                if (acc) { out = t.accId === acc; inn = t.toAccId === acc; }
+                else { const co = finCounted(t.accId), ci = finCounted(t.toAccId); out = co && !ci; inn = ci && !co; }
+                return { r: inn ? v : 0, d: out ? v : 0 };
+            }
+            if (acc ? t.accId !== acc : !finCounted(t.accId)) return z;
+            return t.type === 'receita' ? { r: v, d: 0 } : { r: 0, d: v };
+        }
+
+        // ---------- Status ----------
+        function finSt(t) { const s = t.status || 'pago'; if (s === 'pendente') return 'pendente'; return t.type === 'receita' ? 'recebido' : 'pago'; }
+        function finStLabel(t) { const s = finSt(t); return s === 'pendente' ? 'Pendente' : s === 'recebido' ? 'Recebido' : (t.type === 'transferencia' ? 'Efetuada' : 'Pago'); }
+        function finStCls(t) { const s = finSt(t); return s === 'pendente' ? 'bg-amber-100 text-amber-700' : s === 'recebido' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'; }
+        function finStatusOpts(type, st) {
+            const done = type === 'receita' ? ['recebido', 'Recebido'] : ['pago', type === 'transferencia' ? 'Efetuada' : 'Pago'];
+            const cur = st === 'pendente' ? 'pendente' : 'ok';
+            return `<option value="${done[0]}" ${cur === 'ok' ? 'selected' : ''}>${done[1]}</option><option value="pendente" ${cur === 'pendente' ? 'selected' : ''}>Pendente</option>`;
+        }
+        function finAccHtml(t) {
+            const cs = contasData();
+            const isT = t.type === 'transferencia';
+            const opt = v => finAccOpts(v, isT);
+            return `<div class="grid grid-cols-2 gap-4">
+                <div><label class="${LBL}" id="fin-acc-lbl">${isT ? 'Conta de origem' : 'Cartão / Conta'}</label><select id="fin-acc" class="${INP}">${opt(t.accId || '')}</select></div>
+                <div id="fin-to-wrap" class="${isT ? '' : 'hidden'}"><label class="${LBL}">Conta de destino</label><select id="fin-to" class="${INP}">${opt(t.toAccId || '')}</select></div>
+            </div>${cs.length ? '' : '<p class="text-[11px] text-amber-600 -mt-2">Nenhum cartão cadastrado ainda. Cadastre no menu "Cartão".</p>'}`;
+        }
+        function finAccOpts(v, isT) {
+            const cs = contasData();
+            let h = `<option value="">— Sem cartão/conta —</option>` + cs.map(a => `<option value="${a.id}" ${v === a.id ? 'selected' : ''}>${esc(accLabel(a))}</option>`).join('');
+            if (isT) h += `<optgroup label="Habitacional (Fundo de Obra)">` + appData.habitacao.people.map(p => { const id = 'hab:' + p.id; return `<option value="${id}" ${v === id ? 'selected' : ''}>Habitacional ${esc(p.name)}</option>`; }).join('') + `</optgroup>`;
+            return h;
+        }
+        function finTypeChange() {
+            const ty = document.getElementById('fin-type').value;
+            const sel = document.getElementById('fin-status');
+            sel.innerHTML = finStatusOpts(ty, sel.value === 'pendente' ? 'pendente' : 'ok');
+            ['fin-acc', 'fin-to'].forEach(i => { const el = document.getElementById(i); let v = el.value; if (ty !== 'transferencia' && isHabId(v)) v = ''; el.innerHTML = finAccOpts(v, ty === 'transferencia'); });
+            document.getElementById('fin-to-wrap').classList.toggle('hidden', ty !== 'transferencia');
+            document.getElementById('fin-acc-lbl').textContent = ty === 'transferencia' ? 'Conta de origem' : 'Cartão / Conta';
+            const c = document.getElementById('fin-category');
+            if (ty === 'transferencia' && !c.value.trim()) c.value = 'Transferência';
+        }
+
+        // ---------- Tela Financeiro (filtro geral) ----------
+        function finSet(k, v) { finF[k] = v; renderCurrentTabContent(); }
+        function finClear() { finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' }; financeFilterDate = ''; financeFilterStatus = 'todos'; renderCurrentTabContent(); }
+        function finFiltered() {
+            const f = finF;
+            return appData.financeiro.transactions.filter(t => {
+                if (financeFilterDate && !(t.date && t.date.startsWith(financeFilterDate))) return false;
+                if (financeFilterStatus !== 'todos' && finSt(t) !== financeFilterStatus) return false;
+                if (f.acc && t.accId !== f.acc && t.toAccId !== f.acc) return false;
+                if (f.cat && (t.category || '') !== f.cat) return false;
+                if (f.type && t.type !== f.type) return false;
+                const a = Number(t.amount) || 0;
+                if (f.min !== '' && a < Number(f.min)) return false;
+                if (f.max !== '' && a > Number(f.max)) return false;
+                if (f.q && !normKey((t.desc || '') + ' ' + (t.category || '')).includes(normKey(f.q))) return false;
+                return true;
+            }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        }
+        function renderFinanceiro(container) {
+            const list = finFiltered();
+            let tr = 0, td = 0, tp = 0;
+            list.forEach(t => {
+                const e = finEffect(t, finF.acc);
+                tr += e.r; td += e.d;
+                if (finSt(t) === 'pendente') tp += e.r + e.d;
+            });
+            const saldo = tr - td;
+            const cats = [...new Set(appData.financeiro.transactions.map(t => t.category).filter(Boolean))].sort();
+            const o = (v, l, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`;
+            const S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            const card = (l, v, c) => `<div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700"><p class="text-xs font-semibold text-slate-400 uppercase">${l}</p><h3 class="text-2xl font-bold ${c} mt-1">R$ ${money(v)}</h3></div>`;
+            container.innerHTML = `
+                <div class="space-y-6 max-w-7xl mx-auto">
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <span class="text-xs font-bold text-slate-500 uppercase"><i class="fa-solid fa-filter mr-1"></i> Filtro geral</span>
+                            <div class="flex gap-2">
+                                <button onclick="finClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Ver movimentação geral (limpar filtros)</button>
+                                <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <input type="month" value="${financeFilterDate}" onchange="changeFinanceFilter(this.value)" title="Mês" class="${S}">
+                            <select onchange="finSet('acc',this.value)" class="${S}"><option value="">Todos os bancos/cartões</option>${contasData().map(a => o(a.id, accLabel(a), finF.acc)).join('')}</select>
+                            <select onchange="finSet('cat',this.value)" class="${S}"><option value="">Todas as categorias</option>${cats.map(c => o(c, c, finF.cat)).join('')}</select>
+                            <select onchange="finSet('type',this.value)" class="${S}">${o('', 'Receitas e despesas', finF.type)}${o('receita', 'Só receitas', finF.type)}${o('despesa', 'Só despesas', finF.type)}${o('transferencia', 'Só transferências', finF.type)}</select>
+                            <select onchange="changeFinanceStatusFilter(this.value)" class="${S}">${o('todos', 'Todos os status', financeFilterStatus)}${o('pago', 'Pagos', financeFilterStatus)}${o('recebido', 'Recebidos', financeFilterStatus)}${o('pendente', 'Pendentes', financeFilterStatus)}</select>
+                            <input type="number" step="0.01" min="0" placeholder="Valor mín." value="${finF.min}" onchange="finSet('min',this.value)" class="${S} w-28">
+                            <input type="number" step="0.01" min="0" placeholder="Valor máx." value="${finF.max}" onchange="finSet('max',this.value)" class="${S} w-28">
+                            <input type="text" placeholder="Buscar descrição..." value="${esc(finF.q)}" onchange="finSet('q',this.value)" class="${S} w-44">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                        ${card('Receitas', tr, 'text-emerald-600')}${card('Despesas', td, 'text-rose-600')}${card('Saldo do Período', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${card('Pendente', tp, 'text-amber-600')}
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-wallet text-teal-500"></i><span>Lançamentos Financeiros</span><span class="text-xs font-normal text-slate-400">(${list.length})</span></h3>
+                        ${list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhuma transação encontrada para este filtro.</p></div>` : `
+                        <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
+                                <th class="p-3.5 rounded-l-xl">Descrição</th><th class="p-3.5">Categoria</th><th class="p-3.5">Cartão/Conta</th><th class="p-3.5">Data</th><th class="p-3.5">Valor</th><th class="p-3.5">Status</th><th class="p-3.5">Anexos</th><th class="p-3.5 text-right rounded-r-xl">Ações</th>
+                            </tr></thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                            ${list.map(t => {
+                                const isT = t.type === 'transferencia', nAtt = (t.attachments || []).length;
+                                const a1 = accById(t.accId), a2 = accById(t.toAccId);
+                                const acc = isT ? `${a1 ? esc(a1.name) : '—'} <i class="fa-solid fa-arrow-right text-[9px] mx-0.5"></i> ${a2 ? esc(a2.name) : '—'}` : (a1 ? esc(a1.name) : '<span class="text-slate-300">—</span>');
+                                const ef = isT ? finEffect(t, finF.acc) : null;
+                                const tDir = isT ? (ef.d > 0 ? 'out' : ef.r > 0 ? 'in' : 'mid') : '';
+                                const vc = tDir === 'mid' ? 'text-sky-600' : (tDir === 'in' || (!isT && t.type === 'receita')) ? 'text-emerald-600' : 'text-rose-600';
+                                const sg = tDir === 'mid' ? '⇄' : (tDir === 'in' || (!isT && t.type === 'receita')) ? '+' : '-';
+                                return `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                                    <td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
+                                        ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
+                                        ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}
+                                        ${isT ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">transf.</span>` : ''}</td>
+                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>
+                                    <td class="p-3.5 text-xs text-slate-500 whitespace-nowrap">${acc}</td>
+                                    <td class="p-3.5 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td>
+                                    <td class="p-3.5 font-bold whitespace-nowrap ${vc}">${sg} R$ ${money(t.amount)}</td>
+                                    <td class="p-3.5"><button onclick="toggleFinanceStatus('${t.id}')" title="Clique para alternar entre ${t.type === 'receita' ? 'Recebido' : 'Pago'} e Pendente" class="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${finStCls(t)}"><i class="fa-solid ${finSt(t) === 'pendente' ? 'fa-clock' : 'fa-circle-check'} mr-1"></i>${finStLabel(t)}</button></td>
+                                    <td class="p-3.5"><button onclick="openAttachmentsModal('${t.id}')" title="Anexos" class="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${nAtt ? 'bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}"><i class="fa-solid fa-paperclip mr-1"></i>${nAtt || 'Anexar'}</button></td>
+                                    <td class="p-3.5 text-right space-x-1 whitespace-nowrap">
+                                        <button onclick="editFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                                        <button onclick="deleteFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                                    </td></tr>`;
+                            }).join('')}
+                            </tbody></table></div>`}
+                    </div>
+                </div>`;
+        }
+        function toggleFinanceStatus(id) {
+            const t = appData.financeiro.transactions.find(x => x.id === id);
+            if (!t) return;
+            t.status = finSt(t) === 'pendente' ? (t.type === 'receita' ? 'recebido' : 'pago') : 'pendente';
+            saveAppData(); renderCurrentTabContent();
+        }
+
+        // ---------- Menu "Cartão" (débito e poupança) ----------
+        function renderContas(container) {
+            const cs = contasData();
+            if (!cs.find(a => a.id === contaSel)) contaSel = cs[0] ? cs[0].id : null;
+            const a = accById(contaSel);
+            let body = '';
+            if (!cs.length) {
+                body = `<div class="text-center py-16 text-slate-400"><i class="fa-regular fa-credit-card text-5xl mb-3"></i><p class="text-sm">Nenhum cartão cadastrado. Cadastre um cartão de débito ou poupança para ligá-lo ao Financeiro.</p></div>`;
+            } else {
+                const txs = appData.financeiro.transactions.filter(t => t.accId === a.id || t.toAccId === a.id).sort((x, y) => (y.date || '').localeCompare(x.date || ''));
+                let rec = 0, des = 0, saldo = 0, prev = 0;
+                txs.forEach(t => {
+                    const e = finEffect(t, a.id); rec += e.r; des += e.d;
+                    if (finSt(t) === 'pendente') prev += e.r - e.d; else saldo += e.r - e.d;
+                });
+                const k = (l, v, c) => `<div class="bg-slate-50 dark:bg-slate-700/40 rounded-2xl p-4"><p class="text-[11px] font-semibold text-slate-400 uppercase">${l}</p><p class="text-xl font-bold ${c} mt-1">R$ ${money(v)}</p></div>`;
+                body = `
+                <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700 space-y-5">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white">${esc(a.name)} <span class="text-xs font-bold px-2 py-0.5 rounded-md ${a.type === 'poupanca' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'}">${a.type === 'poupanca' ? 'Poupança' : 'Débito'}</span>
+                            ${a.noSum ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 ml-1">fora da soma da tela inicial</span>' : ''}</h3>
+                            <p class="text-xs text-slate-500 mt-1">Nº ${esc(a.number)} · Agência ${esc(a.agency)} · Conta ${esc(a.account)}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="openFinanceModal(); setTimeout(()=>{const s=document.getElementById('fin-acc'); if(s) s.value='${a.id}';},30)" class="bg-teal-600 text-white px-3 py-2 rounded-xl text-xs font-bold"><i class="fa-solid fa-plus mr-1"></i>Lançar no Financeiro</button>
+                            <button onclick="openContaModal('${a.id}')" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteConta('${a.id}')" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">${k('Saldo atual', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${k('Previsto (pendentes)', prev, 'text-amber-600')}${k('Entradas', rec, 'text-emerald-600')}${k('Saídas', des, 'text-rose-600')}</div>
+                    <p class="text-[11px] text-slate-400">Os lançamentos abaixo vêm da tela Financeiro (campo "Cartão / Conta"). Para alterar, edite lá.</p>
+                    ${txs.length === 0 ? '<p class="text-sm text-slate-400 text-center py-6">Nenhum lançamento ligado a este cartão.</p>' : `
+                    <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-slate-400 uppercase text-[11px]"><tr><th class="p-2">Data</th><th class="p-2">Descrição</th><th class="p-2">Categoria</th><th class="p-2">Valor</th><th class="p-2">Status</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    ${txs.map(t => { const e = finEffect(t, a.id), v = e.r - e.d; return `<tr><td class="p-2 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td><td class="p-2 font-medium text-slate-800 dark:text-white">${esc(t.desc)}${t.type === 'transferencia' ? ' <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 font-bold">transf.</span>' : ''}</td><td class="p-2">${esc(t.category)}</td><td class="p-2 font-bold whitespace-nowrap ${v >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${v >= 0 ? '+' : '-'} R$ ${money(Math.abs(v))}</td><td class="p-2"><span class="px-2 py-0.5 rounded-md text-xs font-bold ${finStCls(t)}">${finStLabel(t)}</span></td></tr>`; }).join('')}
+                    </tbody></table></div>`}
+                </div>`;
+            }
+            container.innerHTML = `<div class="space-y-6 max-w-7xl mx-auto">
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap gap-2">${cs.map(c => `<button onclick="contaSel='${c.id}';renderCurrentTabContent()" class="px-3 py-1.5 rounded-xl text-xs font-bold ${c.id === contaSel ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${c.type === 'poupanca' ? 'fa-piggy-bank' : 'fa-credit-card'} mr-1"></i>${esc(c.name)}</button>`).join('')}</div>
+                    <button onclick="openContaModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Novo cartão</span></button>
+                </div>${body}</div>`;
+        }
+        function openContaModal(id = null) {
+            const c = id ? accById(id) : { name: '', number: '', agency: '', account: '', type: 'debito', noSum: false };
+            showModal(id ? 'Editar cartão' : 'Novo cartão (débito / poupança)', `
+                <form onsubmit="saveConta(event,'${id || ''}')" class="space-y-4">
+                    <div><label class="${LBL}">Nome *</label><input id="ct-name" required value="${esc(c.name)}" placeholder="Ex: Nubank, Caixa Poupança" class="${INP}"></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Tipo *</label><select id="ct-type" required class="${INP}"><option value="debito" ${c.type === 'debito' ? 'selected' : ''}>Débito</option><option value="poupanca" ${c.type === 'poupanca' ? 'selected' : ''}>Poupança</option></select></div>
+                        <div><label class="${LBL}">Número *</label><input id="ct-number" required inputmode="numeric" value="${esc(c.number)}" class="${INP}"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Agência *</label><input id="ct-agency" required value="${esc(c.agency)}" class="${INP}"></div>
+                        <div><label class="${LBL}">Conta *</label><input id="ct-account" required value="${esc(c.account)}" class="${INP}"></div>
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" id="ct-nosum" ${c.noSum ? 'checked' : ''}> Não contabilizar o valor na tela inicial</label>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar cartão</button>
+                </form>`);
+        }
+        function saveConta(e, id) {
+            e.preventDefault();
+            const v = k => document.getElementById(k).value.trim();
+            const data = { name: v('ct-name'), type: v('ct-type'), number: v('ct-number'), agency: v('ct-agency'), account: v('ct-account'), noSum: document.getElementById('ct-nosum').checked };
+            if (id) Object.assign(accById(id), data);
+            else { const c = Object.assign({ id: uid() }, data); contasData().push(c); contaSel = c.id; }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Cartão salvo!', 'success');
+        }
+        function deleteConta(id) {
+            if (!confirm('Excluir este cartão? Os lançamentos do Financeiro continuam, apenas ficam sem cartão ligado.')) return;
+            appData.financeiro.transactions.forEach(t => { if (t.accId === id) t.accId = ''; if (t.toAccId === id) t.toAccId = ''; });
+            appData.contas.cards = contasData().filter(a => a.id !== id);
+            if (dashAcc === id) dashAcc = '';
+            if (finF.acc === id) finF.acc = '';
+            saveAppData(); renderCurrentTabContent();
+        }
+
+        // ---------- Tela inicial: situação financeira com filtros + cartão de crédito ----------
+        function finDash() {
+            let r = 0, d = 0;
+            appData.financeiro.transactions.forEach(t => { const e = finEffect(t, dashAcc); r += e.r; d += e.d; });
+            return { r, d, value: dashMode === 'receita' ? r : dashMode === 'despesa' ? d : r - d };
+        }
+        function dashSet(k, v) { if (k === 'acc') dashAcc = v; else dashMode = v; renderCurrentTabContent(); }
+        function finDashHtml() {
+            const f = finDash();
+            const lbl = { saldo: 'Saldo Financeiro', receita: 'Receitas', despesa: 'Despesas' }[dashMode];
+            const col = dashMode === 'receita' ? 'text-emerald-600' : dashMode === 'despesa' ? 'text-rose-600' : (f.value >= 0 ? 'text-emerald-600' : 'text-rose-600');
+            const S = 'px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[10px] max-w-[120px]';
+            return `<p class="text-xs font-medium text-slate-400 uppercase">${lbl}</p>
+                <h3 class="text-xl font-bold ${col} mt-1">R$ ${money(f.value)}</h3>
+                <div class="mt-1.5 flex flex-wrap gap-1">
+                    <select onchange="dashSet('acc',this.value)" class="${S}"><option value="">Total geral</option>${contasData().map(a => `<option value="${a.id}" ${dashAcc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select>
+                    <select onchange="dashSet('mode',this.value)" class="${S}"><option value="saldo" ${dashMode === 'saldo' ? 'selected' : ''}>Saldo final</option><option value="receita" ${dashMode === 'receita' ? 'selected' : ''}>Só receita</option><option value="despesa" ${dashMode === 'despesa' ? 'selected' : ''}>Só despesa</option></select>
+                </div>`;
+        }
+        function dashCreditHtml() {
+            const tx = appData.financeiro.transactions.filter(t => t.cardInvoice);
+            const sum = a => a.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+            const open = sum(tx.filter(t => (t.status || 'pago') === 'pendente'));
+            const mk = localDateStr().slice(0, 7);
+            const month = sum(tx.filter(t => t.cardInvoice.inv === mk));
+            return `<div onclick="switchTab('cartao')" class="cursor-pointer bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                <div><p class="text-xs font-medium text-slate-400 uppercase">Cartão de Crédito</p>
+                <h3 class="text-xl font-bold text-rose-600 mt-1">R$ ${money(open)}</h3>
+                <p class="text-[10px] text-slate-400 mt-1">Faturas em aberto · fatura do mês: R$ ${money(month)}</p></div>
+                <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center text-xl"><i class="fa-solid fa-credit-card"></i></div></div>`;
+        }
+
+        // ---------- Agenda: repetição, dia todo e calendário ----------
+        function agOcc(it, ds) {
+            if (!it.date || ds < it.date) return false;
+            if (it.until && ds > it.until) return false;
+            const r = it.repeat;
+            if (!r || !r.freq || r.freq === 'none') return ds === it.date;
+            const a = new Date(it.date + 'T00:00:00'), b = new Date(ds + 'T00:00:00');
+            const days = Math.round((b - a) / 864e5);
+            let n = 1, unit = r.freq;
+            if (r.freq === 'custom') { n = Math.max(1, Number(r.every) || 1); unit = r.unit || 'day'; }
+            if (unit === 'daily' || unit === 'day') return days % n === 0;
+            if (unit === 'weekly' || unit === 'week') {
+                const wd = (r.days && r.days.length) ? r.days : [a.getDay()];
+                return wd.includes(b.getDay()) && Math.floor((days + a.getDay()) / 7) % n === 0;
+            }
+            if (unit === 'monthly' || unit === 'month') {
+                const mo = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
+                const lastB = new Date(b.getFullYear(), b.getMonth() + 1, 0).getDate();
+                return mo % n === 0 && b.getDate() === Math.min(a.getDate(), lastB);
+            }
+            if (unit === 'yearly' || unit === 'year') {
+                const yr = b.getFullYear() - a.getFullYear();
+                return yr % n === 0 && b.getMonth() === a.getMonth() && b.getDate() === a.getDate();
+            }
+            return ds === it.date;
+        }
+        function agRepeatLabel(it) {
+            const r = it.repeat; if (!r || !r.freq || r.freq === 'none') return '';
+            const m = { daily: 'Diário', weekly: 'Semanal', monthly: 'Mensal', yearly: 'Anual' };
+            const u = { day: 'dia(s)', week: 'semana(s)', month: 'mês(es)', year: 'ano(s)' };
+            return ' · 🔁 ' + (r.freq === 'custom' ? `A cada ${r.every} ${u[r.unit] || ''}` : m[r.freq]);
+        }
+        function agDay(ds) {
+            return appData.agenda.filter(a => a.status !== 'Finalizado' && agOcc(a, ds))
+                .sort((x, y) => (x.allDay ? '' : (x.time || '')).localeCompare(y.allDay ? '' : (y.time || '')));
+        }
+        function agViewToggle() {
+            const b = (v, i, l) => `<button onclick="agSetView('${v}')" class="px-3 py-1.5 text-xs font-bold ${agView === v ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${i} mr-1"></i>${l}</button>`;
+            return `<div class="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${b('calendario', 'fa-calendar-days', 'Calendário')}${b('lista', 'fa-list', 'Lista')}</div>`;
+        }
+        function agSetView(v) { agView = v; renderCurrentTabContent(); }
+        function agNav(d) { agMonth = ymAdd(agMonth, d); renderCurrentTabContent(); }
+        function agPick(ds) { agSel = ds; renderCurrentTabContent(); }
+        function agToday() { agMonth = localDateStr().slice(0, 7); agSel = localDateStr(); renderCurrentTabContent(); }
+        function renderAgendaCal(container) {
+            const [y, m] = agMonth.split('-').map(Number);
+            const start = new Date(y, m - 1, 1).getDay(), dim = new Date(y, m, 0).getDate(), today = localDateStr();
+            let cells = '';
+            for (let i = 0; i < start; i++) cells += '<div></div>';
+            for (let d = 1; d <= dim; d++) {
+                const ds = `${agMonth}-${pad2(d)}`, ev = agDay(ds), isT = ds === today, isS = ds === agSel;
+                cells += `<button onclick="agPick('${ds}')" class="min-h-[56px] sm:min-h-[92px] p-1 rounded-xl border text-left flex flex-col gap-0.5 bg-white dark:bg-slate-800 ${isS ? 'border-teal-500 ring-2 ring-teal-300' : 'border-slate-200 dark:border-slate-700'}">
+                    <span class="text-[11px] font-bold ${isT ? 'bg-teal-600 text-white rounded-full w-5 h-5 flex items-center justify-center' : 'text-slate-500'}">${d}</span>
+                    ${ev.slice(0, 3).map(a => `<span class="hidden sm:block truncate text-[10px] px-1 rounded ${a.allDay ? 'bg-amber-100 text-amber-800' : 'bg-teal-100 text-teal-800'}">${a.allDay ? '' : (a.time || '') + ' '}${esc(a.title)}</span>`).join('')}
+                    ${ev.length ? '<span class="sm:hidden w-1.5 h-1.5 rounded-full bg-teal-500"></span>' : ''}
+                    ${ev.length > 3 ? `<span class="hidden sm:block text-[10px] text-slate-400">+${ev.length - 3}</span>` : ''}</button>`;
+            }
+            const sel = agDay(agSel);
+            container.innerHTML = `<div class="space-y-5 max-w-7xl mx-auto">
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                    ${agViewToggle()}
+                    <div class="flex items-center gap-2">
+                        <button onclick="agNav(-1)" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-left"></i></button>
+                        <span class="font-bold text-sm text-slate-800 dark:text-white min-w-[140px] text-center capitalize">${fmtYM(agMonth)}</span>
+                        <button onclick="agNav(1)" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-right"></i></button>
+                        <button onclick="agToday()" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold">Hoje</button>
+                    </div>
+                    <button onclick="openAgendaModal(null,'${agSel}')" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Compromisso</span></button>
+                </div>
+                <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-400 uppercase">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(x => `<div>${x}</div>`).join('')}</div>
+                <div class="grid grid-cols-7 gap-1">${cells}</div>
+                <div class="space-y-3"><h3 class="font-bold text-sm text-slate-500 uppercase tracking-wider">${fmtBR(agSel)}</h3>
+                    ${sel.length ? `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${sel.map(i => renderAgendaCard(i, false)).join('')}</div>` : '<p class="text-sm text-slate-400">Nenhum compromisso neste dia.</p>'}</div>
+            </div>`;
+        }
+        function openAgendaModal(id = null, dflt = '') {
+            let it = { title: '', date: dflt || (agView === 'calendario' ? agSel : localDateStr()), time: '09:00', allDay: false, repeat: { freq: 'none', every: 1, unit: 'day', days: [] }, until: '', address: '', desc: '', status: 'Ativo' };
+            if (id) it = Object.assign({}, it, appData.agenda.find(a => a.id === id) || {});
+            const r = Object.assign({ freq: 'none', every: 1, unit: 'day', days: [] }, it.repeat || {});
+            const fo = (v, l) => `<option value="${v}" ${r.freq === v ? 'selected' : ''}>${l}</option>`;
+            const uo = (v, l) => `<option value="${v}" ${r.unit === v ? 'selected' : ''}>${l}</option>`;
+            showModal(id ? 'Editar Compromisso' : 'Inserir Compromisso', `
+                <form onsubmit="saveAgenda(event,'${id || ''}')" class="space-y-4">
+                    <div><label class="${LBL}">Título</label><input type="text" id="ag-title" value="${esc(it.title)}" required class="${INP}"></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Data</label><input type="date" id="ag-date" value="${it.date}" required class="${INP}"></div>
+                        <div><div class="flex items-center justify-between mb-1"><label class="text-xs font-semibold text-slate-500 uppercase">Horário</label>
+                            <label class="flex items-center gap-1 text-[11px] text-slate-500"><input type="checkbox" id="ag-allday" ${it.allDay ? 'checked' : ''} onchange="agAllDayChange()"> dia todo</label></div>
+                            <input type="time" id="ag-time" value="${it.time || ''}" ${it.allDay ? 'disabled' : ''} class="${INP}"></div>
+                    </div>
+                    <div><label class="${LBL}">Repetição</label>
+                        <select id="ag-freq" onchange="agRepChange()" class="${INP}">${fo('none', 'Não repete')}${fo('daily', 'Diária')}${fo('weekly', 'Semanal')}${fo('monthly', 'Mensal')}${fo('yearly', 'Anual')}${fo('custom', 'A cada...')}</select></div>
+                    <div id="ag-wd-wrap" class="${r.freq === 'weekly' ? '' : 'hidden'}"><label class="${LBL}">Dias da semana</label><div class="flex gap-1.5">
+                        ${['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((l, i) => `<label class="flex flex-col items-center text-[11px] text-slate-500 gap-0.5"><input type="checkbox" class="ag-wd" value="${i}" ${(r.days || []).includes(i) ? 'checked' : ''}>${l}</label>`).join('')}</div>
+                        <p class="text-[11px] text-slate-400 mt-1">Sem marcar nada, repete no dia da semana da data escolhida.</p></div>
+                    <div id="ag-custom-wrap" class="${r.freq === 'custom' ? '' : 'hidden'} grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">A cada</label><input type="number" min="1" id="ag-every" value="${r.every || 1}" class="${INP}"></div>
+                        <div><label class="${LBL}">Unidade</label><select id="ag-unit" class="${INP}">${uo('day', 'dia(s)')}${uo('week', 'semana(s)')}${uo('month', 'mês(es)')}${uo('year', 'ano(s)')}</select></div></div>
+                    <div id="ag-until-wrap" class="${r.freq === 'none' ? 'hidden' : ''}"><label class="${LBL}">Repetir até (opcional)</label><input type="date" id="ag-until" value="${it.until || ''}" class="${INP}"></div>
+                    <div><label class="${LBL}">Local</label><input type="text" id="ag-address" value="${esc(it.address || '')}" class="${INP}"></div>
+                    <div><label class="${LBL}">Descrição</label><textarea id="ag-desc" rows="2" class="${INP}">${esc(it.desc || '')}</textarea></div>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                </form>`);
+        }
+        function agAllDayChange() { document.getElementById('ag-time').disabled = document.getElementById('ag-allday').checked; }
+        function agRepChange() {
+            const f = document.getElementById('ag-freq').value;
+            document.getElementById('ag-wd-wrap').classList.toggle('hidden', f !== 'weekly');
+            document.getElementById('ag-custom-wrap').classList.toggle('hidden', f !== 'custom');
+            document.getElementById('ag-until-wrap').classList.toggle('hidden', f === 'none');
+        }
+        function saveAgenda(e, id) {
+            e.preventDefault();
+            const g = k => document.getElementById(k).value;
+            const allDay = document.getElementById('ag-allday').checked, freq = g('ag-freq');
+            const data = {
+                title: g('ag-title'), date: g('ag-date'), allDay, time: allDay ? '' : g('ag-time'),
+                address: g('ag-address'), desc: g('ag-desc'),
+                repeat: { freq, every: Math.max(1, Number(g('ag-every')) || 1), unit: g('ag-unit'), days: Array.from(document.querySelectorAll('.ag-wd:checked')).map(c => Number(c.value)) },
+                until: freq === 'none' ? '' : g('ag-until')
+            };
+            if (id) { const ag = appData.agenda.find(x => x.id === id); if (ag) Object.assign(ag, data); }
+            else appData.agenda.push(Object.assign({ id: Date.now().toString(), status: 'Ativo' }, data));
+            if (data.date) { agSel = data.date; agMonth = data.date.slice(0, 7); }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Salvo!', 'success');
+        }
+
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -4203,5 +4581,8 @@
             initDrive();
         };
     </script>
+<script>if(window.innerWidth<768){var _sb=document.getElementById('sidebar');if(_sb)_sb.classList.add('-translate-x-full');}</script>
+<script>(function(){var c=window.closeModal;if(typeof c==='function'){window.closeModal=function(){nEd={};return c.apply(this,arguments);};}})();</script>
+<script>if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script>
 </body>
 </html>
