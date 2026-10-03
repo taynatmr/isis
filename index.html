@@ -112,11 +112,31 @@
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(156, 112, 32, 0.8);
         }
+        /* Celular: menu vira gaveta sobreposta (não ocupa espaço quando recuado). Computador não muda. */
+        #sidebar-backdrop { display: none; }
+        @media (max-width: 767px) {
+            #app { height: 100dvh; }
+            #sidebar { position: fixed; top: 0; left: 0; bottom: 0; height: 100dvh; width: min(82vw, 18rem); z-index: 50; padding-top: env(safe-area-inset-top); }
+            #sidebar.-translate-x-full { box-shadow: none; }
+            #sidebar-backdrop.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; }
+        }
+        #current-page-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+        @media (max-width: 767px) {
+            html, body { overflow-x: hidden; overscroll-behavior-x: none; max-width: 100%; }
+            #app { overflow: hidden; width: 100%; max-width: 100%; }
+            #main-content-container { overflow-x: hidden; overscroll-behavior-x: none; }
+            header { padding-left: 1rem !important; padding-right: 1rem !important; gap: .5rem; }
+            header > div:first-child { min-width: 0; flex: 1 1 auto; gap: .75rem; }
+            header > div:last-child { flex-shrink: 0; }
+            #current-page-title { font-size: 1.1rem; }
+        }
+        @media (min-width: 768px) { #sidebar.-translate-x-full { transform: none !important; } }
     </style>
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="isisGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD54A"/><stop offset=".55" stop-color="#FFB800"/><stop offset="1" stop-color="#E89B00"/></linearGradient></defs></svg>
     <div id="app" class="flex h-full w-full">
+        <div id="sidebar-backdrop" onclick="toggleSidebarMobile()"></div>
         
         <!-- SIDEBAR (Dark Teal Theme) -->
         <aside id="sidebar" class="w-64 bg-side-950 text-slate-200 flex flex-col h-full flex-shrink-0 transition-all duration-300 z-20 shadow-xl">
@@ -138,7 +158,7 @@
             <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
                 <a href="#" onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-sun w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
-                    <span>Meu Dia</span>
+                    <span>Resumo</span>
                 </a>
                 <a href="#" onclick="switchTab('saude')" id="nav-saude" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-heart-pulse w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
@@ -159,6 +179,10 @@
                 <a href="#" onclick="switchTab('agenda')" id="nav-agenda" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-calendar-days w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Agenda</span>
+                </a>
+                <a href="#" onclick="switchTab('notas')" id="nav-notas" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-note-sticky w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
+                    <span>Notas</span>
                 </a>
                 <a href="#" onclick="switchTab('lembretes')" id="nav-lembretes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-bell w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
@@ -196,14 +220,14 @@
         </aside>
 
         <!-- MAIN CONTENT WRAPPER -->
-        <div class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900">
+        <div class="flex-1 min-w-0 flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900">
             <!-- Top Header -->
             <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-6 flex-shrink-0 shadow-sm">
                 <div class="flex items-center space-x-4">
                     <button onclick="toggleSidebarMobile()" class="md:hidden text-slate-600 dark:text-slate-300 hover:text-teal-600">
                         <i class="fa-solid fa-bars text-xl"></i>
                     </button>
-                    <h2 id="current-page-title" class="text-xl font-bold text-slate-800 dark:text-white">Meu Dia</h2>
+                    <h2 id="current-page-title" class="text-xl font-bold text-slate-800 dark:text-white">Resumo</h2>
                 </div>
                 <div class="flex items-center space-x-3">
                     <span id="current-date-badge" class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
@@ -577,7 +601,7 @@
             const h = d.habitacao || {};
             const lists = [d.financeiro && d.financeiro.transactions, d.agenda, d.lembretes, d.hobbies, d.atalhos, d.metas,
                            h.contributions, h.budgets, h.suppliers, h.docFolders, d.saude && d.saude.meds,
-                           d.aniversarios, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups];
+                           d.aniversarios, d.notas, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups];
             let n = lists.reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
             n += Object.keys((d.saude && d.saude.waterLog) || {}).length;
             n += Object.keys((d.saude && d.saude.medLog) || {}).length;
@@ -844,11 +868,12 @@
             }
 
             const titles = {
-                dashboard: 'Meu Dia',
+                dashboard: 'Resumo',
                 saude: 'Saúde & Bem-estar',
                 financeiro: 'Controle Financeiro',
                 cartao: 'Cartão de Crédito',
                 contas: 'Cartão (Débito e Poupança)',
+                notas: 'Notas',
                 agenda: 'Agenda Pessoal',
                 lembretes: 'Lembretes & Tarefas',
                 hobbies: 'Hobbies & Projetos',
@@ -862,13 +887,18 @@
             
             const sidebar = document.getElementById('sidebar');
             if (window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) {
-                sidebar.classList.add('-translate-x-full');
+                sidebar.classList.add('-translate-x-full'); syncSidebarBackdrop();
             }
         }
 
         function toggleSidebarMobile() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('-translate-x-full');
+            syncSidebarBackdrop();
+        }
+        function syncSidebarBackdrop() {
+            const b = document.getElementById('sidebar-backdrop'), sb = document.getElementById('sidebar');
+            if (b && sb) b.classList.toggle('show', window.innerWidth < 768 && !sb.classList.contains('-translate-x-full'));
         }
 
         function toggleDarkMode() {
@@ -889,6 +919,7 @@
                 case 'financeiro': renderFinanceiro(container); break;
                 case 'cartao': renderCartao(container); break;
                 case 'contas': renderContas(container); break;
+                case 'notas': renderNotas(container); break;
                 case 'agenda': renderAgenda(container); break;
                 case 'lembretes': renderLembretes(container); break;
                 case 'hobbies': renderHobbies(container); break;
@@ -3980,6 +4011,144 @@
                 if (c) Object.assign(c, want[k]); else H.contributions.push(Object.assign({ id: uid(), linkKey: k }, want[k]));
             });
         }
+        // =====================================================
+        // NOTAS (texto ou lista) COM SENHA OPCIONAL — criptografia AES-GCM no próprio aparelho
+        // =====================================================
+        let nEd = {}, nQuery = '';
+        function notasData() { if (!Array.isArray(appData.notas)) appData.notas = []; return appData.notas; }
+        function nB64(buf) { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
+        function nUnB64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+        async function nKey(pw, salt) {
+            const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+            return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+        }
+        async function nEncrypt(obj, pw) {
+            const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+            const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await nKey(pw, salt), new TextEncoder().encode(JSON.stringify(obj)));
+            return { salt: nB64(salt), iv: nB64(iv), data: nB64(ct) };
+        }
+        async function nDecrypt(enc, pw) {
+            const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nUnB64(enc.iv) }, await nKey(pw, nUnB64(enc.salt)), nUnB64(enc.data));
+            return JSON.parse(new TextDecoder().decode(pt));
+        }
+        function nCryptoOk() { if (window.crypto && crypto.subtle) return true; showToast('Este navegador não permite criptografia aqui. Abra pelo endereço https do sistema.', 'error'); return false; }
+
+        function renderNotas(container) {
+            const q = normKey(nQuery);
+            const list = notasData().slice().sort((a, b) => (b.updated || 0) - (a.updated || 0)).filter(n => {
+                if (!q) return true;
+                if (normKey(n.title || '').includes(q)) return true;
+                if (n.locked) return false;
+                return normKey((n.text || '') + ' ' + (n.items || []).map(i => i.t).join(' ')).includes(q);
+            });
+            const prev = n => {
+                if (n.locked) return `<p class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mt-2"><i class="fa-solid fa-lock"></i>Protegida por senha</p>`;
+                if (n.kind === 'lista') {
+                    const it = n.items || [], done = it.filter(i => i.done).length;
+                    return `<div class="mt-2 space-y-0.5 text-xs text-slate-500">${it.slice(0, 4).map(i => `<p class="truncate ${i.done ? 'line-through opacity-60' : ''}"><i class="fa-regular ${i.done ? 'fa-square-check' : 'fa-square'} mr-1.5"></i>${esc(i.t)}</p>`).join('')}${it.length > 4 ? `<p class="text-[11px] text-slate-400">+${it.length - 4} itens</p>` : ''}${it.length ? `<p class="text-[11px] text-slate-400 pt-1">${done}/${it.length} concluídos</p>` : '<p class="text-slate-400">Lista vazia</p>'}</div>`;
+                }
+                return `<p class="mt-2 text-xs text-slate-500 line-clamp-4 whitespace-pre-line">${esc((n.text || '').slice(0, 220)) || '<span class="text-slate-400">Nota vazia</span>'}</p>`;
+            };
+            container.innerHTML = `<div class="space-y-5 max-w-7xl mx-auto">
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                    <input type="text" placeholder="Buscar notas..." value="${esc(nQuery)}" onchange="nQuery=this.value;renderCurrentTabContent()" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm w-full sm:w-64">
+                    <button onclick="openNoteEditor(null)" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Nova nota</span></button>
+                </div>
+                ${list.length ? `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">${list.map(n => `
+                    <button onclick="openNote('${n.id}')" class="text-left bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700 hover:border-teal-400 transition">
+                        <div class="flex items-start justify-between gap-2"><h4 class="font-bold text-sm text-slate-800 dark:text-white break-words">${esc(n.title || 'Sem título')}</h4>
+                            <i class="fa-solid ${n.locked ? 'fa-lock text-amber-500' : n.kind === 'lista' ? 'fa-list-check text-teal-500' : 'fa-note-sticky text-teal-500'} text-sm mt-0.5"></i></div>
+                        ${prev(n)}
+                        <p class="text-[10px] text-slate-400 mt-3">${n.updated ? new Date(n.updated).toLocaleDateString('pt-BR') : ''}</p>
+                    </button>`).join('')}</div>` : `<div class="text-center py-16 text-slate-400"><i class="fa-regular fa-note-sticky text-5xl mb-3"></i><p class="text-sm">${nQuery ? 'Nenhuma nota encontrada.' : 'Nenhuma nota ainda. Toque em "Nova nota" para criar texto ou lista.'}</p></div>`}
+            </div>`;
+        }
+        function openNote(id) {
+            const n = notasData().find(x => x.id === id); if (!n) return;
+            if (!n.locked) { openNoteEditor(id); return; }
+            showModal('Nota protegida', `<form onsubmit="unlockNote(event,'${id}')" class="space-y-4">
+                <p class="text-sm text-slate-500"><i class="fa-solid fa-lock text-amber-500 mr-1"></i>${esc(n.title || 'Sem título')}</p>
+                <div><label class="${LBL}">Senha</label><input type="password" id="nt-unlock" autocomplete="off" required class="${INP}"></div>
+                <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Abrir nota</button></form>`);
+            setTimeout(() => { const e = document.getElementById('nt-unlock'); if (e) e.focus(); }, 50);
+        }
+        async function unlockNote(e, id) {
+            e.preventDefault(); if (!nCryptoOk()) return;
+            const n = notasData().find(x => x.id === id), pw = document.getElementById('nt-unlock').value;
+            try { openNoteEditor(id, await nDecrypt(n.enc, pw), pw); }
+            catch (err) { showToast('Senha incorreta.', 'error'); document.getElementById('nt-unlock').value = ''; }
+        }
+        function noteItemRow(it) {
+            return `<div class="nt-row flex items-center gap-2"><input type="checkbox" class="nt-done" ${it.done ? 'checked' : ''}><input type="text" class="nt-it ${INP} flex-1" value="${esc(it.t || '')}" placeholder="Item" onkeydown="if(event.key==='Enter'){event.preventDefault();noteAddItem();}"><button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1"><i class="fa-solid fa-xmark"></i></button></div>`;
+        }
+        function noteAddItem() {
+            document.getElementById('nt-items').insertAdjacentHTML('beforeend', noteItemRow({}));
+            const r = document.querySelectorAll('#nt-items .nt-it'); r[r.length - 1].focus();
+        }
+        function noteKindChange() {
+            const k = document.getElementById('nt-kind').value;
+            document.getElementById('nt-text-wrap').classList.toggle('hidden', k !== 'texto');
+            document.getElementById('nt-list-wrap').classList.toggle('hidden', k !== 'lista');
+            if (k === 'lista' && !document.querySelector('#nt-items .nt-row')) noteAddItem();
+        }
+        function notePwChange() { document.getElementById('nt-pw-wrap').classList.toggle('hidden', document.getElementById('nt-protect').value !== 'sim'); }
+        function openNoteEditor(id, data, pw) {
+            const base = id ? notasData().find(n => n.id === id) : null;
+            const kind = base ? base.kind : 'texto';
+            const c = data || { text: base ? (base.text || '') : '', items: base ? (base.items || []) : [] };
+            nEd = { id: id || '', pw: pw || '' };
+            const locked = !!(base && base.locked);
+            showModal(id ? 'Editar nota' : 'Nova nota', `
+                <form onsubmit="saveNote(event)" class="space-y-4">
+                    <div><label class="${LBL}">Título</label><input type="text" id="nt-title" value="${esc(base ? base.title : '')}" required class="${INP}"></div>
+                    ${base ? `<input type="hidden" id="nt-kind" value="${kind}">` : `<div><label class="${LBL}">Tipo</label><select id="nt-kind" onchange="noteKindChange()" class="${INP}"><option value="texto">Texto</option><option value="lista">Lista (com itens marcáveis)</option></select></div>`}
+                    <div id="nt-text-wrap" class="${kind === 'texto' ? '' : 'hidden'}"><label class="${LBL}">Texto</label><textarea id="nt-text" rows="8" class="${INP}">${esc(c.text || '')}</textarea></div>
+                    <div id="nt-list-wrap" class="${kind === 'lista' ? '' : 'hidden'} space-y-2"><label class="${LBL}">Itens</label>
+                        <div id="nt-items" class="space-y-2">${(c.items || []).map(noteItemRow).join('')}</div>
+                        <button type="button" onclick="noteAddItem()" class="text-xs font-bold text-teal-600"><i class="fa-solid fa-plus mr-1"></i>Adicionar item</button></div>
+                    <div><label class="${LBL}">Proteger com senha?</label><select id="nt-protect" onchange="notePwChange()" class="${INP}"><option value="nao" ${locked ? '' : 'selected'}>Não</option><option value="sim" ${locked ? 'selected' : ''}>Sim</option></select></div>
+                    <div id="nt-pw-wrap" class="${locked ? '' : 'hidden'} space-y-3">
+                        <div class="grid grid-cols-2 gap-3"><div><label class="${LBL}">${locked ? 'Nova senha' : 'Senha'}</label><input type="password" id="nt-pw" autocomplete="new-password" placeholder="${locked ? 'Em branco = manter' : 'Mín. 4 caracteres'}" class="${INP}"></div>
+                        <div><label class="${LBL}">Repetir senha</label><input type="password" id="nt-pw2" autocomplete="new-password" class="${INP}"></div></div>
+                        <p class="text-[11px] text-amber-600">Atenção: não há como recuperar a senha. Se esquecer, o conteúdo da nota não poderá ser aberto. O título continua visível na lista.</p></div>
+                    <div class="flex gap-3"><button type="submit" class="flex-1 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar nota</button>
+                    ${base ? `<button type="button" onclick="deleteNote('${id}')" class="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-rose-600 text-sm font-bold"><i class="fa-solid fa-trash"></i></button>` : ''}</div>
+                </form>`);
+            if (!base) setTimeout(() => { const e = document.getElementById('nt-title'); if (e) e.focus(); }, 50);
+        }
+        async function saveNote(e) {
+            e.preventDefault();
+            const g = k => document.getElementById(k).value;
+            const base = nEd.id ? notasData().find(n => n.id === nEd.id) : null;
+            const kind = base ? base.kind : g('nt-kind');
+            const payload = kind === 'lista'
+                ? { text: '', items: Array.from(document.querySelectorAll('#nt-items .nt-row')).map(r => ({ t: r.querySelector('.nt-it').value.trim(), done: r.querySelector('.nt-done').checked })).filter(i => i.t) }
+                : { text: g('nt-text'), items: [] };
+            const protect = g('nt-protect') === 'sim';
+            let pw = '';
+            if (protect) {
+                if (!nCryptoOk()) return;
+                const np = g('nt-pw'), cp = g('nt-pw2');
+                if (np) {
+                    if (np.length < 4) { showToast('A senha precisa ter ao menos 4 caracteres.', 'warning'); return; }
+                    if (np !== cp) { showToast('As senhas não conferem.', 'warning'); return; }
+                    pw = np;
+                } else pw = nEd.pw;
+                if (!pw) { showToast('Defina uma senha para proteger a nota.', 'warning'); return; }
+            }
+            const n = base || { id: uid(), kind, created: Date.now() };
+            n.title = g('nt-title').trim(); n.updated = Date.now();
+            if (protect) { n.enc = await nEncrypt(payload, pw); n.locked = true; delete n.text; delete n.items; }
+            else { n.locked = false; delete n.enc; n.text = payload.text; n.items = payload.items; }
+            if (!base) notasData().push(n);
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Nota salva!', 'success');
+        }
+        function deleteNote(id) {
+            if (!confirm('Excluir esta nota? Não dá para desfazer.')) return;
+            appData.notas = notasData().filter(n => n.id !== id);
+            saveAppData(); closeModal(); renderCurrentTabContent();
+        }
+
         function contasData() {
             if (!appData.contas) appData.contas = { cards: [] };
             if (!Array.isArray(appData.contas.cards)) appData.contas.cards = [];
@@ -4399,6 +4568,8 @@
             initDrive();
         };
     </script>
+<script>if(window.innerWidth<768){var _sb=document.getElementById('sidebar');if(_sb)_sb.classList.add('-translate-x-full');}</script>
+<script>(function(){var c=window.closeModal;if(typeof c==='function'){window.closeModal=function(){nEd={};return c.apply(this,arguments);};}})();</script>
 <script>if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script>
 </body>
 </html>
