@@ -8,6 +8,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -30,6 +31,14 @@
     <script>
         // ===== Personalização de cores (aplicada antes da tela aparecer) =====
         const THEME_DEFAULT = { accent: '#9C7020', sidebar: '#2E1F12', bg: '#FAF7F2' };
+        // Paleta original dourado + marrom (padrão do sistema)
+        const _ORIG = {
+            ac: { 50: '#FBF6E9', 100: '#F5EACB', 200: '#EBD598', 300: '#E0BF66', 400: '#D4A63A', 500: '#C08F26', 600: '#9C7020', 700: '#7F5A1B', 800: '#5E4219', 850: '#4F3719', 900: '#46301A', 950: '#2E1F12' },
+            bg: { 50: '#FAF7F2', 100: '#F3EEE6', 200: '#E6DED1', 300: '#CFC4B3', 400: '#A89C88', 500: '#7D7263', 600: '#5E5448', 700: '#43392F', 800: '#2E261F', 850: '#2E261F', 900: '#211B16', 950: '#15110D' },
+            sd: { 50: '#FBF6E9', 100: '#F5EACB', 200: '#EBD598', 300: '#E0BF66', 400: '#D4A63A', 500: '#C08F26', 600: '#7F5A1B', 700: '#5E4219', 800: '#5E4219', 850: '#46301A', 900: '#46301A', 950: '#2E1F12' }
+        };
+        function _orig(k) { const o = {}; _KEYS.forEach(n => o[n] = _hex2rgb(_ORIG[k][n])); return o; }
+        function _isDef(a, b) { return String(a).toLowerCase() === String(b).toLowerCase(); }
         const _W = [255, 255, 255], _K = [0, 0, 0], _KEYS = [50,100,200,300,400,500,600,700,800,850,900,950];
         function _hex2rgb(h) { h = String(h).replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16) || 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
         function _mix(a, b, t) { return a.map((v, i) => Math.round(v + (b[i] - v) * t)); }
@@ -47,14 +56,14 @@
             Object.keys(tint).forEach(k => ac[k] = _mix(ab, _W, tint[k]));
             ac[600] = ab;
             Object.keys(shade).forEach(k => ac[k] = _mix(ab, _K, shade[k]));
-            _setVars('ac', ac);
+            _setVars('ac', _isDef(c.accent, THEME_DEFAULT.accent) ? _orig('ac') : ac);
             st.setProperty('--on-ac', _lum(ab) > 0.5 ? '#1F1408' : '#FFFFFF');
             // 2) menu lateral
             const sb = _hex2rgb(c.sidebar), sdark = _lum(sb) < 0.4, sd = {};
             _KEYS.forEach((k, i) => sd[k] = _mix(sb, sdark ? _W : _K, 0.04 * i));
             sd[950] = sb; sd[900] = _mix(sb, sdark ? _W : _K, sdark ? .10 : .08);
             sd[800] = _mix(sb, sdark ? _W : _K, sdark ? .18 : .14); sd[700] = _mix(sb, sdark ? _W : _K, sdark ? .26 : .22);
-            _setVars('sd', sd);
+            _setVars('sd', _isDef(c.sidebar, THEME_DEFAULT.sidebar) ? _orig('sd') : sd);
             st.setProperty('--sd-text', sdark ? '#E2E8F0' : '#3A2C1E');
             st.setProperty('--sd-strong', sdark ? '#FFFFFF' : '#1A1209');
             // 3) fundo das telas
@@ -68,7 +77,7 @@
                 bg[50] = _hsl2rgb(h, hs * .5, .97); bg[100] = _hsl2rgb(h, hs * .5, .94); bg[200] = _hsl2rgb(h, hs * .5, .88);
                 bg[900] = bb; bg[800] = _mix(bb, _W, .06); bg[700] = _mix(bb, _W, .12); bg[950] = _mix(bb, _K, .4);
             }
-            _setVars('bg', bg);
+            _setVars('bg', _isDef(c.bg, THEME_DEFAULT.bg) ? _orig('bg') : bg);
         }
         try { applyColors(JSON.parse(localStorage.getItem('meusistema_colors') || 'null')); } catch (e) { applyColors(null); }
     </script>
@@ -130,6 +139,10 @@
                 <a href="#" onclick="switchTab('financeiro')" id="nav-financeiro" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-wallet w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Financeiro</span>
+                </a>
+                <a href="#" onclick="switchTab('cartao')" id="nav-cartao" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-credit-card w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
+                    <span>Cartão de Crédito</span>
                 </a>
                 <a href="#" onclick="switchTab('agenda')" id="nav-agenda" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-calendar-days w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
@@ -223,6 +236,8 @@
     <script>
         // --- CORE DATA STORE & INITIALIZATION ---
         let appData = {
+            aniversarios: [],
+            cartao: { cards: [], entries: [], categories: ['Gasolina', 'Ração', 'Assinatura', 'Presente', 'Outros'] },
             profile: {
                 name: "Samuel & Tayná",
                 theme: "light"
@@ -270,6 +285,28 @@
         let medCalMonth = localDateStr().slice(0, 7); // YYYY-MM
         let habDocsOpen = false;
         let habDocsFolderId = null;
+
+        // --- NOVOS ESTADOS (orçamentos, movimentações, cartão, mural) ---
+        const INP = 'w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+        const LBL = 'block text-xs font-semibold text-slate-500 uppercase mb-1';
+        const BUDGET_STATUSES = ['Pendente', 'Aprovado', 'Rejeitado', 'Pago'];
+        let obraSortKey = 'date', obraSortDir = 'desc';
+        let budgetView = 'bloco', budgetSelectMode = false, budgetSelected = [], budgetGroupOpen = {};
+        let cardSelectedId = null, cardInvMonth = '';
+        let catRankQuery = '', catRankPeriod = 'all';
+        let muralView = 'bloco', muralScope = 'mes', muralMonth = localDateStr().slice(0, 7), muralPhotos = true;
+        function uiLoad() {
+            const u = (appData.profile && appData.profile.ui) || {};
+            if (u.budgetView) budgetView = u.budgetView;
+            if (u.muralView) muralView = u.muralView;
+            if (u.muralScope) muralScope = u.muralScope;
+            if (u.muralPhotos !== undefined) muralPhotos = !!u.muralPhotos;
+        }
+        function uiSave() {
+            if (!appData.profile) appData.profile = {};
+            appData.profile.ui = { budgetView, muralView, muralScope, muralPhotos };
+            saveAppData();
+        }
 
 
         // --- HELPERS: DATAS ---
@@ -428,6 +465,22 @@
                 if (!t.status) t.status = 'pago';
                 if (!t.attachments) t.attachments = [];
             });
+
+            // Orçamentos: valor pago, observação e grupos
+            appData.habitacao.budgets.forEach(b => {
+                if (b.paidAmount === undefined) b.paidAmount = '';
+                if (b.obs === undefined) b.obs = '';
+                if (b.paidDate === undefined) b.paidDate = '';
+            });
+            if (!Array.isArray(appData.habitacao.budgetGroups)) appData.habitacao.budgetGroups = [];
+            // Mural de aniversariantes e Cartão de Crédito
+            if (!Array.isArray(appData.aniversarios)) appData.aniversarios = [];
+            if (!appData.cartao) appData.cartao = {};
+            if (!Array.isArray(appData.cartao.cards)) appData.cartao.cards = [];
+            if (!Array.isArray(appData.cartao.entries)) appData.cartao.entries = [];
+            if (!Array.isArray(appData.cartao.categories) || !appData.cartao.categories.length) appData.cartao.categories = CARD_DEFAULT_CATS.slice();
+            syncCardInvoices();
+            uiLoad();
         }
 
         function saveAppData() {
@@ -504,7 +557,8 @@
             if (!d || typeof d !== 'object') return 0;
             const h = d.habitacao || {};
             const lists = [d.financeiro && d.financeiro.transactions, d.agenda, d.lembretes, d.hobbies, d.atalhos, d.metas,
-                           h.contributions, h.budgets, h.suppliers, h.docFolders, d.saude && d.saude.meds];
+                           h.contributions, h.budgets, h.suppliers, h.docFolders, d.saude && d.saude.meds,
+                           d.aniversarios, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups];
             let n = lists.reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
             n += Object.keys((d.saude && d.saude.waterLog) || {}).length;
             n += Object.keys((d.saude && d.saude.medLog) || {}).length;
@@ -598,7 +652,7 @@
             if (!looksLikeBackup(obj)) throw new Error('Arquivo de backup inválido');
             const clean = JSON.parse(JSON.stringify(obj));
             if (!clean.profile) clean.profile = { name: 'Samuel & Tayná', theme: 'light' };
-            ['agenda', 'lembretes', 'hobbies', 'atalhos', 'metas'].forEach(k => { if (!Array.isArray(clean[k])) clean[k] = []; });
+            ['agenda', 'lembretes', 'hobbies', 'atalhos', 'metas', 'aniversarios'].forEach(k => { if (!Array.isArray(clean[k])) clean[k] = []; });
             localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
             loadAppData();
             saveAppData();
@@ -774,6 +828,7 @@
                 dashboard: 'Meu Dia',
                 saude: 'Saúde & Bem-estar',
                 financeiro: 'Controle Financeiro',
+                cartao: 'Cartão de Crédito',
                 agenda: 'Agenda Pessoal',
                 lembretes: 'Lembretes & Tarefas',
                 hobbies: 'Hobbies & Projetos',
@@ -812,6 +867,7 @@
                 case 'dashboard': renderDashboard(container); break;
                 case 'saude': renderSaude(container); break;
                 case 'financeiro': renderFinanceiro(container); break;
+                case 'cartao': renderCartao(container); break;
                 case 'agenda': renderAgenda(container); break;
                 case 'lembretes': renderLembretes(container); break;
                 case 'hobbies': renderHobbies(container); break;
@@ -908,6 +964,12 @@
                                 <i class="fa-solid fa-bell"></i>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Mural de aniversariantes + Categorias mais consumidas -->
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                        <div id="mural-box" class="lg:col-span-3 bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">${muralInner()}</div>
+                        <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">${catRankBoxHtml()}</div>
                     </div>
 
                     <!-- Two Column Layout -->
@@ -1274,6 +1336,7 @@
                                             <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
                                                 <td class="p-3.5 font-medium text-slate-800 dark:text-white">
                                                     ${esc(t.desc)}
+                                                    ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
                                                     ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}
                                                 </td>
                                                 <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>
@@ -1568,10 +1631,7 @@
             if (obraFilterStatus !== 'todos') {
                 contributionsList = contributionsList.filter(c => c.type === obraFilterStatus);
             }
-            contributionsList.sort((a, b) => {
-                if (obraSortOrder === 'date-desc') return new Date(b.date) - new Date(a.date);
-                return new Date(a.date) - new Date(b.date);
-            });
+            contributionsList = sortContribs(contributionsList);
 
             // Lista de Orçamentos
             let budgetsList = [...appData.habitacao.budgets];
@@ -1638,73 +1698,20 @@
                         </div>
                     </div>
 
-                    <!-- Seção de Orçamentos Realizados -->
-                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-                            <h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2">
-                                <i class="fa-solid fa-file-invoice text-amber-500"></i>
-                                <span>Orçamentos e Recibos Cadastrados</span>
-                            </h3>
-                            <div class="flex items-center space-x-2">
-                                <select onchange="setBudgetFilter(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
-                                    <option value="todos" ${budgetFilterStatus === 'todos' ? 'selected' : ''}>Todos os Status</option>
-                                    <option value="Pendente" ${budgetFilterStatus === 'Pendente' ? 'selected' : ''}>Pendente</option>
-                                    <option value="Aprovado" ${budgetFilterStatus === 'Aprovado' ? 'selected' : ''}>Aprovado</option>
-                                    <option value="Rejeitado" ${budgetFilterStatus === 'Rejeitado' ? 'selected' : ''}>Rejeitado</option>
-                                </select>
-                                <button onclick="openBudgetModal()" class="bg-amber-500 hover:bg-amber-600 text-teal-950 px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center space-x-1">
-                                    <i class="fa-solid fa-plus"></i>
-                                    <span>Incluir Orçamento</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        ${budgetsList.length === 0 ? '<p class="text-sm text-slate-400 py-6 text-center">Nenhum orçamento cadastrado.</p>' : `
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                ${budgetsList.map(b => `
-                                    <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 flex flex-col justify-between">
-                                        <div>
-                                            <div class="flex justify-between items-start mb-2">
-                                                <span class="text-[11px] font-bold px-2.5 py-1 rounded-lg ${b.status === 'Aprovado' ? 'bg-emerald-100 text-emerald-700' : (b.status === 'Rejeitado' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700')}">${b.status}</span>
-                                                <div class="space-x-1">
-                                                    <button onclick="editBudget('${b.id}')" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs"><i class="fa-solid fa-pen"></i></button>
-                                                    <button onclick="deleteBudget('${b.id}')" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
-                                                </div>
-                                            </div>
-                                            <h4 class="font-bold text-slate-800 dark:text-white text-base mb-1">${b.title}</h4>
-                                            <p class="text-xs text-slate-500 mb-1"><i class="fa-solid fa-store mr-1"></i> Fornecedor: <span class="font-semibold text-slate-700 dark:text-slate-300">${b.supplier}</span></p>
-                                            <p class="text-xs text-slate-500 mb-2"><i class="fa-regular fa-calendar mr-1"></i> ${b.date}</p>
-                                            <p class="text-lg font-extrabold text-amber-600 mb-3">R$ ${Number(b.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                            
-                                            ${b.fileName ? `
-                                                <div class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex items-center justify-between text-xs">
-                                                    <span class="truncate max-w-[160px] text-teal-600 dark:text-teal-400 font-medium"><i class="fa-solid fa-paperclip mr-1"></i> ${b.fileName}</span>
-                                                    ${b.fileData ? `<button onclick="downloadBudgetFile('${b.id}')" class="px-2 py-1 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 rounded font-bold text-[10px]">Baixar Arquivo</button>` : ''}
-                                                </div>
-                                            ` : '<p class="text-[11px] text-slate-400 italic">Nenhum arquivo anexado</p>'}
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `}
-                    </div>
+                    ${budgetsSectionHtml(budgetsList)}
 
                     <!-- Movimentações com Filtro e Ordenação -->
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                         <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
                             <h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2">
                                 <i class="fa-solid fa-money-bill-transfer text-amber-500"></i>
-                                <span>Movimentações do Fundo de Obra</span>
+                                <span>Movimentações do Fundo de Obra <span class="text-[11px] font-normal text-slate-400 ml-1">(clique nos títulos para ordenar)</span></span>
                             </h3>
                             <div class="flex flex-wrap items-center gap-2">
                                 <select onchange="setObraFilter(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
                                     <option value="todos" ${obraFilterStatus === 'todos' ? 'selected' : ''}>Todos os Tipos</option>
                                     <option value="aporte" ${obraFilterStatus === 'aporte' ? 'selected' : ''}>Aportes</option>
                                     <option value="retirada" ${obraFilterStatus === 'retirada' ? 'selected' : ''}>Retiradas</option>
-                                </select>
-                                <select onchange="setObraSort(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
-                                    <option value="date-desc" ${obraSortOrder === 'date-desc' ? 'selected' : ''}>Mais Recentes</option>
-                                    <option value="date-asc" ${obraSortOrder === 'date-asc' ? 'selected' : ''}>Mais Antigos</option>
                                 </select>
                             </div>
                         </div>
@@ -1714,11 +1721,11 @@
                                 <table class="w-full text-left text-sm">
                                     <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]">
                                         <tr>
-                                            <th class="p-3.5 rounded-l-xl">Pessoa</th>
-                                            <th class="p-3.5">Tipo</th>
-                                            <th class="p-3.5">Descrição</th>
-                                            <th class="p-3.5">Data</th>
-                                            <th class="p-3.5">Valor</th>
+                                            <th onclick="setObraSortKey('pessoa')" class="p-3.5 rounded-l-xl cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Pessoa${sortIcon('pessoa')}</th>
+                                            <th onclick="setObraSortKey('tipo')" class="p-3.5 cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Tipo${sortIcon('tipo')}</th>
+                                            <th onclick="setObraSortKey('desc')" class="p-3.5 cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Descrição${sortIcon('desc')}</th>
+                                            <th onclick="setObraSortKey('date')" class="p-3.5 cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Data${sortIcon('date')}</th>
+                                            <th onclick="setObraSortKey('valor')" class="p-3.5 cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Valor${sortIcon('valor')}</th>
                                             <th class="p-3.5 text-right rounded-r-xl">Ações</th>
                                         </tr>
                                     </thead>
@@ -1911,147 +1918,409 @@
         function setObraSort(val) { obraSortOrder = val; renderCurrentTabContent(); }
         function setBudgetFilter(val) { budgetFilterStatus = val; renderCurrentTabContent(); }
 
-        // --- ORÇAMENTOS E RECIBOS MODAL ---
+                // =====================================================
+        // ORÇAMENTOS (bloco/lista, valor pago, status Pago, grupos)
+        // =====================================================
+        function budgetBadge(b) {
+            const m = { Aprovado: 'bg-emerald-100 text-emerald-700', Rejeitado: 'bg-rose-100 text-rose-700', Pago: 'bg-sky-100 text-sky-700', Pendente: 'bg-amber-100 text-amber-700' };
+            return `<span class="text-[11px] font-bold px-2.5 py-1 rounded-lg whitespace-nowrap ${m[b.status] || m.Pendente}">${b.status === 'Pago' ? '<i class="fa-solid fa-circle-check mr-1"></i>' : ''}${esc(b.status)}</span>`;
+        }
+        function sumBudgets(arr, key) { return arr.reduce((s, b) => s + (Number(b[key]) || 0), 0); }
+        function setBudgetView(v) { budgetView = v; uiSave(); renderCurrentTabContent(); }
+        function pruneBudgetGroups() {
+            const H = appData.habitacao;
+            H.budgetGroups = (H.budgetGroups || []).filter(g => H.budgets.some(b => b.groupId === g.id));
+        }
+        function budgetSelCheck(b) {
+            if (!budgetSelectMode) return '';
+            return `<input type="checkbox" ${budgetSelected.includes(b.id) ? 'checked' : ''} onchange="toggleBudgetSel('${b.id}')" class="w-4 h-4 mr-2 accent-amber-500 flex-shrink-0">`;
+        }
+        function budgetActions(b) {
+            return `<div class="space-x-1 whitespace-nowrap">
+                <button onclick="editBudget('${b.id}')" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="deleteBudget('${b.id}')" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+            </div>`;
+        }
+        function budgetCardHtml(b) {
+            const amt = Number(b.amount) || 0, paid = Number(b.paidAmount) || 0;
+            return `
+            <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center">${budgetSelCheck(b)}${budgetBadge(b)}</div>
+                        ${budgetActions(b)}
+                    </div>
+                    <h4 class="font-bold text-slate-800 dark:text-white text-base mb-1">${esc(b.title)}</h4>
+                    <p class="text-xs text-slate-500 mb-1"><i class="fa-solid fa-store mr-1"></i> Fornecedor: <span class="font-semibold text-slate-700 dark:text-slate-300">${esc(b.supplier)}</span></p>
+                    <p class="text-xs text-slate-500 mb-2"><i class="fa-regular fa-calendar mr-1"></i> ${fmtBR(b.date)}${b.status === 'Pago' && b.paidDate ? ` · <span class="text-sky-600 font-semibold">pago em ${fmtBR(b.paidDate)}</span>` : ''}</p>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div><p class="text-[10px] uppercase font-semibold text-slate-400">Valor</p><p class="text-base font-extrabold text-amber-600">R$ ${money(amt)}</p></div>
+                        <div><p class="text-[10px] uppercase font-semibold text-slate-400">Valor pago</p><p class="text-base font-extrabold ${paid > 0 ? 'text-emerald-600' : 'text-slate-400'}">R$ ${money(paid)}</p></div>
+                    </div>
+                    ${paid > 0 && paid < amt ? `<p class="text-[11px] text-rose-500 font-semibold mb-2">Falta pagar R$ ${money(amt - paid)}</p>` : ''}
+                    ${b.obs ? `<p class="text-xs text-slate-500 italic mb-2 whitespace-pre-line"><i class="fa-regular fa-note-sticky mr-1"></i>${esc(b.obs)}</p>` : ''}
+                    ${b.fileName ? `
+                        <div class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex items-center justify-between text-xs">
+                            <span class="truncate max-w-[160px] text-teal-600 dark:text-teal-400 font-medium"><i class="fa-solid fa-paperclip mr-1"></i> ${esc(b.fileName)}</span>
+                            ${b.fileData ? `<button onclick="downloadBudgetFile('${b.id}')" class="px-2 py-1 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 rounded font-bold text-[10px]">Baixar Arquivo</button>` : ''}
+                        </div>` : '<p class="text-[11px] text-slate-400 italic">Nenhum arquivo anexado</p>'}
+                </div>
+            </div>`;
+        }
+        function budgetRowHtml(b, indent) {
+            const amt = Number(b.amount) || 0, paid = Number(b.paidAmount) || 0;
+            return `
+            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                <td class="p-3 ${indent ? 'pl-8' : ''}">
+                    <div class="flex items-center">${budgetSelCheck(b)}<span class="font-semibold text-slate-800 dark:text-white">${esc(b.title)}</span></div>
+                    ${b.obs ? `<p class="text-[11px] text-slate-400 italic mt-0.5 max-w-xs truncate" title="${esc(b.obs)}">${esc(b.obs)}</p>` : ''}
+                </td>
+                <td class="p-3 text-slate-500">${esc(b.supplier)}</td>
+                <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(b.date)}</td>
+                <td class="p-3">${budgetBadge(b)}${b.status === 'Pago' && b.paidDate ? `<p class="text-[10px] text-sky-600 mt-0.5">${fmtBR(b.paidDate)}</p>` : ''}</td>
+                <td class="p-3 font-bold text-amber-600 whitespace-nowrap">R$ ${money(amt)}</td>
+                <td class="p-3 font-bold whitespace-nowrap ${paid > 0 ? 'text-emerald-600' : 'text-slate-400'}">R$ ${money(paid)}</td>
+                <td class="p-3 whitespace-nowrap">${b.fileName && b.fileData ? `<button onclick="downloadBudgetFile('${b.id}')" title="${esc(b.fileName)}" class="px-2 py-1 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 rounded text-[11px] font-bold"><i class="fa-solid fa-paperclip mr-1"></i>Baixar</button>` : '<span class="text-slate-300">—</span>'}</td>
+                <td class="p-3 text-right">${budgetActions(b)}</td>
+            </tr>`;
+        }
+        function groupHeaderInner(g, all) {
+            const open = budgetGroupOpen[g.id] !== false;
+            return `
+                <button onclick="toggleBudgetGroup('${g.id}')" class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs flex-shrink-0"><i class="fa-solid ${open ? 'fa-chevron-down' : 'fa-chevron-right'}"></i></button>
+                <div class="min-w-0 flex-1">
+                    <p class="font-bold text-slate-800 dark:text-white text-sm truncate"><i class="fa-solid fa-layer-group text-amber-500 mr-1.5"></i>${esc(g.name)} <span class="text-[11px] font-semibold text-slate-400">· ${all.length} orçamento(s)</span></p>
+                    <p class="text-[11px] text-slate-500 truncate">${g.supplier ? `<i class="fa-solid fa-store mr-1"></i>${esc(g.supplier)}` : ''}${g.obs ? ` · ${esc(g.obs)}` : ''}</p>
+                </div>
+                <div class="text-right text-xs flex-shrink-0">
+                    <p class="font-extrabold text-amber-600">R$ ${money(sumBudgets(all, 'amount'))}</p>
+                    <p class="font-semibold text-emerald-600">pago R$ ${money(sumBudgets(all, 'paidAmount'))}</p>
+                </div>
+                <div class="space-x-1 whitespace-nowrap flex-shrink-0">
+                    ${g.fileName && g.fileData ? `<button onclick="downloadGroupFile('${g.id}')" title="${esc(g.fileName)}" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs text-teal-600"><i class="fa-solid fa-paperclip"></i></button>` : ''}
+                    <button onclick="openGroupModal('${g.id}')" title="Editar grupo" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="dissolveGroup('${g.id}')" title="Desfazer grupo (os orçamentos são mantidos)" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs hover:text-rose-600"><i class="fa-solid fa-link-slash"></i></button>
+                </div>`;
+        }
+        function budgetsSectionHtml(list) {
+            const H = appData.habitacao;
+            const shownIds = new Set(list.map(b => b.id));
+            const groupedIds = new Set();
+            const blocks = [];
+            (H.budgetGroups || []).forEach(g => {
+                const all = H.budgets.filter(b => b.groupId === g.id);
+                all.forEach(b => groupedIds.add(b.id));
+                const shown = all.filter(b => shownIds.has(b.id));
+                if (budgetFilterStatus !== 'todos' && shown.length === 0) return;
+                blocks.push({ g, all, shown });
+            });
+            const loose = list.filter(b => !groupedIds.has(b.id));
+            const totalAmt = sumBudgets(list, 'amount'), totalPaid = sumBudgets(list, 'paidAmount');
+            const segBtn = (v, icon, label) => `<button onclick="setBudgetView('${v}')" class="px-3 py-1.5 text-xs font-bold flex items-center space-x-1 ${budgetView === v ? 'bg-amber-500 text-teal-950' : 'bg-slate-50 dark:bg-slate-900 text-slate-500'}"><i class="fa-solid ${icon}"></i><span>${label}</span></button>`;
+            const statusOpt = s => `<option value="${s}" ${budgetFilterStatus === s ? 'selected' : ''}>${s}</option>`;
+
+            let body = '';
+            if (list.length === 0 && blocks.length === 0) {
+                body = '<p class="text-sm text-slate-400 py-6 text-center">Nenhum orçamento cadastrado.</p>';
+            } else if (budgetView === 'bloco') {
+                body = `<div class="space-y-4">
+                    ${blocks.map(({ g, all, shown }) => {
+                        const open = budgetGroupOpen[g.id] !== false;
+                        return `<div class="rounded-2xl border-2 border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/10 p-4">
+                            <div class="flex items-center gap-3">${groupHeaderInner(g, all)}</div>
+                            ${open ? `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">${shown.length ? shown.map(budgetCardHtml).join('') : '<p class="text-xs text-slate-400 italic">Grupo sem orçamentos neste filtro.</p>'}</div>` : ''}
+                        </div>`;
+                    }).join('')}
+                    ${loose.length ? `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${loose.map(budgetCardHtml).join('')}</div>` : ''}
+                </div>`;
+            } else {
+                body = `<div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
+                        <th class="p-3 rounded-l-xl">Orçamento</th><th class="p-3">Fornecedor</th><th class="p-3">Data</th><th class="p-3">Status</th><th class="p-3">Valor</th><th class="p-3">Pago</th><th class="p-3">Anexo</th><th class="p-3 text-right rounded-r-xl">Ações</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                        ${blocks.map(({ g, all, shown }) => {
+                            const open = budgetGroupOpen[g.id] !== false;
+                            return `<tr class="bg-amber-50 dark:bg-amber-950/20"><td colspan="8" class="p-3"><div class="flex items-center gap-3">${groupHeaderInner(g, all)}</div></td></tr>
+                                ${open ? shown.map(b => budgetRowHtml(b, true)).join('') : ''}`;
+                        }).join('')}
+                        ${loose.map(b => budgetRowHtml(b, false)).join('')}
+                    </tbody></table></div>`;
+            }
+
+            return `
+            <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-file-invoice text-amber-500"></i><span>Orçamentos e Recibos Cadastrados</span>
+                    </h3>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${segBtn('bloco', 'fa-table-cells-large', 'Blocos')}${segBtn('lista', 'fa-list', 'Lista')}</div>
+                        <select onchange="setBudgetFilter(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
+                            <option value="todos" ${budgetFilterStatus === 'todos' ? 'selected' : ''}>Todos os Status</option>
+                            ${BUDGET_STATUSES.map(statusOpt).join('')}
+                        </select>
+                        <button onclick="toggleBudgetSelectMode()" class="px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center space-x-1 ${budgetSelectMode ? 'bg-slate-700 text-white' : 'bg-teal-600 hover:bg-teal-700 text-white'}">
+                            <i class="fa-solid fa-layer-group"></i><span>${budgetSelectMode ? 'Cancelar seleção' : 'Criar grupo'}</span>
+                        </button>
+                        <button onclick="openBudgetModal()" class="bg-amber-500 hover:bg-amber-600 text-teal-950 px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center space-x-1">
+                            <i class="fa-solid fa-plus"></i><span>Incluir Orçamento</span>
+                        </button>
+                    </div>
+                </div>
+                ${budgetSelectMode ? `
+                <div class="mb-4 p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <span class="text-teal-800 dark:text-teal-200"><i class="fa-solid fa-circle-info mr-1"></i>Marque os orçamentos que fazem parte do mesmo fornecedor/documento (mínimo 2). <b id="bud-sel-count">${budgetSelected.length}</b> selecionado(s).</span>
+                    <button id="bud-group-btn" onclick="openGroupModal()" ${budgetSelected.length < 2 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg bg-teal-600 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed">Agrupar selecionados</button>
+                </div>` : ''}
+                <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 mb-4">
+                    <span>Total orçado: <b class="text-amber-600">R$ ${money(totalAmt)}</b></span>
+                    <span>Total pago: <b class="text-emerald-600">R$ ${money(totalPaid)}</b></span>
+                    <span>Em aberto: <b class="text-rose-500">R$ ${money(Math.max(0, totalAmt - totalPaid))}</b></span>
+                </div>
+                ${body}
+            </div>`;
+        }
+
+        // --- ORÇAMENTOS: MODAL ---
+        function toggleBudgetGroup(id) { budgetGroupOpen[id] = budgetGroupOpen[id] === false; renderCurrentTabContent(); }
+        function toggleBudgetSelectMode() { budgetSelectMode = !budgetSelectMode; budgetSelected = []; renderCurrentTabContent(); }
+        function toggleBudgetSel(id) {
+            const i = budgetSelected.indexOf(id);
+            if (i >= 0) budgetSelected.splice(i, 1); else budgetSelected.push(id);
+            const c = document.getElementById('bud-sel-count'); if (c) c.textContent = budgetSelected.length;
+            const btn = document.getElementById('bud-group-btn'); if (btn) btn.disabled = budgetSelected.length < 2;
+        }
         function openBudgetModal(id = null) {
-            let b = { title: '', supplier: '', amount: '', date: new Date().toISOString().split('T')[0], status: 'Pendente', fileName: '', fileData: '' };
-            if (id && appData.habitacao.budgets) {
-                b = appData.habitacao.budgets.find(x => x.id === id) || b;
-            }
-
-            let supplierOptions = '';
-            if (appData.habitacao.suppliers && appData.habitacao.suppliers.length > 0) {
-                supplierOptions = appData.habitacao.suppliers.map(s => `<option value="${s.name}" ${b.supplier === s.name ? 'selected' : ''}>${s.name}</option>`).join('');
-            }
-
+            let b = { title: '', supplier: '', amount: '', paidAmount: '', date: localDateStr(), status: 'Pendente', paidDate: '', obs: '', groupId: '', fileName: '', fileData: '' };
+            if (id && appData.habitacao.budgets) b = appData.habitacao.budgets.find(x => x.id === id) || b;
+            const sup = (appData.habitacao.suppliers || []).map(s => s.name);
+            if (b.supplier && b.supplier !== 'Geral' && !sup.includes(b.supplier)) sup.push(b.supplier);
+            const supplierOptions = sup.map(n => `<option value="${esc(n)}" ${b.supplier === n ? 'selected' : ''}>${esc(n)}</option>`).join('');
+            const groupOptions = (appData.habitacao.budgetGroups || []).map(g => `<option value="${g.id}" ${b.groupId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
             showModal(id ? 'Editar Orçamento / Recibo' : 'Incluir Orçamento / Recibo', `
                 <form onsubmit="saveBudget(event, '${id || ''}')" class="space-y-4">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Título / Descrição do Orçamento</label>
-                        <input type="text" id="budget-title" value="${b.title}" placeholder="Ex: Compra de Pisos, Mão de Obra Pedreiro" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        <label class="${LBL}">Título / Descrição do Orçamento</label>
+                        <input type="text" id="budget-title" value="${esc(b.title)}" placeholder="Ex: Compra de Pisos, Mão de Obra Pedreiro" required class="${INP}">
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Fornecedor</label>
-                            <select id="budget-supplier" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                                <option value="">Selecione o Fornecedor</option>
-                                ${supplierOptions}
-                            </select>
+                            <label class="${LBL}">Fornecedor</label>
+                            <select id="budget-supplier" class="${INP}"><option value="">Selecione o Fornecedor</option>${supplierOptions}</select>
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Status</label>
-                            <select id="budget-status" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                                <option value="Pendente" ${b.status === 'Pendente' ? 'selected' : ''}>Pendente</option>
-                                <option value="Aprovado" ${b.status === 'Aprovado' ? 'selected' : ''}>Aprovado</option>
-                                <option value="Rejeitado" ${b.status === 'Rejeitado' ? 'selected' : ''}>Rejeitado</option>
+                            <label class="${LBL}">Status</label>
+                            <select id="budget-status" onchange="toggleBudgetPaidDate()" class="${INP}">
+                                ${BUDGET_STATUSES.map(s => `<option value="${s}" ${b.status === s ? 'selected' : ''}>${s}</option>`).join('')}
                             </select>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Valor (R$)</label>
-                            <input type="number" step="0.01" id="budget-amount" value="${b.amount}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            <label class="${LBL}">Valor (R$)</label>
+                            <input type="number" step="0.01" min="0" id="budget-amount" value="${b.amount}" required class="${INP}">
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Data</label>
-                            <input type="date" id="budget-date" value="${b.date}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            <label class="${LBL}">Valor pago (R$)</label>
+                            <input type="number" step="0.01" min="0" id="budget-paid" value="${b.paidAmount === undefined ? '' : b.paidAmount}" placeholder="0,00" class="${INP}">
                         </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="${LBL}">Data do orçamento</label>
+                            <input type="date" id="budget-date" value="${b.date}" required class="${INP}">
+                        </div>
+                        <div id="budget-paiddate-wrap" class="${b.status === 'Pago' ? '' : 'hidden'}">
+                            <label class="${LBL}">Data do pagamento</label>
+                            <input type="date" id="budget-paiddate" value="${b.paidDate || ''}" class="${INP}">
+                        </div>
+                    </div>
+                    ${groupOptions ? `
+                    <div>
+                        <label class="${LBL}">Grupo</label>
+                        <select id="budget-group" class="${INP}"><option value="">Sem grupo</option>${groupOptions}</select>
+                    </div>` : ''}
+                    <div>
+                        <label class="${LBL}">Observação</label>
+                        <textarea id="budget-obs" rows="2" class="${INP}" placeholder="Ex: preço válido até..., forma de pagamento...">${esc(b.obs || '')}</textarea>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Anexar Arquivo (Recibo / PDF / Imagem)</label>
+                        <label class="${LBL}">Anexar Arquivo (Recibo / PDF / Imagem)</label>
                         <input type="file" id="budget-file" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
-                        ${b.fileName ? `<p class="text-xs text-teal-600 mt-1">Atual: ${b.fileName}</p>` : ''}
+                        ${b.fileName ? `<p class="text-xs text-teal-600 mt-1">Atual: ${esc(b.fileName)}</p>` : ''}
                     </div>
                     <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-teal-950 py-3 rounded-xl font-bold text-sm shadow">Salvar Orçamento</button>
                 </form>
             `);
         }
-
-        function saveBudget(e, id) {
-            e.preventDefault();
-            const title = document.getElementById('budget-title').value;
-            const supplier = document.getElementById('budget-supplier').value || 'Geral';
-            const status = document.getElementById('budget-status').value;
-            const amount = document.getElementById('budget-amount').value;
-            const date = document.getElementById('budget-date').value;
-            const fileInput = document.getElementById('budget-file');
-
-            let existingBudget = null;
-            if (id && appData.habitacao.budgets) {
-                existingBudget = appData.habitacao.budgets.find(x => x.id === id);
-            }
-
-            let fileName = existingBudget ? existingBudget.fileName : '';
-            let fileData = existingBudget ? existingBudget.fileData : '';
-
-            if (fileInput.files && fileInput.files[0]) {
-                const file = fileInput.files[0];
-                fileName = file.name;
-                const reader = new FileReader();
-                reader.onload = function(uploadEvent) {
-                    fileData = uploadEvent.target.result;
-                    finishSaveBudget(id, title, supplier, status, amount, date, fileName, fileData);
-                };
-                reader.readAsDataURL(file);
-            } else {
-                finishSaveBudget(id, title, supplier, status, amount, date, fileName, fileData);
+        function toggleBudgetPaidDate() {
+            const isPaid = document.getElementById('budget-status').value === 'Pago';
+            document.getElementById('budget-paiddate-wrap').classList.toggle('hidden', !isPaid);
+            if (isPaid) {
+                const d = document.getElementById('budget-paiddate');
+                if (!d.value) d.value = localDateStr();
+                const p = document.getElementById('budget-paid');
+                if (!p.value) p.value = document.getElementById('budget-amount').value;
+                d.focus();
             }
         }
-
-        function finishSaveBudget(id, title, supplier, status, amount, date, fileName, fileData) {
+        function saveBudget(e, id) {
+            e.preventDefault();
+            const status = document.getElementById('budget-status').value;
+            const data = {
+                title: document.getElementById('budget-title').value,
+                supplier: document.getElementById('budget-supplier').value || 'Geral',
+                status,
+                amount: document.getElementById('budget-amount').value,
+                paidAmount: document.getElementById('budget-paid').value,
+                date: document.getElementById('budget-date').value,
+                paidDate: status === 'Pago' ? (document.getElementById('budget-paiddate').value || localDateStr()) : '',
+                obs: document.getElementById('budget-obs').value.trim()
+            };
+            const gSel = document.getElementById('budget-group');
+            const existing = id ? appData.habitacao.budgets.find(x => x.id === id) : null;
+            data.groupId = gSel ? gSel.value : (existing ? existing.groupId || '' : '');
+            data.fileName = existing ? existing.fileName : '';
+            data.fileData = existing ? existing.fileData : '';
+            const fi = document.getElementById('budget-file');
+            if (fi.files && fi.files[0]) {
+                const file = fi.files[0];
+                data.fileName = file.name;
+                const reader = new FileReader();
+                reader.onload = ev => { data.fileData = ev.target.result; finishSaveBudget(id, data); };
+                reader.readAsDataURL(file);
+            } else finishSaveBudget(id, data);
+        }
+        function finishSaveBudget(id, data) {
             if (!appData.habitacao.budgets) appData.habitacao.budgets = [];
             if (id) {
                 const b = appData.habitacao.budgets.find(x => x.id === id);
-                if (b) {
-                    b.title = title;
-                    b.supplier = supplier;
-                    b.status = status;
-                    b.amount = amount;
-                    b.date = date;
-                    b.fileName = fileName;
-                    b.fileData = fileData;
-                }
-            } else {
-                appData.habitacao.budgets.push({
-                    id: Date.now().toString(),
-                    title,
-                    supplier,
-                    status,
-                    amount,
-                    date,
-                    fileName,
-                    fileData
-                });
-            }
-            saveAppData();
-            closeModal();
-            renderCurrentTabContent();
+                if (b) Object.assign(b, data);
+            } else appData.habitacao.budgets.push(Object.assign({ id: uid() }, data));
+            pruneBudgetGroups();
+            saveAppData(); closeModal(); renderCurrentTabContent();
             showToast("Orçamento salvo com sucesso!", "success");
         }
-
-        function editBudget(id) {
-            openBudgetModal(id);
-        }
-
+        function editBudget(id) { openBudgetModal(id); }
         function deleteBudget(id) {
-            if (appData.habitacao.budgets) {
-                appData.habitacao.budgets = appData.habitacao.budgets.filter(b => b.id !== id);
-                saveAppData();
-                renderCurrentTabContent();
-                showToast("Orçamento removido.", "info");
-            }
+            appData.habitacao.budgets = appData.habitacao.budgets.filter(b => b.id !== id);
+            budgetSelected = budgetSelected.filter(x => x !== id);
+            pruneBudgetGroups();
+            saveAppData(); renderCurrentTabContent();
+            showToast("Orçamento removido.", "info");
         }
-
-        function downloadBudgetFile(id) {
-            const b = appData.habitacao.budgets.find(x => x.id === id);
-            if (!b || !b.fileData) return;
+        function triggerDownload(dataUrl, name) {
             const a = document.createElement('a');
-            a.href = b.fileData;
-            a.download = b.fileName || 'arquivo_orcamento';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            a.href = dataUrl; a.download = name || 'arquivo';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
             showToast("Baixando arquivo...", "success");
         }
+        function downloadBudgetFile(id) {
+            const b = appData.habitacao.budgets.find(x => x.id === id);
+            if (b && b.fileData) triggerDownload(b.fileData, b.fileName || 'arquivo_orcamento');
+        }
+        function downloadGroupFile(id) {
+            const g = (appData.habitacao.budgetGroups || []).find(x => x.id === id);
+            if (g && g.fileData) triggerDownload(g.fileData, g.fileName || 'documento_grupo');
+        }
+
+        // --- ORÇAMENTOS: GRUPOS ---
+        function openGroupModal(groupId = null) {
+            const g = groupId ? (appData.habitacao.budgetGroups || []).find(x => x.id === groupId) : null;
+            const base = g || { name: '', supplier: '', obs: '', fileName: '' };
+            const members = g ? appData.habitacao.budgets.filter(b => b.groupId === g.id) : appData.habitacao.budgets.filter(b => budgetSelected.includes(b.id));
+            if (!g && members.length < 2) { showToast('Selecione pelo menos 2 orçamentos.', 'warning'); return; }
+            const sup = (appData.habitacao.suppliers || []).map(s => s.name);
+            if (base.supplier && !sup.includes(base.supplier)) sup.push(base.supplier);
+            else if (!g) { const first = members.find(m => m.supplier && m.supplier !== 'Geral'); if (first && !sup.includes(first.supplier)) sup.push(first.supplier); }
+            const defSup = base.supplier || ((members.find(m => m.supplier && m.supplier !== 'Geral') || {}).supplier || '');
+            showModal(g ? 'Editar grupo' : 'Criar grupo de orçamentos', `
+                <form onsubmit="saveGroup(event, '${groupId || ''}')" class="space-y-4">
+                    <div class="text-xs text-slate-500 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3">
+                        <b>${members.length}</b> orçamento(s): ${members.map(m => esc(m.title)).join(', ')}<br>
+                        Total: <b class="text-amber-600">R$ ${money(sumBudgets(members, 'amount'))}</b>
+                    </div>
+                    <div>
+                        <label class="${LBL}">Nome do grupo</label>
+                        <input type="text" id="grp-name" value="${esc(base.name)}" required placeholder="Ex: Esquadrias — Vidraçaria Silva" class="${INP}">
+                    </div>
+                    <div>
+                        <label class="${LBL}">Fornecedor</label>
+                        <select id="grp-supplier" class="${INP}"><option value="">—</option>${sup.map(n => `<option value="${esc(n)}" ${defSup === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+                    </div>
+                    <div>
+                        <label class="${LBL}">Observação</label>
+                        <textarea id="grp-obs" rows="2" class="${INP}">${esc(base.obs || '')}</textarea>
+                    </div>
+                    <div>
+                        <label class="${LBL}">Documento do grupo (orçamento geral / PDF)</label>
+                        <input type="file" id="grp-file" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
+                        ${base.fileName ? `<p class="text-xs text-teal-600 mt-1">Atual: ${esc(base.fileName)}</p>` : ''}
+                    </div>
+                    <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-teal-950 py-3 rounded-xl font-bold text-sm shadow">${g ? 'Salvar grupo' : 'Criar grupo'}</button>
+                </form>
+            `);
+        }
+        function saveGroup(e, groupId) {
+            e.preventDefault();
+            const H = appData.habitacao;
+            if (!H.budgetGroups) H.budgetGroups = [];
+            const fields = { name: document.getElementById('grp-name').value.trim(), supplier: document.getElementById('grp-supplier').value, obs: document.getElementById('grp-obs').value.trim() };
+            const fi = document.getElementById('grp-file');
+            const finish = (fileName, fileData) => {
+                let g = groupId ? H.budgetGroups.find(x => x.id === groupId) : null;
+                if (g) { Object.assign(g, fields); if (fileName !== null) { g.fileName = fileName; g.fileData = fileData; } }
+                else {
+                    g = Object.assign({ id: uid(), fileName: fileName || '', fileData: fileData || '' }, fields);
+                    H.budgetGroups.push(g);
+                    H.budgets.forEach(b => { if (budgetSelected.includes(b.id)) b.groupId = g.id; });
+                    budgetSelectMode = false; budgetSelected = [];
+                }
+                if (fields.supplier) H.budgets.filter(b => b.groupId === g.id && (!b.supplier || b.supplier === 'Geral')).forEach(b => b.supplier = fields.supplier);
+                pruneBudgetGroups();
+                saveAppData(); closeModal(); renderCurrentTabContent();
+                showToast(groupId ? 'Grupo atualizado.' : 'Grupo criado!', 'success');
+            };
+            if (fi.files && fi.files[0]) {
+                const f = fi.files[0], r = new FileReader();
+                r.onload = ev => finish(f.name, ev.target.result);
+                r.readAsDataURL(f);
+            } else finish(null, null);
+        }
+        function dissolveGroup(id) {
+            const H = appData.habitacao;
+            H.budgets.forEach(b => { if (b.groupId === id) b.groupId = ''; });
+            H.budgetGroups = (H.budgetGroups || []).filter(g => g.id !== id);
+            saveAppData(); renderCurrentTabContent();
+            showToast('Grupo desfeito. Os orçamentos foram mantidos.', 'info');
+        }
+        function sortIcon(k) {
+            if (obraSortKey !== k) return '<i class="fa-solid fa-sort ml-1 opacity-30"></i>';
+            return `<i class="fa-solid fa-arrow-${obraSortDir === 'asc' ? 'up' : 'down'} ml-1 text-teal-600"></i>`;
+        }
+        function setObraSortKey(k) {
+            if (obraSortKey === k) obraSortDir = obraSortDir === 'asc' ? 'desc' : 'asc';
+            else { obraSortKey = k; obraSortDir = 'asc'; }
+            renderCurrentTabContent();
+        }
+        function sortContribs(list) {
+            const people = appData.habitacao.people;
+            const val = {
+                pessoa: c => (people.find(p => p.id === c.personId) || { name: '' }).name,
+                tipo: c => c.type || '',
+                desc: c => c.desc || '',
+                date: c => c.date || '',
+                valor: c => Number(c.amount) || 0
+            }[obraSortKey] || (c => c.date || '');
+            const dir = obraSortDir === 'asc' ? 1 : -1;
+            return list.sort((a, b) => {
+                const x = val(a), y = val(b);
+                const r = (typeof x === 'number') ? x - y : String(x).localeCompare(String(y), 'pt-BR', { numeric: true, sensitivity: 'base' });
+                return r * dir;
+            });
+        }
+
 
         // --- FORNECEDORES MODAL ---
         function openSupplierModal() {
@@ -2197,6 +2466,7 @@
         function showModal(title, htmlContent) {
             const modal = document.getElementById('global-modal');
             const content = document.getElementById('modal-content');
+            content.classList.remove('max-w-3xl'); content.classList.add('max-w-lg');
             content.innerHTML = `
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-bold text-lg text-slate-800 dark:text-white">${title}</h3>
@@ -2375,11 +2645,16 @@
             }
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast("Salvo!", "success");
         }
-        function editFinance(id) { openFinanceModal(id); }
+        function editFinance(id) {
+            const t = appData.financeiro.transactions.find(x => x.id === id);
+            if (t && t.cardInvoice) { cardSelectedId = t.cardInvoice.cardId; cardInvMonth = t.cardInvoice.inv; switchTab('cartao'); return; }
+            openFinanceModal(id);
+        }
 
         function deleteFinance(id) {
             const t = appData.financeiro.transactions.find(x => x.id === id);
             if (!t) return;
+            if (t.cardInvoice) { showToast('Esta fatura é gerada pelo Cartão de Crédito. Exclua os lançamentos na tela do cartão.', 'warning'); return; }
             const siblings = t.installment ? appData.financeiro.transactions.filter(x => x.installment && x.installment.group === t.installment.group) : [];
             if (siblings.length > 1) {
                 showModal('Excluir parcela', `
@@ -2651,6 +2926,685 @@
         }
         function editHabitacaoContrib(id) { openHabitacaoContribModal(id); }
         function deleteHabitacaoContrib(id) { appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
+
+        // =====================================================
+        // CARTÃO DE CRÉDITO
+        // =====================================================
+        const CARD_DEFAULT_CATS = ['Gasolina', 'Ração', 'Assinatura', 'Presente', 'Outros'];
+        const pad2 = n => String(n).padStart(2, '0');
+        function ymAdd(key, n) { const [y, m] = key.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }
+        function fmtYM(key) { const [y, m] = key.split('-').map(Number); const s = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1); }
+        function cardById(id) { return appData.cartao.cards.find(c => c.id === id); }
+        // Fatura identificada pelo mês de VENCIMENTO. Compra depois do dia de fechamento cai na fatura seguinte.
+        function cardInvoiceKey(card, dateStr) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const close = Number(card.closingDay) || 31, due = Number(card.dueDay) || close;
+            let cm = m - 1; if (d > close) cm++;
+            const dm = cm + (due > close ? 0 : 1);
+            const dt = new Date(y, dm, 1);
+            return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}`;
+        }
+        function cardDueDate(card, key) {
+            const [y, m] = key.split('-').map(Number);
+            const last = new Date(y, m, 0).getDate();
+            return `${key}-${pad2(Math.min(Number(card.dueDay) || last, last))}`;
+        }
+        function cardEntriesFor(cardId, key) { return appData.cartao.entries.filter(e => e.cardId === cardId && e.invoice === key); }
+        function cardInvoiceTotal(cardId, key) { return cardEntriesFor(cardId, key).reduce((s, e) => s + (Number(e.amount) || 0), 0); }
+        function cardInvoiceTx(cardId, key) { return appData.financeiro.transactions.find(t => t.cardInvoice && t.cardInvoice.cardId === cardId && t.cardInvoice.inv === key); }
+
+        // Leva para Finanças somente "Cartão de Crédito" + valor final de cada fatura
+        function syncCardInvoices() {
+            const C = appData.cartao; if (!C) return;
+            const sums = {};
+            C.entries.forEach(e => {
+                if (!e.invoice || !C.cards.some(c => c.id === e.cardId)) return;
+                const k = e.cardId + '|' + e.invoice;
+                sums[k] = (sums[k] || 0) + (Number(e.amount) || 0);
+            });
+            const seen = new Set(), keep = [];
+            const upd = (t, cardId, inv) => {
+                const card = cardById(cardId);
+                t.type = 'despesa'; t.category = 'Cartão de Crédito';
+                t.desc = 'Cartão de Crédito' + (C.cards.length > 1 ? ' — ' + card.name : '');
+                t.amount = (sums[cardId + '|' + inv]).toFixed(2);
+                t.date = cardDueDate(card, inv);
+            };
+            appData.financeiro.transactions.forEach(t => {
+                if (!t.cardInvoice) { keep.push(t); return; }
+                const k = t.cardInvoice.cardId + '|' + t.cardInvoice.inv;
+                if (sums[k] !== undefined && !seen.has(k)) { upd(t, t.cardInvoice.cardId, t.cardInvoice.inv); seen.add(k); keep.push(t); }
+                else (t.attachments || []).forEach(a => deleteStoredFile(a.id));
+            });
+            Object.keys(sums).forEach(k => {
+                if (seen.has(k)) return;
+                const [cardId, inv] = k.split('|');
+                const t = { id: uid(), status: 'pendente', attachments: [], cardInvoice: { cardId, inv } };
+                upd(t, cardId, inv); keep.push(t);
+            });
+            appData.financeiro.transactions = keep;
+        }
+        function cardCommit(msg) { syncCardInvoices(); saveAppData(); closeModal(); renderCurrentTabContent(); if (msg) showToast(msg, 'success'); }
+
+        function renderCartao(container) {
+            const C = appData.cartao;
+            if (C.cards.length === 0) {
+                container.innerHTML = `
+                <div class="max-w-3xl mx-auto bg-white dark:bg-slate-800 rounded-3xl p-10 text-center shadow-sm border border-slate-100 dark:border-slate-700">
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-500 flex items-center justify-center text-3xl mb-4"><i class="fa-solid fa-credit-card"></i></div>
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white">Nenhum cartão cadastrado</h3>
+                    <p class="text-sm text-slate-500 mt-1 mb-5">Cadastre seu cartão para lançar compras e acompanhar as faturas.</p>
+                    <button onclick="openCardModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow"><i class="fa-solid fa-plus mr-2"></i>Cadastrar cartão</button>
+                </div>`;
+                return;
+            }
+            if (!cardById(cardSelectedId)) cardSelectedId = C.cards[0].id;
+            const card = cardById(cardSelectedId);
+            if (!cardInvMonth) cardInvMonth = cardInvoiceKey(card, localDateStr());
+            const key = cardInvMonth;
+            const entries = cardEntriesFor(card.id, key).sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.name.localeCompare(b.name));
+            const total = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+            const tx = cardInvoiceTx(card.id, key);
+            const paid = tx && tx.status === 'pago';
+            const keys = [...new Set(C.entries.filter(e => e.cardId === card.id).map(e => e.invoice))];
+            const used = keys.reduce((s, k) => { const t = cardInvoiceTx(card.id, k); return s + ((t && t.status === 'pago') ? 0 : cardInvoiceTotal(card.id, k)); }, 0);
+            const limit = Number(card.limit) || 0;
+            const byCat = {};
+            entries.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + (Number(e.amount) || 0); });
+            const masked = card.number ? '•••• ' + String(card.number).replace(/\D/g, '').slice(-4) : '••••';
+
+            container.innerHTML = `
+            <div class="space-y-6 max-w-7xl mx-auto">
+                <div class="flex flex-wrap gap-4 items-stretch">
+                    ${C.cards.map(c => `
+                        <button onclick="cardSelect('${c.id}')" class="text-left rounded-2xl p-5 w-64 text-white shadow-lg transition ${c.id === card.id ? 'ring-4 ring-amber-400 scale-[1.02]' : 'opacity-80 hover:opacity-100'} bg-gradient-to-br from-teal-900 to-teal-700">
+                            <div class="flex justify-between items-start"><i class="fa-solid fa-credit-card text-xl text-amber-300"></i><span class="text-[10px] uppercase text-teal-200">Fecha ${c.closingDay || '—'} · Vence ${c.dueDay || '—'}</span></div>
+                            <p class="font-bold text-lg mt-4 truncate">${esc(c.name)}</p>
+                            <p class="text-sm tracking-widest text-teal-100">${c.number ? '•••• ' + esc(String(c.number).replace(/\D/g, '').slice(-4)) : '••••'}</p>
+                            <p class="text-[11px] text-teal-200 mt-2">Limite R$ ${money(c.limit || 0)}</p>
+                        </button>`).join('')}
+                    <button onclick="openCardModal()" class="w-40 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-400 hover:text-teal-600 hover:border-teal-400 flex flex-col items-center justify-center text-xs font-bold gap-1 p-4"><i class="fa-solid fa-plus text-lg"></i>Novo cartão</button>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <button onclick="cardNavMonth(-1)" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-left"></i></button>
+                        <div class="text-center min-w-[170px]"><p class="text-[10px] uppercase font-bold text-slate-400">Fatura de</p><p class="font-bold text-slate-800 dark:text-white">${fmtYM(key)}</p></div>
+                        <button onclick="cardNavMonth(1)" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-right"></i></button>
+                        <input type="month" value="${key}" onchange="cardSetMonth(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="openCardEntryModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow"><i class="fa-solid fa-plus mr-1.5"></i>Novo lançamento</button>
+                        <button onclick="openCardImportModal()" class="bg-amber-500 hover:bg-amber-600 text-teal-950 px-4 py-2 rounded-xl text-xs font-bold shadow"><i class="fa-solid fa-file-import mr-1.5"></i>Importar fatura</button>
+                        <button onclick="openCardCategories()" class="bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold"><i class="fa-solid fa-tags mr-1.5"></i>Categorias</button>
+                        <button onclick="openCardModal('${card.id}')" class="bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold"><i class="fa-solid fa-pen mr-1.5"></i>Editar cartão</button>
+                        <button onclick="deleteCard('${card.id}')" class="bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                        <p class="text-xs font-semibold text-slate-400 uppercase">Valor da fatura</p>
+                        <h3 class="text-2xl font-bold text-rose-600 mt-1">R$ ${money(total)}</h3>
+                        <button onclick="toggleInvoicePaid('${card.id}','${key}')" ${tx ? '' : 'disabled'} class="mt-2 px-2.5 py-1 rounded-lg text-xs font-bold disabled:opacity-40 ${paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}"><i class="fa-solid ${paid ? 'fa-circle-check' : 'fa-clock'} mr-1"></i>${paid ? 'Fatura paga' : 'Em aberto'}${tx ? ' (alternar)' : ''}</button>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                        <p class="text-xs font-semibold text-slate-400 uppercase">Vencimento</p>
+                        <h3 class="text-2xl font-bold text-slate-800 dark:text-white mt-1">${fmtBR(cardDueDate(card, key))}</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">Fechamento dia ${card.closingDay || '—'}</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                        <p class="text-xs font-semibold text-slate-400 uppercase">Limite usado</p>
+                        <h3 class="text-2xl font-bold text-amber-600 mt-1">R$ ${money(used)}</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">${limit ? `Disponível R$ ${money(limit - used)} de R$ ${money(limit)}` : 'Limite não informado'}</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                        <p class="text-xs font-semibold text-slate-400 uppercase">Dados</p>
+                        <p class="text-sm font-semibold text-slate-800 dark:text-white mt-1">${esc(card.name)} · ${masked}</p>
+                        <p class="text-[11px] text-slate-400 mt-1">Ag. ${esc(card.agency || '—')} · Conta ${esc(card.account || '—')}</p>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 flex items-center space-x-2"><i class="fa-solid fa-receipt text-teal-500"></i><span>Lançamentos da fatura</span></h3>
+                    <p class="text-[11px] text-slate-400 mb-4">Em Finanças aparece apenas "Cartão de Crédito" com o valor final desta fatura.</p>
+                    ${Object.keys(byCat).length ? `<div class="flex flex-wrap gap-2 mb-4">${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="px-2.5 py-1 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"><b>${esc(k)}</b> R$ ${money(v)}</span>`).join('')}</div>` : ''}
+                    ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhum lançamento nesta fatura.</p></div>` : `
+                    <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
+                            <th class="p-3 rounded-l-xl">Data</th><th class="p-3">Nome</th><th class="p-3">Categoria</th><th class="p-3">Parcela</th><th class="p-3">Observação</th><th class="p-3">Valor</th><th class="p-3 text-right rounded-r-xl">Ações</th>
+                        </tr></thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                        ${entries.map(e => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                            <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}</td>
+                            <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}</td>
+                            <td class="p-3"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(e.category)}</span></td>
+                            <td class="p-3">${e.installment ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${e.installment.n}/${e.installment.total}</span>` : '<span class="text-slate-300">—</span>'}</td>
+                            <td class="p-3 text-slate-500 text-xs max-w-[220px] truncate" title="${esc(e.obs || '')}">${esc(e.obs || '')}</td>
+                            <td class="p-3 font-bold text-rose-600 whitespace-nowrap">R$ ${money(e.amount)}</td>
+                            <td class="p-3 text-right space-x-1 whitespace-nowrap">
+                                <button onclick="openCardEntryModal('${e.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                                <button onclick="deleteCardEntry('${e.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                            </td></tr>`).join('')}
+                        </tbody>
+                        <tfoot><tr><td colspan="5" class="p-3 text-right font-bold text-slate-500">Total da fatura</td><td class="p-3 font-extrabold text-rose-600">R$ ${money(total)}</td><td></td></tr></tfoot>
+                    </table></div>`}
+                </div>
+            </div>`;
+        }
+        function cardSelect(id) { cardSelectedId = id; cardInvMonth = ''; renderCurrentTabContent(); }
+        function cardNavMonth(d) { cardInvMonth = ymAdd(cardInvMonth, d); renderCurrentTabContent(); }
+        function cardSetMonth(v) { if (v) { cardInvMonth = v; renderCurrentTabContent(); } }
+        function toggleInvoicePaid(cardId, key) {
+            const t = cardInvoiceTx(cardId, key); if (!t) return;
+            t.status = t.status === 'pago' ? 'pendente' : 'pago';
+            saveAppData(); renderCurrentTabContent();
+        }
+
+        // --- Cartão: cadastro ---
+        function openCardModal(id = null) {
+            const c = id ? cardById(id) : { name: '', number: '', agency: '', account: '', closingDay: '', dueDay: '', limit: '' };
+            showModal(id ? 'Editar cartão' : 'Novo cartão', `
+                <form onsubmit="saveCard(event, '${id || ''}')" class="space-y-4">
+                    <div><label class="${LBL}">Nome do cartão</label><input id="cd-name" required value="${esc(c.name)}" placeholder="Ex: Nubank, Itaú Platinum" class="${INP}"></div>
+                    <div><label class="${LBL}">Número</label><input id="cd-number" inputmode="numeric" value="${esc(c.number)}" placeholder="Pode informar só os 4 últimos dígitos" class="${INP}"></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Agência</label><input id="cd-agency" value="${esc(c.agency)}" class="${INP}"></div>
+                        <div><label class="${LBL}">Conta</label><input id="cd-account" value="${esc(c.account)}" class="${INP}"></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div><label class="${LBL}">Dia fechamento</label><input type="number" min="1" max="31" id="cd-close" required value="${c.closingDay}" class="${INP}"></div>
+                        <div><label class="${LBL}">Dia vencimento</label><input type="number" min="1" max="31" id="cd-due" required value="${c.dueDay}" class="${INP}"></div>
+                        <div><label class="${LBL}">Limite (R$)</label><input type="number" step="0.01" min="0" id="cd-limit" value="${c.limit}" class="${INP}"></div>
+                    </div>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar cartão</button>
+                </form>`);
+        }
+        function saveCard(e, id) {
+            e.preventDefault();
+            const v = k => document.getElementById(k).value.trim();
+            const data = { name: v('cd-name'), number: v('cd-number'), agency: v('cd-agency'), account: v('cd-account'), closingDay: Number(v('cd-close')), dueDay: Number(v('cd-due')), limit: Number(v('cd-limit')) || 0 };
+            if (id) Object.assign(cardById(id), data);
+            else { const c = Object.assign({ id: uid() }, data); appData.cartao.cards.push(c); cardSelectedId = c.id; cardInvMonth = ''; }
+            cardCommit('Cartão salvo!');
+        }
+        function deleteCard(id) {
+            const n = appData.cartao.entries.filter(e => e.cardId === id).length;
+            if (!confirm(`Excluir este cartão${n ? ` e seus ${n} lançamento(s)` : ''}? Esta ação não pode ser desfeita.`)) return;
+            appData.cartao.cards = appData.cartao.cards.filter(c => c.id !== id);
+            appData.cartao.entries = appData.cartao.entries.filter(e => e.cardId !== id);
+            cardSelectedId = null; cardInvMonth = '';
+            cardCommit('Cartão excluído.');
+        }
+
+        // --- Cartão: categorias ---
+        function openCardCategories() {
+            const cats = appData.cartao.categories;
+            showModal('Categorias do cartão', `
+                <div class="space-y-2 mb-4">
+                    ${cats.map(c => `<div class="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 text-sm"><span>${esc(c)}</span><button onclick="removeCardCategory(decodeURIComponent('${encodeURIComponent(c)}'))" class="text-slate-400 hover:text-rose-600"><i class="fa-solid fa-xmark"></i></button></div>`).join('')}
+                </div>
+                <form onsubmit="addCardCategory(event)" class="flex gap-2">
+                    <input id="new-cat" required placeholder="Nova categoria" class="${INP}">
+                    <button class="bg-teal-600 text-white px-4 rounded-xl text-sm font-bold">Adicionar</button>
+                </form>
+                <p class="text-[11px] text-slate-400 mt-3">Remover uma categoria não altera lançamentos já feitos.</p>`);
+        }
+        function addCardCategory(e) {
+            e.preventDefault();
+            const n = document.getElementById('new-cat').value.trim();
+            if (n && !appData.cartao.categories.some(c => normKey(c) === normKey(n))) { appData.cartao.categories.push(n); saveAppData(); }
+            openCardCategories();
+        }
+        function removeCardCategory(n) {
+            appData.cartao.categories = appData.cartao.categories.filter(c => c !== n);
+            saveAppData(); openCardCategories();
+        }
+
+        // --- Cartão: lançamentos ---
+        function catSelectHtml(selected) {
+            const cats = appData.cartao.categories.slice();
+            if (selected && !cats.includes(selected)) cats.push(selected);
+            return `<select id="ce-cat" onchange="document.getElementById('ce-newcat').classList.toggle('hidden', this.value !== '__new__')" class="${INP}">
+                ${cats.map(c => `<option value="${esc(c)}" ${c === selected ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+                <option value="__new__">➕ Nova categoria…</option></select>
+                <input id="ce-newcat" placeholder="Nome da nova categoria" class="${INP} mt-2 hidden">`;
+        }
+        function openCardEntryModal(id = null) {
+            const C = appData.cartao;
+            const en = id ? C.entries.find(x => x.id === id) : null;
+            const card = cardById(en ? en.cardId : cardSelectedId) || C.cards[0];
+            const e = en || { name: '', amount: '', date: localDateStr(), invoice: cardInvoiceKey(card, localDateStr()), category: C.categories[0] || 'Outros', obs: '' };
+            window._invTouched = !!id;
+            const sib = en && en.installment ? C.entries.filter(x => x.installment && x.installment.group === en.installment.group).length : 0;
+            showModal(id ? 'Editar lançamento' : 'Novo lançamento no cartão', `
+                <form onsubmit="saveCardEntry(event, '${id || ''}')" class="space-y-4">
+                    ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ce-card" onchange="cardAutoInvoice()" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ce-card" value="${card.id}">`}
+                    <div><label class="${LBL}">Nome</label><input id="ce-name" required value="${esc(e.name)}" placeholder="Ex: Posto Shell" class="${INP}"></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Valor (R$)</label><input type="number" step="0.01" min="0" id="ce-amount" required value="${e.amount}" class="${INP}"></div>
+                        ${id ? `<div><label class="${LBL}">Parcela</label><div class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-sm text-slate-500">${en.installment ? `${en.installment.n} de ${en.installment.total}` : 'À vista'}</div></div>` : `
+                        <div><label class="${LBL}">Parcelas (opcional)</label><input type="number" min="1" max="60" id="ce-inst" placeholder="À vista" class="${INP}"></div>`}
+                    </div>
+                    ${id ? '' : `<div id="ce-mode-wrap" class="-mt-2"><label class="${LBL}">Se parcelado, o valor informado é</label><select id="ce-mode" class="${INP}"><option value="total">Valor total (divide entre as parcelas)</option><option value="each">Valor de cada parcela</option></select></div>`}
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Data da compra</label><input type="date" id="ce-date" required value="${e.date}" onchange="cardAutoInvoice()" class="${INP}"></div>
+                        <div><label class="${LBL}">Fatura (mês)</label><input type="month" id="ce-inv" required value="${e.invoice}" oninput="window._invTouched=true" class="${INP}"></div>
+                    </div>
+                    <div><label class="${LBL}">Categoria</label>${catSelectHtml(e.category)}</div>
+                    <div><label class="${LBL}">Observação</label><textarea id="ce-obs" rows="2" class="${INP}">${esc(e.obs || '')}</textarea></div>
+                    ${sib > 1 ? `<label class="flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" id="ce-all"> Aplicar nome, categoria e observação às outras ${sib - 1} parcelas</label>` : ''}
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                </form>`);
+        }
+        function cardAutoInvoice() {
+            if (window._invTouched) return;
+            const card = cardById(document.getElementById('ce-card').value), d = document.getElementById('ce-date').value;
+            if (card && d) document.getElementById('ce-inv').value = cardInvoiceKey(card, d);
+        }
+        function saveCardEntry(ev, id) {
+            ev.preventDefault();
+            const C = appData.cartao, g = k => document.getElementById(k);
+            let category = g('ce-cat').value;
+            if (category === '__new__') {
+                category = g('ce-newcat').value.trim() || 'Outros';
+                if (!C.categories.some(c => normKey(c) === normKey(category))) C.categories.push(category);
+            }
+            const base = { cardId: g('ce-card').value, name: g('ce-name').value.trim(), date: g('ce-date').value, invoice: g('ce-inv').value, category, obs: g('ce-obs').value.trim() };
+            const amount = Number(g('ce-amount').value) || 0;
+            if (id) {
+                const en = C.entries.find(x => x.id === id);
+                Object.assign(en, base, { amount });
+                const all = g('ce-all');
+                if (all && all.checked && en.installment) C.entries.forEach(x => { if (x !== en && x.installment && x.installment.group === en.installment.group) Object.assign(x, { name: base.name, category: base.category, obs: base.obs, cardId: base.cardId }); });
+            } else {
+                const n = Math.max(1, Math.min(60, parseInt(g('ce-inst').value) || 1));
+                if (n === 1) C.entries.push(Object.assign({ id: uid(), amount }, base));
+                else {
+                    const group = uid(), each = g('ce-mode').value === 'each';
+                    const totalCents = Math.round(amount * 100), per = Math.floor(totalCents / n);
+                    for (let i = 0; i < n; i++) {
+                        const cents = each ? Math.round(amount * 100) : (i === n - 1 ? totalCents - per * (n - 1) : per);
+                        C.entries.push(Object.assign({}, base, { id: uid(), amount: cents / 100, date: addMonthsToDate(base.date, i), invoice: ymAdd(base.invoice, i), installment: { group, n: i + 1, total: n } }));
+                    }
+                }
+                cardSelectedId = base.cardId; cardInvMonth = base.invoice;
+            }
+            cardCommit('Lançamento salvo!');
+        }
+        function deleteCardEntry(id) {
+            const C = appData.cartao, en = C.entries.find(x => x.id === id); if (!en) return;
+            const sib = en.installment ? C.entries.filter(x => x.installment && x.installment.group === en.installment.group) : [];
+            if (sib.length > 1) {
+                showModal('Excluir parcela', `
+                    <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">"${esc(en.name)}" tem ${sib.length} parcelas. O que deseja excluir?</p>
+                    <div class="space-y-2">
+                        <button onclick="removeCardEntry('${id}', false)" class="w-full bg-slate-100 dark:bg-slate-700 py-2.5 rounded-xl text-sm font-bold">Só esta parcela (${en.installment.n}/${en.installment.total})</button>
+                        <button onclick="removeCardEntry('${id}', true)" class="w-full bg-rose-600 text-white py-2.5 rounded-xl text-sm font-bold">Todas as ${sib.length} parcelas</button>
+                    </div>`);
+            } else removeCardEntry(id, false);
+        }
+        function removeCardEntry(id, whole) {
+            const C = appData.cartao, en = C.entries.find(x => x.id === id); if (!en) return;
+            C.entries = C.entries.filter(x => whole && en.installment ? !(x.installment && x.installment.group === en.installment.group) : x.id !== id);
+            cardCommit();
+        }
+
+        // --- Cartão: importar fatura (PDF / OFX / CSV) ---
+        let cardImportRows = [], pdfWorkerReady = false;
+        function openCardImportModal() {
+            showModal('Importar fatura', `
+                <p class="text-xs text-slate-500 mb-3">Envie o arquivo da fatura em <b>OFX</b>, <b>CSV</b> ou <b>PDF</b>. Você revisa os lançamentos antes de importar.</p>
+                <input type="file" id="ci-file" accept=".pdf,.ofx,.qfx,.csv,.txt" onchange="handleCardImportFile(this)" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
+                <p id="ci-msg" class="text-xs text-slate-400 mt-3"></p>`);
+        }
+        function guessCardCategory(name) {
+            const n = normKey(name);
+            const rules = [['Gasolina', /posto|shell|ipiranga|petrobras|combust|gasolina|\bale\b/], ['Ração', /rac(ao|ões)|\bpet\b|petz|cobasi|agropec|veterin/], ['Assinatura', /netflix|spotify|disney|prime video|amazon prime|youtube|hbo|max\b|globoplay|apple\.com|google (one|play)|icloud|assinatura|deezer/], ['Presente', /presente|boticario|natura|floricultura|flores/]];
+            for (const [cat, re] of rules) if (re.test(n) && appData.cartao.categories.includes(cat)) return cat;
+            return appData.cartao.categories.includes('Outros') ? 'Outros' : (appData.cartao.categories[0] || 'Outros');
+        }
+        async function handleCardImportFile(input) {
+            const f = input.files[0]; if (!f) return;
+            const msg = document.getElementById('ci-msg'); msg.textContent = 'Lendo arquivo…';
+            try {
+                const ext = f.name.split('.').pop().toLowerCase();
+                let raw = [];
+                if (ext === 'ofx' || ext === 'qfx') raw = parseOfx(await f.text());
+                else if (ext === 'csv' || ext === 'txt') raw = parseCsvFatura(await f.text());
+                else if (ext === 'pdf') raw = await parsePdfFatura(f);
+                else throw new Error('Formato não suportado.');
+                if (!raw.length) throw new Error('Não encontrei lançamentos neste arquivo. Se for PDF, tente o OFX/CSV do banco ou lance manualmente.');
+                buildImportRows(raw);
+            } catch (err) { msg.className = 'text-xs text-rose-500 mt-3'; msg.textContent = err.message || 'Erro ao ler o arquivo.'; }
+        }
+        function parseOfx(txt) {
+            const out = [], re = /<STMTTRN>([\s\S]*?)(?=<\/STMTTRN>|<STMTTRN>|<\/BANKTRANLIST>|$)/gi; let m;
+            const tag = (s, t) => { const x = s.match(new RegExp('<' + t + '>([^<\\r\\n]*)', 'i')); return x ? x[1].trim() : ''; };
+            while ((m = re.exec(txt))) {
+                const dt = tag(m[1], 'DTPOSTED').slice(0, 8), amt = parseFloat(tag(m[1], 'TRNAMT').replace(',', '.'));
+                if (dt.length < 8 || isNaN(amt)) continue;
+                out.push({ date: `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}`, name: tag(m[1], 'MEMO') || tag(m[1], 'NAME') || 'Lançamento', signed: amt });
+            }
+            return out;
+        }
+        function csvSplit(line, sep) {
+            const out = []; let cur = '', q = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
+                else if (ch === sep && !q) { out.push(cur); cur = ''; }
+                else cur += ch;
+            }
+            out.push(cur); return out.map(s => s.trim());
+        }
+        function parseCsvFatura(txt) {
+            const lines = txt.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
+            if (!lines.length) return [];
+            const sep = (lines[0].split(';').length > lines[0].split(',').length) ? ';' : ',';
+            const head = csvSplit(lines[0], sep).map(normKey);
+            const find = (...al) => head.findIndex(h => al.includes(h));
+            let iD = find('data', 'date', 'data da compra', 'data lancamento', 'data compra'), iN = find('descricao', 'description', 'title', 'titulo', 'estabelecimento', 'historico', 'lancamento', 'nome', 'name'), iV = find('valor', 'amount', 'valor (r$)', 'value', 'valor r$');
+            let start = 1;
+            if (iD < 0 || iV < 0) { iD = 0; iN = 1; iV = head.length - 1; start = 0; }
+            if (iN < 0) iN = head.findIndex((h, i) => i !== iD && i !== iV);
+            const out = [];
+            for (let i = start; i < lines.length; i++) {
+                const c = csvSplit(lines[i], sep), date = parseDateAny(c[iD]);
+                if (!date) continue;
+                const raw = String(c[iV] || '').trim(); if (!raw) continue;
+                let v = parseAmount(raw); if (/^\(.*\)$/.test(raw)) v = -Math.abs(v);
+                out.push({ date, name: c[iN] || 'Lançamento', signed: v });
+            }
+            return out;
+        }
+        async function ensurePdfWorker() {
+            if (pdfWorkerReady) return;
+            if (typeof pdfjsLib === 'undefined') throw new Error('Leitor de PDF indisponível (sem internet?). Use OFX ou CSV.');
+            const url = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            try { const t = await (await fetch(url)).text(); pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([t], { type: 'text/javascript' })); }
+            catch (e) { pdfjsLib.GlobalWorkerOptions.workerSrc = url; }
+            pdfWorkerReady = true;
+        }
+        async function parsePdfFatura(file) {
+            await ensurePdfWorker();
+            const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+            const MES = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+            const today = new Date(), out = [];
+            for (let p = 1; p <= pdf.numPages; p++) {
+                const tc = await (await pdf.getPage(p)).getTextContent();
+                const rows = {};
+                tc.items.forEach(it => { if (!it.str.trim()) return; const y = Math.round(it.transform[5] / 3); (rows[y] = rows[y] || []).push(it); });
+                Object.keys(rows).sort((a, b) => b - a).forEach(y => {
+                    const line = rows[y].sort((a, b) => a.transform[4] - b.transform[4]).map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+                    const dm = line.match(/^(\d{1,2})[\/\s-]((?:\d{1,2})|(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez))(?:[\/\s-](\d{2,4}))?\b/i);
+                    if (!dm) return;
+                    const am = [...line.matchAll(/(-|−)?\s?(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})(\s?CR)?/g)].pop();
+                    if (!am) return;
+                    const day = Number(dm[1]); let mon = /^\d+$/.test(dm[2]) ? Number(dm[2]) : MES[dm[2].toLowerCase()];
+                    if (!mon || mon > 12 || day > 31) return;
+                    let yr = dm[3] ? Number(dm[3].length === 2 ? '20' + dm[3] : dm[3]) : today.getFullYear();
+                    if (!dm[3] && (mon - 1) > today.getMonth() + 1) yr--;
+                    let name = line.slice(dm[0].length, am.index).replace(/\s+/g, ' ').trim();
+                    if (name.length < 2) return;
+                    let v = parseAmount(am[2]); if (am[1] || am[3]) v = -v;
+                    out.push({ date: `${yr}-${pad2(mon)}-${pad2(day)}`, name, signed: v });
+                });
+            }
+            return out;
+        }
+        function buildImportRows(raw) {
+            // Descobre qual sinal representa compra (a maioria dos lançamentos)
+            const neg = raw.filter(r => r.signed < 0).length, purchaseNeg = neg > raw.length / 2;
+            const card = cardById(cardSelectedId) || appData.cartao.cards[0];
+            cardImportRows = raw.map(r => {
+                const isPurchase = purchaseNeg ? r.signed < 0 : r.signed > 0;
+                const amount = Math.abs(r.signed);
+                const skip = !isPurchase || /pagamento (recebido|efetuado|de fatura|fatura)|saldo (anterior|restante)|total (da )?fatura|estorno/i.test(r.name);
+                const dup = appData.cartao.entries.some(e => e.cardId === card.id && e.date === r.date && Math.abs(e.amount - amount) < 0.005 && normKey(e.name) === normKey(r.name));
+                return { on: !skip && !dup, note: dup ? 'já lançado' : (skip ? 'crédito/pagamento' : ''), date: r.date, name: r.name, amount, category: guessCardCategory(r.name) };
+            });
+            renderCardImportPreview();
+        }
+        function renderCardImportPreview() {
+            const C = appData.cartao, card = cardById(cardSelectedId) || C.cards[0];
+            showModal('Revisar importação', `
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ci-card" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ci-card" value="${card.id}">`}
+                    <div><label class="${LBL}">Forçar fatura (opcional)</label><input type="month" id="ci-inv" class="${INP}"></div>
+                </div>
+                <p class="text-[11px] text-slate-400 mb-2">Sem "forçar fatura", cada compra vai para a fatura conforme o dia de fechamento. Ajuste data, nome, valor e categoria se precisar.</p>
+                <div class="max-h-[50vh] overflow-auto border border-slate-100 dark:border-slate-700 rounded-xl">
+                <table class="w-full text-xs"><thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[10px] sticky top-0"><tr><th class="p-2"></th><th class="p-2 text-left">Data</th><th class="p-2 text-left">Nome</th><th class="p-2 text-left">Valor</th><th class="p-2 text-left">Categoria</th></tr></thead><tbody>
+                ${cardImportRows.map((r, i) => `<tr class="border-t border-slate-100 dark:border-slate-700 ${r.note ? 'opacity-70' : ''}">
+                    <td class="p-2"><input type="checkbox" ${r.on ? 'checked' : ''} onchange="cardImportRows[${i}].on=this.checked;updateImportCount()"></td>
+                    <td class="p-1"><input type="date" value="${r.date}" onchange="cardImportRows[${i}].date=this.value" class="w-32 px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"></td>
+                    <td class="p-1"><input value="${esc(r.name)}" onchange="cardImportRows[${i}].name=this.value" class="w-full min-w-[140px] px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${r.note ? `<span class="text-[10px] text-amber-600">${r.note}</span>` : ''}</td>
+                    <td class="p-1"><input type="number" step="0.01" value="${r.amount.toFixed(2)}" onchange="cardImportRows[${i}].amount=Number(this.value)||0" class="w-24 px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"></td>
+                    <td class="p-1"><select onchange="cardImportRows[${i}].category=this.value" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${C.categories.map(c => `<option ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
+                </tr>`).join('')}
+                </tbody></table></div>
+                <button onclick="confirmCardImport()" class="w-full mt-4 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Importar <span id="ci-count"></span></button>`);
+            const mc = document.getElementById('modal-content'); mc.classList.remove('max-w-lg'); mc.classList.add('max-w-3xl');
+            updateImportCount();
+        }
+        function updateImportCount() { const n = cardImportRows.filter(r => r.on).length, el = document.getElementById('ci-count'); if (el) el.textContent = `${n} lançamento(s)`; }
+        function confirmCardImport() {
+            const card = cardById(document.getElementById('ci-card').value), force = document.getElementById('ci-inv').value;
+            const rows = cardImportRows.filter(r => r.on && r.date && r.amount > 0);
+            if (!rows.length) { showToast('Nenhum lançamento selecionado.', 'warning'); return; }
+            rows.forEach(r => appData.cartao.entries.push({ id: uid(), cardId: card.id, name: r.name, amount: r.amount, date: r.date, invoice: force || cardInvoiceKey(card, r.date), category: r.category, obs: 'Importado da fatura' }));
+            cardSelectedId = card.id; cardInvMonth = force || cardInvoiceKey(card, rows[0].date);
+            cardImportRows = [];
+            cardCommit(`${rows.length} lançamento(s) importado(s)!`);
+        }
+
+        // =====================================================
+        // DASHBOARD: CATEGORIAS MAIS CONSUMIDAS
+        // =====================================================
+        function categoryRanking() {
+            const now = localDateStr(), ym = now.slice(0, 7), yr = now.slice(0, 4);
+            const rows = [];
+            appData.financeiro.transactions.forEach(t => {
+                if (t.type === 'receita' || t.cardInvoice) return; // fatura já é contada pelos lançamentos do cartão
+                rows.push({ cat: (t.category || 'Sem categoria').trim(), amount: Number(t.amount) || 0, date: t.date || '', src: 'fin' });
+            });
+            appData.cartao.entries.forEach(e => rows.push({ cat: (e.category || 'Outros').trim(), amount: Number(e.amount) || 0, date: e.date || '', src: 'card' }));
+            const filt = rows.filter(r => catRankPeriod === 'all' || (catRankPeriod === 'month' && r.date.startsWith(ym)) || (catRankPeriod === 'year' && r.date.startsWith(yr)));
+            const map = {};
+            filt.forEach(r => {
+                const k = normKey(r.cat);
+                const o = map[k] || (map[k] = { name: r.cat, total: 0, count: 0, card: 0 });
+                o.total += r.amount; o.count++; if (r.src === 'card') o.card += r.amount;
+            });
+            return Object.values(map).sort((a, b) => b.total - a.total);
+        }
+        function catRankListHtml() {
+            const all = categoryRanking();
+            const q = normKey(catRankQuery);
+            const ranked = all.map((c, i) => Object.assign({ pos: i + 1 }, c));
+            const list = q ? ranked.filter(c => normKey(c.name).includes(q)) : ranked.slice(0, 8);
+            if (!ranked.length) return '<p class="text-sm text-slate-400 text-center py-8">Sem despesas no período.</p>';
+            if (!list.length) return '<p class="text-sm text-slate-400 text-center py-8">Nenhuma categoria encontrada.</p>';
+            const max = ranked[0].total || 1, grand = ranked.reduce((s, c) => s + c.total, 0) || 1;
+            return `<div class="space-y-3">${list.map(c => `
+                <div>
+                    <div class="flex justify-between items-baseline text-sm">
+                        <span class="font-semibold text-slate-800 dark:text-white truncate"><span class="inline-block w-6 text-xs font-bold ${c.pos <= 3 ? 'text-amber-500' : 'text-slate-400'}">#${c.pos}</span>${esc(c.name)}</span>
+                        <span class="font-bold text-rose-600 whitespace-nowrap ml-2">R$ ${money(c.total)}</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-700 mt-1 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-amber-400 to-teal-600" style="width:${Math.max(3, c.total / max * 100)}%"></div></div>
+                    <p class="text-[10px] text-slate-400 mt-0.5">${(c.total / grand * 100).toFixed(1)}% · ${c.count} lançamento(s)${c.card ? ` · cartão R$ ${money(c.card)}` : ''}</p>
+                </div>`).join('')}</div>
+                ${!q && ranked.length > 8 ? `<p class="text-[11px] text-slate-400 mt-3">Mostrando 8 de ${ranked.length} categorias — pesquise para ver as demais.</p>` : ''}`;
+        }
+        function updateCatRank() { const el = document.getElementById('cat-rank-list'); if (el) el.innerHTML = catRankListHtml(); }
+        function catRankBoxHtml() {
+            return `
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-ranking-star text-teal-500"></i><span>Categorias mais consumidas</span></h3>
+                </div>
+                <div class="flex gap-2 mb-4">
+                    <div class="relative flex-1"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="search" value="${esc(catRankQuery)}" oninput="catRankQuery=this.value;updateCatRank()" placeholder="Pesquisar categoria…" class="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm"></div>
+                    <select onchange="catRankPeriod=this.value;updateCatRank()" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
+                        <option value="all" ${catRankPeriod === 'all' ? 'selected' : ''}>Tudo</option>
+                        <option value="month" ${catRankPeriod === 'month' ? 'selected' : ''}>Este mês</option>
+                        <option value="year" ${catRankPeriod === 'year' ? 'selected' : ''}>Este ano</option>
+                    </select>
+                </div>
+                <div id="cat-rank-list">${catRankListHtml()}</div>
+                <p class="text-[10px] text-slate-400 mt-3">Considera Finanças (despesas) e lançamentos do Cartão de Crédito.</p>`;
+        }
+
+        // =====================================================
+        // DASHBOARD: MURAL DE ANIVERSARIANTES
+        // =====================================================
+        const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+        function bdParts(b) { const [y, m, d] = (b.date || '').split('-').map(Number); return { y, m, d }; }
+        function bdNext(b) {
+            const { m, d } = bdParts(b), t = new Date(); t.setHours(0, 0, 0, 0);
+            let dt = new Date(t.getFullYear(), m - 1, d);
+            if (dt < t) dt = new Date(t.getFullYear() + 1, m - 1, d);
+            return { dt, days: Math.round((dt - t) / 86400000) };
+        }
+        function bdAge(b) { const { y } = bdParts(b); return (y && y > 1900) ? bdNext(b).dt.getFullYear() - y : null; }
+        function bdAvatar(b, size) {
+            const cls = size === 'lg' ? 'w-16 h-16 text-xl' : (size === 'xl' ? 'w-32 h-32 text-4xl' : 'w-9 h-9 text-sm');
+            if (b.photo) return `<img src="${b.photo}" alt="" class="${cls} rounded-full object-cover flex-shrink-0 border-2 border-amber-300">`;
+            return `<div class="${cls} rounded-full bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center font-bold flex-shrink-0">${esc((b.name || '?').charAt(0).toUpperCase())}</div>`;
+        }
+        function muralItems() {
+            let items = appData.aniversarios.slice();
+            if (muralScope === 'mes') {
+                const mo = Number(muralMonth.split('-')[1]);
+                items = items.filter(b => bdParts(b).m === mo).sort((a, b) => bdParts(a).d - bdParts(b).d);
+            } else items.sort((a, b) => bdNext(a).days - bdNext(b).days);
+            return items;
+        }
+        function bdDateLabel(b) {
+            const { m, d } = bdParts(b);
+            return muralScope === 'mes' ? `Dia ${d}` : `${d} de ${MESES_PT[m - 1]}`;
+        }
+        function muralInner() {
+            const items = muralItems();
+            const seg = (active, onclick, icon, label) => `<button onclick="${onclick}" class="px-2.5 py-1.5 text-xs font-bold flex items-center space-x-1 ${active ? 'bg-teal-600 text-white' : 'bg-slate-50 dark:bg-slate-900 text-slate-500'}"><i class="fa-solid ${icon}"></i><span>${label}</span></button>`;
+            const ctrl = `<div class="flex flex-wrap items-center gap-2 mb-4">
+                <div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${seg(muralView === 'bloco', "setMural('view','bloco')", 'fa-table-cells-large', 'Blocos')}${seg(muralView === 'lista', "setMural('view','lista')", 'fa-list', 'Lista')}</div>
+                <div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${seg(muralScope === 'mes', "setMural('scope','mes')", 'fa-calendar', 'Mês')}${seg(muralScope === 'total', "setMural('scope','total')", 'fa-calendar-days', 'Total')}</div>
+                ${muralScope === 'mes' ? `<div class="flex items-center gap-1">
+                    <button onclick="muralNav(-1)" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-left"></i></button>
+                    <span class="text-xs font-bold min-w-[110px] text-center text-slate-700 dark:text-slate-200 capitalize">${MESES_PT[Number(muralMonth.split('-')[1]) - 1]}</span>
+                    <button onclick="muralNav(1)" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-right"></i></button></div>` : ''}
+                <label class="flex items-center gap-1.5 text-xs text-slate-500 ml-auto cursor-pointer"><input type="checkbox" ${muralPhotos ? 'checked' : ''} onchange="muralPhotos=this.checked;uiSave();renderMural()" class="accent-teal-600"> Ver com foto</label>
+            </div>`;
+            const today = localDateStr().slice(5);
+            const isToday = b => (b.date || '').slice(5) === today;
+            let body;
+            if (!items.length) body = '<p class="text-sm text-slate-400 text-center py-8"><i class="fa-solid fa-cake-candles text-3xl block mb-2"></i>Nenhum aniversariante' + (muralScope === 'mes' ? ' neste mês.' : ' cadastrado.') + '</p>';
+            else if (muralView === 'lista') {
+                body = `<div class="space-y-2">${items.map(b => `
+                    <button onclick="openBirthdayMenu('${b.id}')" class="w-full text-left flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/50 hover:bg-amber-50 dark:hover:bg-slate-700 border ${isToday(b) ? 'border-amber-400' : 'border-transparent'}">
+                        ${muralPhotos ? bdAvatar(b, 'sm') : ''}
+                        <div class="min-w-0 flex-1"><p class="font-semibold text-sm text-slate-800 dark:text-white truncate">${esc(b.name)}${isToday(b) ? ' 🎉' : ''}</p><p class="text-[11px] text-slate-500 truncate">${esc(b.relation || '')}</p></div>
+                        <span class="text-xs font-bold px-2 py-1 rounded-lg bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 whitespace-nowrap">${bdDateLabel(b)}</span>
+                    </button>`).join('')}</div>`;
+            } else {
+                body = `<div class="grid grid-cols-2 md:grid-cols-3 gap-3">${items.map(b => `
+                    <button onclick="openBirthdayMenu('${b.id}')" class="text-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/50 hover:bg-amber-50 dark:hover:bg-slate-700 border ${isToday(b) ? 'border-amber-400' : 'border-transparent'} flex flex-col items-center">
+                        ${muralPhotos ? `<div class="mb-2">${bdAvatar(b, 'lg')}</div>` : ''}
+                        <p class="font-semibold text-sm text-slate-800 dark:text-white truncate w-full">${esc(b.name)}${isToday(b) ? ' 🎉' : ''}</p>
+                        <p class="text-[11px] text-slate-500 truncate w-full">${esc(b.relation || '')}</p>
+                        <span class="mt-2 text-xs font-bold px-2 py-1 rounded-lg bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200">${bdDateLabel(b)}</span>
+                    </button>`).join('')}</div>`;
+            }
+            return `
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-cake-candles text-teal-500"></i><span>Mural de Aniversariantes</span></h3>
+                    <button onclick="openBirthdayModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow"><i class="fa-solid fa-plus mr-1"></i>Novo</button>
+                </div>
+                ${ctrl}${body}`;
+        }
+        function renderMural() { const el = document.getElementById('mural-box'); if (el) el.innerHTML = muralInner(); }
+        function setMural(k, v) { if (k === 'view') muralView = v; else muralScope = v; uiSave(); renderMural(); }
+        function muralNav(d) { muralMonth = ymAdd(muralMonth, d); renderMural(); }
+
+        function fileToThumb(file, max = 240) {
+            return new Promise((resolve, reject) => {
+                const img = new Image(), url = URL.createObjectURL(file);
+                img.onload = () => {
+                    const s = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+                    c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+                    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                    URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', 0.82));
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Imagem inválida')); };
+                img.src = url;
+            });
+        }
+        function openBirthdayMenu(id) {
+            const b = appData.aniversarios.find(x => x.id === id); if (!b) return;
+            showModal(esc(b.name), `
+                <div class="flex flex-col items-center gap-4 py-2">
+                    ${muralPhotos ? bdAvatar(b, 'lg') : ''}
+                    <p class="text-sm text-slate-500">O que deseja fazer?</p>
+                    <div class="grid grid-cols-2 gap-3 w-full">
+                        <button onclick="viewBirthday('${id}')" class="bg-teal-600 text-white py-2.5 rounded-xl text-sm font-bold"><i class="fa-solid fa-eye mr-1.5"></i>Visualizar</button>
+                        <button onclick="openBirthdayModal('${id}')" class="bg-amber-500 text-teal-950 py-2.5 rounded-xl text-sm font-bold"><i class="fa-solid fa-pen mr-1.5"></i>Editar</button>
+                    </div>
+                </div>`);
+        }
+        function viewBirthday(id) {
+            const b = appData.aniversarios.find(x => x.id === id); if (!b) return;
+            const { d, m, y } = bdParts(b), nx = bdNext(b), age = bdAge(b);
+            showModal('Aniversariante', `
+                <div class="flex flex-col items-center text-center gap-2">
+                    ${bdAvatar(b, 'xl')}
+                    <h4 class="text-xl font-bold text-slate-800 dark:text-white mt-2">${esc(b.name)}</h4>
+                    ${b.relation ? `<span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700">${esc(b.relation)}</span>` : ''}
+                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-2"><i class="fa-regular fa-calendar mr-1"></i>${d} de ${MESES_PT[m - 1]}${y > 1900 ? ' de ' + y : ''}</p>
+                    <p class="text-sm font-semibold text-teal-600">${nx.days === 0 ? 'Faz aniversário hoje! 🎉' : `Faltam ${nx.days} dia(s)`}${age ? ` — completa ${age} anos` : ''}</p>
+                </div>`);
+        }
+        function openBirthdayModal(id = null) {
+            const b = id ? appData.aniversarios.find(x => x.id === id) : { name: '', date: '', relation: '', photo: '' };
+            showModal(id ? 'Editar aniversariante' : 'Novo aniversariante', `
+                <form onsubmit="saveBirthday(event, '${id || ''}')" class="space-y-4">
+                    <div><label class="${LBL}">Nome</label><input id="bd-name" required value="${esc(b.name)}" class="${INP}"></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Data de nascimento</label><input type="date" id="bd-date" required value="${b.date}" class="${INP}"></div>
+                        <div><label class="${LBL}">Vínculo</label><input id="bd-rel" list="bd-rel-list" value="${esc(b.relation)}" placeholder="Ex: Amigo, Família" class="${INP}">
+                            <datalist id="bd-rel-list"><option value="Família"><option value="Amigo(a)"><option value="Trabalho"><option value="Namoro/Cônjuge"><option value="Vizinho(a)"><option value="Outro"></datalist></div>
+                    </div>
+                    <div>
+                        <label class="${LBL}">Foto (opcional)</label>
+                        <div class="flex items-center gap-3">${b.photo ? bdAvatar(b, 'lg') : ''}<input type="file" id="bd-photo" accept="image/*" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs"></div>
+                        ${b.photo ? `<label class="flex items-center gap-1.5 text-xs text-rose-600 mt-2"><input type="checkbox" id="bd-rmphoto"> Remover foto atual</label>` : ''}
+                    </div>
+                    <div class="flex gap-2">
+                        ${id ? `<button type="button" onclick="deleteBirthday('${id}')" class="px-4 bg-slate-100 dark:bg-slate-700 hover:text-rose-600 rounded-xl text-sm font-bold"><i class="fa-solid fa-trash"></i></button>` : ''}
+                        <button type="submit" class="flex-1 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                    </div>
+                </form>`);
+        }
+        async function saveBirthday(e, id) {
+            e.preventDefault();
+            const g = k => document.getElementById(k);
+            const data = { name: g('bd-name').value.trim(), date: g('bd-date').value, relation: g('bd-rel').value.trim() };
+            const existing = id ? appData.aniversarios.find(x => x.id === id) : null;
+            let photo = existing ? existing.photo || '' : '';
+            if (g('bd-rmphoto') && g('bd-rmphoto').checked) photo = '';
+            const f = g('bd-photo').files[0];
+            if (f) { try { photo = await fileToThumb(f); } catch (err) { showToast('Não foi possível ler a imagem.', 'error'); return; } }
+            data.photo = photo;
+            if (existing) Object.assign(existing, data); else appData.aniversarios.push(Object.assign({ id: uid() }, data));
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Aniversariante salvo!', 'success');
+        }
+        function deleteBirthday(id) {
+            if (!confirm('Excluir este aniversariante?')) return;
+            appData.aniversarios = appData.aniversarios.filter(x => x.id !== id);
+            saveAppData(); closeModal(); renderCurrentTabContent();
+        }
 
         // =====================================================
         // RELATÓRIOS (XLSX) — exportar / importar
