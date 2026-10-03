@@ -488,11 +488,13 @@
             if (!Array.isArray(appData.cartao.entries)) appData.cartao.entries = [];
             if (!Array.isArray(appData.cartao.categories) || !appData.cartao.categories.length) appData.cartao.categories = CARD_DEFAULT_CATS.slice();
             contasData();
+            syncHabTransfers();
             syncCardInvoices();
             uiLoad();
         }
 
         function saveAppData() {
+            try { syncHabTransfers(); } catch (e) { console.error(e); }
             try {
                 appData._savedAt = new Date().toISOString();
                 localStorage.setItem('meusistema_pessoal_data', JSON.stringify(appData));
@@ -1617,7 +1619,7 @@
                                                 <tr class="hover:bg-slate-50/50">
                                                     <td class="p-3.5 font-bold text-slate-800 dark:text-white">${person.name}</td>
                                                     <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? 'Pendente' : 'Retirada'}</span></td>
-                                                    <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}</td>
+                                                    <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}${c.linkKey ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">via Financeiro</span>' : ''}</td>
                                                     <td class="p-3.5 text-slate-500">${c.date}</td>
                                                     <td class="p-3.5 font-bold ${c.type === 'aporte' ? 'text-emerald-600' : c.type === 'pendente' ? 'text-amber-600' : 'text-rose-600'}">R$ ${Number(c.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                                                     <td class="p-3.5 text-right space-x-1">
@@ -2764,8 +2766,15 @@
             }
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast("Salvo!", "success");
         }
-        function editHabitacaoContrib(id) { openHabitacaoContribModal(id); }
-        function deleteHabitacaoContrib(id) { appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
+        function editHabitacaoContrib(id) {
+            const c = appData.habitacao.contributions.find(x => x.id === id);
+            if (c && c.linkKey) { showToast('Esta movimentação vem de uma Transferência no Financeiro. Edite por lá.', 'warning'); return; }
+            openHabitacaoContribModal(id);
+        }
+        function deleteHabitacaoContrib(id) {
+            const c = appData.habitacao.contributions.find(x => x.id === id);
+            if (c && c.linkKey) { showToast('Esta movimentação vem de uma Transferência no Financeiro. Exclua por lá.', 'warning'); return; }
+            appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
 
         // =====================================================
         // CARTÃO DE CRÉDITO
@@ -3945,14 +3954,37 @@
         // =====================================================
         // AJUSTES V2: CONTAS (CARTÃO DÉBITO/POUPANÇA), FINANCEIRO, TELA INICIAL, AGENDA
         // =====================================================
+        // Transferências com "Habitacional X" geram aporte/retirada no Fundo de Obra (só estas; nada mais do Habitacional vai ao Financeiro)
+        function syncHabTransfers() {
+            const H = appData.habitacao; if (!H || !appData.financeiro) return;
+            const want = {};
+            appData.financeiro.transactions.forEach(t => {
+                if (t.type !== 'transferencia') return;
+                [['from', t.accId, 'retirada'], ['to', t.toAccId, 'aporte']].forEach(([side, id, ty]) => {
+                    if (!isHabId(id)) return;
+                    const pid = id.slice(4); if (!H.people.some(p => p.id === pid)) return;
+                    want[t.id + '|' + side] = { personId: pid, type: t.status === 'pendente' ? 'pendente' : ty, amount: t.amount, date: t.date, desc: 'Transf. Financeiro: ' + (t.desc || '') };
+                });
+            });
+            H.contributions = H.contributions.filter(c => !c.linkKey || want[c.linkKey]);
+            Object.keys(want).forEach(k => {
+                const c = H.contributions.find(x => x.linkKey === k);
+                if (c) Object.assign(c, want[k]); else H.contributions.push(Object.assign({ id: uid(), linkKey: k }, want[k]));
+            });
+        }
         function contasData() {
             if (!appData.contas) appData.contas = { cards: [] };
             if (!Array.isArray(appData.contas.cards)) appData.contas.cards = [];
             return appData.contas.cards;
         }
-        function accById(id) { return id ? contasData().find(a => a.id === id) : null; }
-        function accLabel(a) { return a ? `${a.name} (${a.type === 'poupanca' ? 'Poupança' : 'Débito'})` : ''; }
-        function finCounted(id) { const a = accById(id); return !(a && a.noSum); }
+        function isHabId(id) { return typeof id === 'string' && id.startsWith('hab:'); }
+        function accById(id) {
+            if (!id) return null;
+            if (isHabId(id)) { const p = appData.habitacao.people.find(x => x.id === id.slice(4)); return p ? { id, name: 'Habitacional ' + p.name, type: 'hab' } : null; }
+            return contasData().find(a => a.id === id);
+        }
+        function accLabel(a) { return a && a.type === 'hab' ? a.name : a ? `${a.name} (${a.type === 'poupanca' ? 'Poupança' : 'Débito'})` : ''; }
+        function finCounted(id) { if (isHabId(id)) return false; const a = accById(id); return !(a && a.noSum); }
 
         // Efeito de um lançamento (receita / despesa) no total geral ou em uma conta específica
         function finEffect(t, acc) {
@@ -3978,17 +4010,24 @@
         }
         function finAccHtml(t) {
             const cs = contasData();
-            const opt = v => `<option value="">— Sem cartão/conta —</option>` + cs.map(a => `<option value="${a.id}" ${v === a.id ? 'selected' : ''}>${esc(accLabel(a))}</option>`).join('');
             const isT = t.type === 'transferencia';
+            const opt = v => finAccOpts(v, isT);
             return `<div class="grid grid-cols-2 gap-4">
                 <div><label class="${LBL}" id="fin-acc-lbl">${isT ? 'Conta de origem' : 'Cartão / Conta'}</label><select id="fin-acc" class="${INP}">${opt(t.accId || '')}</select></div>
                 <div id="fin-to-wrap" class="${isT ? '' : 'hidden'}"><label class="${LBL}">Conta de destino</label><select id="fin-to" class="${INP}">${opt(t.toAccId || '')}</select></div>
             </div>${cs.length ? '' : '<p class="text-[11px] text-amber-600 -mt-2">Nenhum cartão cadastrado ainda. Cadastre no menu "Cartão".</p>'}`;
         }
+        function finAccOpts(v, isT) {
+            const cs = contasData();
+            let h = `<option value="">— Sem cartão/conta —</option>` + cs.map(a => `<option value="${a.id}" ${v === a.id ? 'selected' : ''}>${esc(accLabel(a))}</option>`).join('');
+            if (isT) h += `<optgroup label="Habitacional (Fundo de Obra)">` + appData.habitacao.people.map(p => { const id = 'hab:' + p.id; return `<option value="${id}" ${v === id ? 'selected' : ''}>Habitacional ${esc(p.name)}</option>`; }).join('') + `</optgroup>`;
+            return h;
+        }
         function finTypeChange() {
             const ty = document.getElementById('fin-type').value;
             const sel = document.getElementById('fin-status');
             sel.innerHTML = finStatusOpts(ty, sel.value === 'pendente' ? 'pendente' : 'ok');
+            ['fin-acc', 'fin-to'].forEach(i => { const el = document.getElementById(i); let v = el.value; if (ty !== 'transferencia' && isHabId(v)) v = ''; el.innerHTML = finAccOpts(v, ty === 'transferencia'); });
             document.getElementById('fin-to-wrap').classList.toggle('hidden', ty !== 'transferencia');
             document.getElementById('fin-acc-lbl').textContent = ty === 'transferencia' ? 'Conta de origem' : 'Cartão / Conta';
             const c = document.getElementById('fin-category');
@@ -4017,10 +4056,9 @@
             const list = finFiltered();
             let tr = 0, td = 0, tp = 0;
             list.forEach(t => {
-                const v = Number(t.amount) || 0;
-                if (finF.acc) { const e = finEffect(t, finF.acc); tr += e.r; td += e.d; }
-                else if (t.type !== 'transferencia') { if (t.type === 'receita') tr += v; else td += v; }
-                if (t.type !== 'transferencia' && finSt(t) === 'pendente') tp += v;
+                const e = finEffect(t, finF.acc);
+                tr += e.r; td += e.d;
+                if (finSt(t) === 'pendente') tp += e.r + e.d;
             });
             const saldo = tr - td;
             const cats = [...new Set(appData.financeiro.transactions.map(t => t.category).filter(Boolean))].sort();
@@ -4063,8 +4101,10 @@
                                 const isT = t.type === 'transferencia', nAtt = (t.attachments || []).length;
                                 const a1 = accById(t.accId), a2 = accById(t.toAccId);
                                 const acc = isT ? `${a1 ? esc(a1.name) : '—'} <i class="fa-solid fa-arrow-right text-[9px] mx-0.5"></i> ${a2 ? esc(a2.name) : '—'}` : (a1 ? esc(a1.name) : '<span class="text-slate-300">—</span>');
-                                const vc = isT ? 'text-sky-600' : t.type === 'receita' ? 'text-emerald-600' : 'text-rose-600';
-                                const sg = isT ? '⇄' : t.type === 'receita' ? '+' : '-';
+                                const ef = isT ? finEffect(t, finF.acc) : null;
+                                const tDir = isT ? (ef.d > 0 ? 'out' : ef.r > 0 ? 'in' : 'mid') : '';
+                                const vc = tDir === 'mid' ? 'text-sky-600' : (tDir === 'in' || (!isT && t.type === 'receita')) ? 'text-emerald-600' : 'text-rose-600';
+                                const sg = tDir === 'mid' ? '⇄' : (tDir === 'in' || (!isT && t.type === 'receita')) ? '+' : '-';
                                 return `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
                                     <td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
                                         ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
