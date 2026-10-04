@@ -3732,7 +3732,7 @@
         const DRIVE_LINK_KEY = 'meusistema_drive_linked';
         const DRIVE_SYNC_KEY = 'meusistema_drive_sync';
         let driveClient = null, driveToken = null, driveTokenExp = 0;
-        let driveFolderId = null, driveFileId = null, driveReconciled = false, driveHadData = false;
+        let driveBestFile = null, driveFolderId = null, driveFileId = null, driveReconciled = false, driveHadData = false;
         let driveSaveTimer = null, driveLastSync = null, driveErr = '';
         let _tokRes = null, _tokRej = null;
 
@@ -3767,6 +3767,7 @@
             if (!r.ok) {
                 let det = '';
                 try { const j = await r.clone().json(); det = (j.error && ((j.error.errors && j.error.errors[0] && j.error.errors[0].reason) || j.error.status)) || ''; } catch (e) {}
+                if (det === 'storageQuotaExceeded') throw new Error('Drive sem espaço: a conta Google que está salvando (ou a dona da pasta) está com o armazenamento cheio. Libere espaço em drive.google.com/drive/quota');
                 throw new Error('Drive ' + r.status + (det ? ' (' + det + ')' : ''));
             }
             return r;
@@ -3779,15 +3780,22 @@
         }
         async function driveEnsureFolder() {
             if (driveFolderId) return;
-            // Pode haver mais de uma pasta "MeuSistema" (a sua e a compartilhada). Usa a que tem os dados;
-            // se houver mais de uma com dados, prefere a compartilhada por outra conta.
+            // Pode haver mais de uma pasta/arquivo de dados (o seu e o compartilhado). Vence o que tem MAIS dados;
+            // em empate, prefere o de outra conta (compartilhado) e depois o mais recente.
             const f = await driveList(`name='${DRIVE_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`, 'id,ownedByMe');
             if (f.length) {
+                let best = null;
                 for (const fo of f) {
-                    const d = await driveList(`name='${DRIVE_DATA}' and '${fo.id}' in parents and trashed=false`, 'id,modifiedTime');
-                    fo._t = d.length ? d[0].modifiedTime : '';
+                    const d = await driveList(`name='${DRIVE_DATA}' and '${fo.id}' in parents and trashed=false`, 'id,modifiedTime,ownedByMe');
+                    for (const df of d) {
+                        let n = 0;
+                        try { n = dataCount(await (await driveFetch(`${DRIVE_API}/${df.id}?alt=media`)).json()); } catch (e) {}
+                        const c = { folder: fo.id, file: df.id, n, mine: !!df.ownedByMe, t: df.modifiedTime || '' };
+                        if (!best || c.n > best.n || (c.n === best.n && ((best.mine && !c.mine) || (best.mine === c.mine && c.t > best.t)))) best = c;
+                    }
                 }
-                f.sort((a, b) => (!!b._t - !!a._t) || ((a.ownedByMe ? 1 : 0) - (b.ownedByMe ? 1 : 0)) || (b._t || '').localeCompare(a._t || ''));
+                if (best) { driveFolderId = best.folder; driveBestFile = best.file; return; }
+                f.sort((x, y) => (x.ownedByMe ? 1 : 0) - (y.ownedByMe ? 1 : 0));
                 driveFolderId = f[0].id; return;
             }
             const r = await driveFetch(DRIVE_API + '?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: DRIVE_FOLDER, mimeType: 'application/vnd.google-apps.folder' }) });
@@ -3828,13 +3836,14 @@
         }
         async function driveReconcile() {
             await driveEnsureFolder();
-            const f = await driveList(`name='${DRIVE_DATA}' and '${driveFolderId}' in parents and trashed=false`, 'id,modifiedTime');
+            const f = driveBestFile ? [{ id: driveBestFile }] : await driveList(`name='${DRIVE_DATA}' and '${driveFolderId}' in parents and trashed=false`, 'id,modifiedTime');
             if (!f.length) { driveFileId = null; driveReconciled = true; await driveUpload(); await driveSyncAttachments(); return; }
             driveFileId = f[0].id;
             const cloud = await (await driveFetch(`${DRIVE_API}/${driveFileId}?alt=media`)).json();
             const cN = dataCount(cloud), lN = dataCount(appData);
             const cT = cloud._savedAt || '', lT = appData._savedAt || '';
             driveHadData = cN > 0;
+            if (cN === 0 && lN === 0) showToast('Nenhum dado encontrado no Drive. Confira se a pasta MeuSistema foi compartilhada com o e-mail que você usou para entrar.', 'warning');
             const localUnchanged = localStorage.getItem(DRIVE_SYNC_KEY) === lT;
             if (cN > 0 && (lN === 0 || (cT > lT && localUnchanged))) {
                 restoreFromObject(cloud);
@@ -3903,7 +3912,7 @@
         }
         function driveSignOut() {
             if (driveToken && window.google) google.accounts.oauth2.revoke(driveToken, () => {});
-            driveToken = null; driveFolderId = null; driveFileId = null; driveReconciled = false;
+            driveToken = null; driveFolderId = null; driveBestFile = null; driveFileId = null; driveReconciled = false;
             localStorage.removeItem(DRIVE_LINK_KEY);
             updateSyncStatus('Drive desconectado', 'amber');
             updateFolderLabel(); refreshBackupTab();
