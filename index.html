@@ -289,7 +289,7 @@
             },
             agenda: [], // { id, date, time, address, title, desc, status }
             lembretes: [], // { id, title, date, priority, completed }
-            hobbies: [], // { id, title, category, status, obs }
+            hobbies: [], // { id, title, category, status, obs, rating, attachments }
             habitacao: {
                 people: [
                     { id: '1', name: 'Samuel', initialBalance: 0 },
@@ -311,7 +311,7 @@
         let agendaFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
         let lembreteFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
         let hobbyFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
-        let financeFilterDate = ''; // '' for all, or YYYY-MM
+        let financeFilterDate = localDateStr().slice(0, 7); // padrão: mês atual; '' = todos os meses
         let obraFilterStatus = 'todos';
         let obraSortOrder = 'date-desc';
         let budgetFilterStatus = 'todos';
@@ -332,6 +332,8 @@
         let finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' };
         let contaSel = null;
         let dashAcc = '', dashMode = 'saldo';
+        let dashBase = 'geral', dashMonth = localDateStr().slice(0, 7); // início: geral do mês atual
+        let hobbyCat = '', saudeDiagOpen = false, diagQuery = '';
         let agView = 'calendario', agMonth = localDateStr().slice(0, 7), agSel = localDateStr();
         let catRankQuery = '', catRankPeriod = 'all';
         let muralView = 'bloco', muralScope = 'mes', muralMonth = localDateStr().slice(0, 7), muralPhotos = true;
@@ -450,6 +452,8 @@
             let name = '';
             appData.financeiro.transactions.forEach(t => (t.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
             appData.habitacao.docFolders.forEach(f => f.files.forEach(a => { if (a.id === id) name = a.name; }));
+            (appData.hobbies || []).forEach(h => (h.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
+            ((appData.saude && appData.saude.exams) || []).forEach(x => (x.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
             downloadStoredFile(id, name);
         }
         function fmtSize(bytes) {
@@ -493,6 +497,9 @@
             if (!appData.saude.waterLog) appData.saude.waterLog = {};
             if (!appData.saude.medLog) appData.saude.medLog = {};
             if (!appData.saude.meds) appData.saude.meds = [];
+            if (!Array.isArray(appData.saude.exams)) appData.saude.exams = [];
+            if (!Array.isArray(appData.hobbies)) appData.hobbies = [];
+            appData.hobbies.forEach(h => { if (!Array.isArray(h.attachments)) h.attachments = []; if (h.rating === undefined) h.rating = 0; });
             if (appData.saude.water && Object.keys(appData.saude.waterLog).length === 0) {
                 appData.saude.waterLog[localDateStr()] = Number(appData.saude.water);
             }
@@ -857,6 +864,8 @@
         function switchTab(tabId) {
             currentActiveTab = tabId;
             if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; }
+            if (tabId === 'financeiro') financeFilterDate = localDateStr().slice(0, 7); // sempre abre no mês atual
+            if (tabId !== 'saude') saudeDiagOpen = false;
             document.querySelectorAll('.nav-item').forEach(el => {
                 el.classList.remove('bg-side-900', 'text-white', 'shadow-inner');
                 el.classList.add('text-slate-300');
@@ -1082,6 +1091,7 @@
         }
 
         function renderSaude(container) {
+            if (saudeDiagOpen) { renderDiagnostico(container); return; }
             const waterToday = getWater(waterDate);
             const goal = appData.saude.waterGoal || 3000;
             const pct = Math.min(100, (waterToday / goal) * 100);
@@ -1115,10 +1125,16 @@
                                 <i class="fa-solid fa-heart-pulse text-teal-500"></i>
                                 <span>Monitor de Saúde e Bem-Estar</span>
                             </h2>
-                            <button onclick="openMedModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button onclick="openDiag()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
+                                    <i class="fa-solid fa-file-medical"></i>
+                                    <span>Diagnóstico</span>
+                                </button>
+<button onclick="openMedModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
                                 <i class="fa-solid fa-plus"></i>
                                 <span>Inserir Remédio</span>
                             </button>
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1234,6 +1250,229 @@
 
                 </div>
             `;
+        }
+
+        // ---------- SAÚDE: DIAGNÓSTICO (exames e evolução) ----------
+        function diagExams() {
+            if (!Array.isArray(appData.saude.exams)) appData.saude.exams = [];
+            return appData.saude.exams;
+        }
+        function openDiag() { saudeDiagOpen = true; renderCurrentTabContent(); }
+        function closeDiag() { saudeDiagOpen = false; renderCurrentTabContent(); }
+        function setDiagQuery(v) { diagQuery = v; renderCurrentTabContent(); }
+
+        function diagNum(s) {
+            const m = String(s == null ? '' : s).replace(/\s/g, '').match(/-?\d+(?:[.,]\d+)?/);
+            return m ? Number(m[0].replace(',', '.')) : null;
+        }
+        // Lê o valor de referência digitado (ex.: "70 a 99", "< 200", "> 40"). Só interpreta casos simples.
+        function diagRange(ref) {
+            const s = String(ref || '').toLowerCase();
+            const nums = (s.match(/\d+(?:[.,]\d+)?/g) || []).map(x => Number(x.replace(',', '.')));
+            if (nums.length === 1) {
+                if (/[<≤]|at[eé]|menor|inferior/.test(s)) return { max: nums[0] };
+                if (/[>≥]|maior|superior|acima/.test(s)) return { min: nums[0] };
+                return null;
+            }
+            if (nums.length === 2) return { min: Math.min(nums[0], nums[1]), max: Math.max(nums[0], nums[1]) };
+            return null;
+        }
+        function diagStatus(r) {
+            if (/[<>≤≥]/.test(String(r.result || ''))) return null;
+            const v = diagNum(r.result), rg = diagRange(r.ref);
+            if (v === null || !rg) return null;
+            if (rg.max !== undefined && v > rg.max) return 'acima';
+            if (rg.min !== undefined && v < rg.min) return 'abaixo';
+            return 'dentro';
+        }
+        function diagBadge(r) {
+            const st = diagStatus(r);
+            if (!st) return '';
+            const m = { dentro: ['bg-emerald-100 text-emerald-700', 'Dentro da referência'], acima: ['bg-rose-100 text-rose-700', 'Acima da referência'], abaixo: ['bg-amber-100 text-amber-700', 'Abaixo da referência'] }[st];
+            return `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded ${m[0]}">${m[1]}</span>`;
+        }
+        function diagFmt(n) { return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
+        function diagMonthLabel(m) { const [y, mo] = String(m || '').split('-'); return y && mo ? `${mo}/${y}` : '—'; }
+
+        function diagGroups() {
+            const g = {};
+            diagExams().forEach(r => {
+                const k = normKey(r.name);
+                if (!g[k]) g[k] = { key: k, name: r.name, recs: [] };
+                g[k].recs.push(r);
+            });
+            Object.values(g).forEach(x => {
+                x.recs.sort((a, b) => (a.month || '').localeCompare(b.month || '') || String(a.id).localeCompare(String(b.id)));
+                x.name = x.recs[x.recs.length - 1].name;
+            });
+            return Object.values(g).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+        }
+        function diagSpark(recs) {
+            const pts = recs.map(r => ({ v: /[<>≤≥]/.test(String(r.result || '')) ? null : diagNum(r.result), label: `${diagMonthLabel(r.month)}: ${r.result}` })).filter(p => p.v !== null);
+            if (pts.length < 2) return '';
+            const W = 220, H = 56, P = 8;
+            const vs = pts.map(p => p.v), mn = Math.min(...vs), mx = Math.max(...vs);
+            const xy = pts.map((p, i) => [
+                P + i * (W - 2 * P) / (pts.length - 1),
+                mx === mn ? H / 2 : H - P - ((p.v - mn) / (mx - mn)) * (H - 2 * P)
+            ]);
+            return `<div class="text-center"><svg viewBox="0 0 ${W} ${H}" class="w-56 h-14 text-teal-500"><polyline fill="none" stroke="currentColor" stroke-width="2" points="${xy.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}"/>${xy.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="currentColor"><title>${esc(pts[i].label)}</title></circle>`).join('')}</svg><p class="text-[10px] text-slate-400">evolução: ${diagFmt(vs[0])} → ${diagFmt(vs[vs.length - 1])}</p></div>`;
+        }
+        function diagDelta(r, prev) {
+            if (!prev) return '<span class="text-slate-300">—</span>';
+            const a = diagNum(r.result), b = diagNum(prev.result);
+            if (a === null || b === null) return '<span class="text-slate-300">—</span>';
+            const d = a - b;
+            if (Math.abs(d) < 1e-9) return '<span class="text-slate-500 text-xs">= igual</span>';
+            return `<span class="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap"><i class="fa-solid ${d > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'} mr-1"></i>${d > 0 ? '+' : ''}${diagFmt(d)}</span>`;
+        }
+
+        function renderDiagnostico(container) {
+            const q = normKey(diagQuery);
+            let groups = diagGroups();
+            if (q) groups = groups.filter(g => normKey(g.name).includes(q) || g.recs.some(r => normKey(r.lab).includes(q)));
+            const total = diagExams().length;
+
+            container.innerHTML = `
+                <div class="space-y-6 max-w-7xl mx-auto">
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <div class="flex flex-wrap justify-between items-center gap-3">
+                            <div class="flex items-center gap-3">
+                                <button onclick="closeDiag()" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> Saúde</button>
+                                <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-file-medical text-indigo-500"></i><span>Diagnóstico — Exames</span></h2>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <input type="text" placeholder="Buscar exame ou laboratório..." value="${esc(diagQuery)}" onchange="setDiagQuery(this.value)" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs w-56">
+                                <button onclick="openDiagModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Incluir exame</span></button>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-3">Registre cada vez que fizer um exame: o novo resultado entra na linha do tempo do mesmo exame e a evolução aparece automaticamente. A marcação "dentro/acima/abaixo" é só uma comparação com o valor de referência que você digitou; quem interpreta o resultado é o seu médico.</p>
+                    </div>
+
+                    ${groups.length === 0 ? `
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl p-10 shadow-sm border border-slate-100 dark:border-slate-700 text-center text-slate-400">
+                            <i class="fa-solid fa-flask-vial text-4xl mb-2"></i>
+                            <p class="text-sm">${total ? 'Nenhum exame encontrado para esta busca.' : 'Nenhum exame cadastrado ainda. Clique em "Incluir exame".'}</p>
+                        </div>` : groups.map(g => {
+                            const last = g.recs[g.recs.length - 1];
+                            const rows = g.recs.map((r, i) => ({ r, prev: i > 0 ? g.recs[i - 1] : null })).reverse();
+                            const spark = diagSpark(g.recs);
+                            return `
+                            <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                                <div class="flex flex-wrap justify-between items-start gap-4 mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-slate-800 dark:text-white">${esc(g.name)}</h3>
+                                        <p class="text-xs text-slate-500 mt-0.5">${g.recs.length} resultado${g.recs.length > 1 ? 's' : ''} · último em ${diagMonthLabel(last.month)}: <b class="text-slate-700 dark:text-slate-200">${esc(last.result)}</b>${diagBadge(last)}</p>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        ${spark}
+                                        <button onclick="openDiagModal(null, '${last.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-1.5"><i class="fa-solid fa-plus"></i><span>Novo resultado</span></button>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                                    <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
+                                        <th class="p-3 rounded-l-xl">Mês/Ano</th><th class="p-3">Laboratório</th><th class="p-3">Resultado</th><th class="p-3">Variação</th><th class="p-3">Referência</th><th class="p-3">Observação</th><th class="p-3">Anexos</th><th class="p-3 text-right rounded-r-xl">Ações</th>
+                                    </tr></thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                    ${rows.map(({ r, prev }) => `
+                                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 align-top">
+                                            <td class="p-3 whitespace-nowrap font-medium text-slate-700 dark:text-slate-200">${diagMonthLabel(r.month)}</td>
+                                            <td class="p-3 text-slate-600 dark:text-slate-300">${esc(r.lab) || '<span class="text-slate-300">—</span>'}</td>
+                                            <td class="p-3 font-bold text-slate-800 dark:text-white whitespace-nowrap">${esc(r.result)}${diagBadge(r)}</td>
+                                            <td class="p-3">${diagDelta(r, prev)}</td>
+                                            <td class="p-3 text-xs text-slate-500">${esc(r.ref) || '<span class="text-slate-300">—</span>'}</td>
+                                            <td class="p-3 text-xs text-slate-500 max-w-[220px]">${esc(r.obs)}</td>
+                                            <td class="p-3 whitespace-nowrap">${(r.attachments || []).map(a => `<button onclick="openStoredFile('${a.id}')" title="${esc(a.name)}" class="px-1.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm"><i class="fa-solid ${fileIcon(a)}"></i></button>`).join(' ') || '<span class="text-slate-300">—</span>'}</td>
+                                            <td class="p-3 text-right whitespace-nowrap space-x-1">
+                                                <button onclick="openDiagModal('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                                                <button onclick="deleteDiag('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                                            </td>
+                                        </tr>`).join('')}
+                                    </tbody></table></div>
+                            </div>`;
+                        }).join('')}
+                </div>`;
+        }
+
+        // id = editar um resultado; fromId = novo resultado do mesmo exame (repete nome, laboratório e referência)
+        function openDiagModal(id = null, fromId = null) {
+            let r = { name: '', lab: '', month: localDateStr().slice(0, 7), ref: '', result: '', obs: '', attachments: [] };
+            if (id) r = diagExams().find(x => x.id === id) || r;
+            else if (fromId) {
+                const src = diagExams().find(x => x.id === fromId);
+                if (src) r = Object.assign(r, { name: src.name, lab: src.lab || '', ref: src.ref || '' });
+            }
+            draftInit(r.attachments);
+            const uniq = f => [...new Set(diagExams().map(x => String(x[f] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            const isNew = !id && fromId;
+            showModal(id ? 'Editar resultado' : (isNew ? 'Novo resultado — ' + esc(r.name) : 'Incluir exame'), `
+                <form onsubmit="saveDiag(event, '${id || ''}')" class="space-y-4">
+                    <div>
+                        <label class="${LBL}">Nome do exame</label>
+                        <input type="text" id="dg-name" list="dg-names" value="${esc(r.name)}" required placeholder="Ex.: Colesterol total, TSH, Glicemia" class="${INP}">
+                        <datalist id="dg-names">${uniq('name').map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="${LBL}">Laboratório</label>
+                            <input type="text" id="dg-lab" list="dg-labs" value="${esc(r.lab)}" class="${INP}">
+                            <datalist id="dg-labs">${uniq('lab').map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
+                        </div>
+                        <div>
+                            <label class="${LBL}">Mês/Ano</label>
+                            <input type="month" id="dg-month" value="${esc(r.month)}" required class="${INP}">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="${LBL}">Valor de referência</label>
+                            <input type="text" id="dg-ref" value="${esc(r.ref)}" placeholder="Ex.: 70 a 99 mg/dL" class="${INP}">
+                        </div>
+                        <div>
+                            <label class="${LBL}">Resultado</label>
+                            <input type="text" id="dg-result" value="${esc(r.result)}" required placeholder="Ex.: 92 mg/dL" class="${INP}">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="${LBL}">Anexo (laudo, foto, PDF)</label>
+                        <div id="draft-att-list">${draftListHtml()}</div>
+                        <input type="file" id="dg-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
+                    </div>
+                    <div>
+                        <label class="${LBL}">Observação</label>
+                        <textarea id="dg-obs" rows="2" class="${INP}">${esc(r.obs || '')}</textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                </form>
+            `);
+        }
+        async function saveDiag(e, id) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type=submit]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+            const data = {
+                name: document.getElementById('dg-name').value.trim(),
+                lab: document.getElementById('dg-lab').value.trim(),
+                month: document.getElementById('dg-month').value,
+                ref: document.getElementById('dg-ref').value.trim(),
+                result: document.getElementById('dg-result').value.trim(),
+                obs: document.getElementById('dg-obs').value.trim()
+            };
+            data.attachments = await draftCommit('dg-files');
+            if (id) {
+                const r = diagExams().find(x => x.id === id);
+                if (r) Object.assign(r, data);
+            } else {
+                diagExams().push(Object.assign({ id: uid() }, data));
+            }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Exame salvo!', 'success');
+        }
+        async function deleteDiag(id) {
+            if (!confirm('Excluir este resultado de exame?')) return;
+            const r = diagExams().find(x => x.id === id);
+            if (r) for (const a of (r.attachments || [])) await deleteStoredFile(a.id);
+            appData.saude.exams = diagExams().filter(x => x.id !== id);
+            saveAppData(); renderCurrentTabContent();
         }
 
         // --- SAÚDE: ÁGUA POR DIA ---
@@ -1463,23 +1702,79 @@
         }
 
         // --- HOBBIES COM FILTROS ---
+        // ---------- Anexos em rascunho (usados nos modais de Hobbies e Diagnóstico) ----------
+        let _draftAtt = [], _draftRemoved = [];
+        function draftInit(list) { _draftAtt = (list || []).slice(); _draftRemoved = []; }
+        function draftListHtml() {
+            if (!_draftAtt.length) return '';
+            return `<div class="space-y-1.5 mb-2">${_draftAtt.map(a => `
+                <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-700/50 text-xs">
+                    <button type="button" onclick="openStoredFile('${a.id}')" class="min-w-0 text-left font-semibold text-slate-700 dark:text-slate-200 truncate"><i class="fa-solid ${fileIcon(a)} mr-1"></i>${esc(a.name)} <span class="font-normal text-slate-400">${fmtSize(a.size)}</span></button>
+                    <button type="button" onclick="draftRemove('${a.id}')" class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-600 hover:text-rose-600" title="Remover"><i class="fa-solid fa-trash"></i></button>
+                </div>`).join('')}</div>`;
+        }
+        function draftRemove(id) {
+            _draftAtt = _draftAtt.filter(a => a.id !== id);
+            _draftRemoved.push(id);
+            const el = document.getElementById('draft-att-list');
+            if (el) el.innerHTML = draftListHtml();
+        }
+        // Guarda os arquivos novos, apaga os removidos e devolve a lista final de anexos
+        async function draftCommit(inputId) {
+            const input = document.getElementById(inputId);
+            const metas = await storeFiles(input ? input.files : []);
+            for (const id of _draftRemoved) await deleteStoredFile(id);
+            return _draftAtt.concat(metas);
+        }
+
+        // ---------- Hobbies: nota (estrelas), anexos e filtro por categoria ----------
+        function hobbyCategories() {
+            const m = {};
+            appData.hobbies.forEach(h => { const k = normKey(h.category); if (k && !m[k]) m[k] = String(h.category).trim(); });
+            return Object.values(m).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        }
+        function starsHtml(n) {
+            n = Number(n) || 0;
+            return [1, 2, 3, 4, 5].map(i => `<i class="fa-${i <= n ? 'solid' : 'regular'} fa-star ${i <= n ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'}"></i>`).join('');
+        }
+        function setHobbyCat(v) { hobbyCat = v; renderCurrentTabContent(); }
+
+        let _thumbUrls = [];
+        function hydrateThumbs() {
+            _thumbUrls.forEach(u => URL.revokeObjectURL(u));
+            _thumbUrls = [];
+            document.querySelectorAll('img[data-att]').forEach(async img => {
+                try {
+                    const b = await getFile(img.dataset.att);
+                    if (b && img.isConnected) { const u = URL.createObjectURL(b); _thumbUrls.push(u); img.src = u; }
+                } catch (e) { /* arquivo ainda não disponível neste navegador */ }
+            });
+        }
+
         function renderHobbies(container) {
+            const cats = hobbyCategories();
+            if (hobbyCat && !cats.some(c => normKey(c) === normKey(hobbyCat))) hobbyCat = '';
             let filteredHobbies = appData.hobbies;
             if (hobbyFilter === 'ativos') {
-                filteredHobbies = appData.hobbies.filter(h => h.status !== 'Finalizado' && h.status !== 'Cancelado');
+                filteredHobbies = filteredHobbies.filter(h => h.status !== 'Finalizado' && h.status !== 'Cancelado');
             } else if (hobbyFilter === 'finalizados') {
-                filteredHobbies = appData.hobbies.filter(h => h.status === 'Finalizado');
+                filteredHobbies = filteredHobbies.filter(h => h.status === 'Finalizado');
             }
+            if (hobbyCat) filteredHobbies = filteredHobbies.filter(h => normKey(h.category) === normKey(hobbyCat));
+            const fbtn = (k, l) => `<button onclick="setHobbyFilter('${k}')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${hobbyFilter === k ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">${l}</button>`;
+            const S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs';
 
             container.innerHTML = `
                 <div class="space-y-6 max-w-7xl mx-auto">
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                         <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-                            <div class="flex items-center space-x-2">
+                            <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-xs font-bold text-slate-500 uppercase"><i class="fa-solid fa-filter mr-1"></i> Filtro:</span>
-                                <button onclick="setHobbyFilter('todos')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${hobbyFilter === 'todos' ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Todos</button>
-                                <button onclick="setHobbyFilter('ativos')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${hobbyFilter === 'ativos' ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Somente Ativos</button>
-                                <button onclick="setHobbyFilter('finalizados')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${hobbyFilter === 'finalizados' ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Finalizados</button>
+                                ${fbtn('todos', 'Todos')}${fbtn('ativos', 'Somente Ativos')}${fbtn('finalizados', 'Finalizados')}
+                                <select onchange="setHobbyCat(this.value)" title="Filtrar por categoria" class="${S}">
+                                    <option value="">Todas as categorias</option>
+                                    ${cats.map(c => `<option value="${esc(c)}" ${normKey(c) === normKey(hobbyCat) ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+                                </select>
                             </div>
                             <button onclick="openHobbyModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
                                 <i class="fa-solid fa-plus"></i>
@@ -1494,27 +1789,40 @@
                             </div>
                         ` : `
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                                ${filteredHobbies.map(h => `
+                                ${filteredHobbies.map(h => {
+                                    const atts = h.attachments || [];
+                                    const isImg = a => (a.type || '').startsWith('image/');
+                                    const imgs = atts.filter(isImg), others = atts.filter(a => !isImg(a));
+                                    return `
                                     <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 flex flex-col justify-between">
                                         <div>
                                             <div class="flex justify-between items-start mb-2">
-                                                <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${h.status === 'Finalizado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${h.status}</span>
+                                                <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${h.status === 'Finalizado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${esc(h.status)}</span>
                                                 <div class="space-x-1">
                                                     <button onclick="editHobby('${h.id}')" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs"><i class="fa-solid fa-pen"></i></button>
                                                     <button onclick="deleteHobby('${h.id}')" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
                                                 </div>
                                             </div>
-                                            <h4 class="font-bold text-slate-800 dark:text-white text-base mb-1">${h.title}</h4>
-                                            <p class="text-xs text-teal-600 dark:text-teal-400 font-semibold mb-2">${h.category}</p>
-                                            ${h.obs ? `<p class="text-xs text-slate-600 dark:text-slate-300">${h.obs}</p>` : ''}
+                                            <h4 class="font-bold text-slate-800 dark:text-white text-base mb-1">${esc(h.title)}</h4>
+                                            <p class="text-xs text-teal-600 dark:text-teal-400 font-semibold mb-1">${esc(h.category)}</p>
+                                            ${Number(h.rating) > 0 ? `<div class="text-xs mb-2 flex items-center gap-0.5" title="Nota ${h.rating} de 5">${starsHtml(h.rating)}</div>` : ''}
+                                            ${h.obs ? `<p class="text-xs text-slate-600 dark:text-slate-300">${esc(h.obs)}</p>` : ''}
+                                            ${imgs.length ? `<div class="flex flex-wrap gap-2 mt-3">
+                                                ${imgs.slice(0, 6).map(a => `<img data-att="${a.id}" alt="${esc(a.name)}" title="${esc(a.name)}" onclick="openStoredFile('${a.id}')" class="h-20 w-20 object-cover rounded-xl bg-slate-200 dark:bg-slate-600 cursor-pointer">`).join('')}
+                                                ${imgs.length > 6 ? `<button onclick="editHobby('${h.id}')" class="h-20 w-20 rounded-xl bg-slate-200 dark:bg-slate-600 text-xs font-bold text-slate-600 dark:text-slate-200">+${imgs.length - 6}</button>` : ''}
+                                            </div>` : ''}
+                                            ${others.length ? `<div class="flex flex-wrap gap-1.5 mt-3">
+                                                ${others.map(a => `<button onclick="openStoredFile('${a.id}')" title="${esc(a.name)}" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-[11px] font-semibold max-w-[160px] truncate"><i class="fa-solid ${fileIcon(a)} mr-1"></i>${esc(a.name)}</button>`).join('')}
+                                            </div>` : ''}
                                         </div>
-                                    </div>
-                                `).join('')}
+                                    </div>`;
+                                }).join('')}
                             </div>
                         `}
                     </div>
                 </div>
             `;
+            hydrateThumbs();
         }
 
         function setHobbyFilter(filter) {
@@ -1614,6 +1922,7 @@
                                 </div>
                                 <h3 class="font-bold text-xl text-white">Saldo em Caixa</h3>
                                 <p class="text-3xl font-extrabold text-emerald-400 mt-2">R$ ${saldoCaixaObra.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                <p class="text-[10px] text-teal-200/80 mt-1.5 leading-tight">Total gasto: <b>R$ ${money(totalRetiradas)}</b></p>
                                 ${totalPrev > 0 ? `<p class="text-[11px] text-amber-300 mt-1">Previsto a pagar: R$ ${money(totalPrev)}</p>` : ''}
                             </div>
                         </div>
@@ -2699,47 +3008,79 @@
         function editLembrete(id) { openLembreteModal(id); }
         function deleteLembrete(id) { appData.lembretes = appData.lembretes.filter(l => l.id !== id); saveAppData(); renderCurrentTabContent(); }
 
+        function starPickerHtml(n) {
+            n = Number(n) || 0;
+            return [1, 2, 3, 4, 5].map(i => `<button type="button" onclick="setHobStar(${i})" title="${i} estrela${i > 1 ? 's' : ''}" class="p-0.5 transition-transform hover:scale-110"><i class="fa-${i <= n ? 'solid' : 'regular'} fa-star ${i <= n ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'}"></i></button>`).join('');
+        }
+        function setHobStar(i) {
+            const inp = document.getElementById('hob-rating');
+            const next = Number(inp.value) === i ? 0 : i; // clicar na mesma estrela limpa a nota
+            inp.value = next;
+            document.getElementById('hob-stars').innerHTML = starPickerHtml(next);
+            document.getElementById('hob-rating-txt').textContent = next ? `${next} de 5` : 'sem nota';
+        }
         function openHobbyModal(id = null) {
-            let h = { title: '', category: 'Leitura', status: 'Em Andamento', obs: '' };
+            let h = { title: '', category: 'Leitura', status: 'Em Andamento', obs: '', rating: 0, attachments: [] };
             if (id) h = appData.hobbies.find(hb => hb.id === id) || h;
+            draftInit(h.attachments);
+            const cats = hobbyCategories();
             showModal(id ? 'Editar Hobby' : 'Inserir Hobby', `
                 <form onsubmit="saveHobby(event, '${id || ''}')" class="space-y-4">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Título</label>
-                        <input type="text" id="hob-title" value="${h.title}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        <label class="${LBL}">Título</label>
+                        <input type="text" id="hob-title" value="${esc(h.title)}" required class="${INP}">
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Categoria</label>
-                            <input type="text" id="hob-cat" value="${h.category}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            <label class="${LBL}">Categoria</label>
+                            <input type="text" id="hob-cat" list="hob-cat-list" value="${esc(h.category)}" required class="${INP}">
+                            <datalist id="hob-cat-list">${cats.map(c => `<option value="${esc(c)}"></option>`).join('')}</datalist>
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Status</label>
-                            <select id="hob-status" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            <label class="${LBL}">Status</label>
+                            <select id="hob-status" class="${INP}">
                                 <option value="Em Andamento" ${h.status === 'Em Andamento' ? 'selected' : ''}>Em Andamento</option>
                                 <option value="Finalizado" ${h.status === 'Finalizado' ? 'selected' : ''}>Finalizado</option>
                             </select>
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Observações</label>
-                        <textarea id="hob-obs" rows="2" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">${h.obs || ''}</textarea>
+                        <label class="${LBL}">Nota</label>
+                        <div class="flex items-center gap-3">
+                            <div id="hob-stars" class="flex items-center text-2xl">${starPickerHtml(h.rating)}</div>
+                            <span id="hob-rating-txt" class="text-xs text-slate-400">${Number(h.rating) ? h.rating + ' de 5' : 'sem nota'}</span>
+                        </div>
+                        <input type="hidden" id="hob-rating" value="${Number(h.rating) || 0}">
+                        <p class="text-[10px] text-slate-400 mt-1">Clique nas estrelas para pintar a nota. Clique de novo na mesma estrela para limpar.</p>
+                    </div>
+                    <div>
+                        <label class="${LBL}">Observações</label>
+                        <textarea id="hob-obs" rows="2" class="${INP}">${esc(h.obs || '')}</textarea>
+                    </div>
+                    <div>
+                        <label class="${LBL}">Anexos (fotos e outros arquivos)</label>
+                        <div id="draft-att-list">${draftListHtml()}</div>
+                        <input type="file" id="hob-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
                     </div>
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>
             `);
         }
-        function saveHobby(e, id) {
+        async function saveHobby(e, id) {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type=submit]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
             const title = document.getElementById('hob-title').value;
-            const category = document.getElementById('hob-cat').value;
+            const category = document.getElementById('hob-cat').value.trim();
             const status = document.getElementById('hob-status').value;
             const obs = document.getElementById('hob-obs').value;
+            const rating = Number(document.getElementById('hob-rating').value) || 0;
+            const attachments = await draftCommit('hob-files');
             if (id) {
                 const hb = appData.hobbies.find(x => x.id === id);
-                if (hb) { hb.title = title; hb.category = category; hb.status = status; hb.obs = obs; }
+                if (hb) { hb.title = title; hb.category = category; hb.status = status; hb.obs = obs; hb.rating = rating; hb.attachments = attachments; }
             } else {
-                appData.hobbies.push({ id: Date.now().toString(), title, category, status, obs });
+                appData.hobbies.push({ id: Date.now().toString(), title, category, status, obs, rating, attachments });
             }
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast("Salvo!", "success");
         }
@@ -3867,6 +4208,8 @@
             const ids = [];
             appData.financeiro.transactions.forEach(t => (t.attachments || []).forEach(a => ids.push(a.id)));
             appData.habitacao.docFolders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
+            (appData.hobbies || []).forEach(h => (h.attachments || []).forEach(a => ids.push(a.id)));
+            ((appData.saude && appData.saude.exams) || []).forEach(x => (x.attachments || []).forEach(a => ids.push(a.id)));
             return ids;
         }
         async function driveUploadAttachment(id, blob) {
@@ -4235,7 +4578,8 @@
 
         // ---------- Tela Financeiro (filtro geral) ----------
         function finSet(k, v) { finF[k] = v; renderCurrentTabContent(); }
-        function finClear() { finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' }; financeFilterDate = ''; financeFilterStatus = 'todos'; renderCurrentTabContent(); }
+        function finClear() { finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' }; financeFilterDate = localDateStr().slice(0, 7); financeFilterStatus = 'todos'; renderCurrentTabContent(); }
+        function finNavMonth(d) { financeFilterDate = ymAdd(financeFilterDate || localDateStr().slice(0, 7), d); renderCurrentTabContent(); }
         function finFiltered() {
             const f = finF;
             return appData.financeiro.transactions.filter(t => {
@@ -4270,12 +4614,18 @@
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <span class="text-xs font-bold text-slate-500 uppercase"><i class="fa-solid fa-filter mr-1"></i> Filtro geral</span>
                             <div class="flex gap-2">
-                                <button onclick="finClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Ver movimentação geral (limpar filtros)</button>
+                                <button onclick="finClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Limpar filtros (volta ao mês atual)</button>
                                 <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <input type="month" value="${financeFilterDate}" onchange="changeFinanceFilter(this.value)" title="Mês" class="${S}">
+                            <div class="flex items-center gap-1">
+                                <button onclick="finNavMonth(-1)" title="Mês anterior" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-left"></i></button>
+                                <input type="month" value="${financeFilterDate}" onchange="changeFinanceFilter(this.value)" title="Mês" class="${S}">
+                                <button onclick="finNavMonth(1)" title="Próximo mês" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-right"></i></button>
+                                <button onclick="changeFinanceFilter(localDateStr().slice(0, 7))" class="px-3 py-1.5 rounded-xl text-xs font-bold ${financeFilterDate === localDateStr().slice(0, 7) ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Mês atual</button>
+                                <button onclick="changeFinanceFilter('')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${financeFilterDate === '' ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Todos os meses</button>
+                            </div>
                             <select onchange="finSet('acc',this.value)" class="${S}"><option value="">Todos os bancos/cartões</option>${contasData().map(a => o(a.id, accLabel(a), finF.acc)).join('')}</select>
                             <select onchange="finSet('cat',this.value)" class="${S}"><option value="">Todas as categorias</option>${cats.map(c => o(c, c, finF.cat)).join('')}</select>
                             <select onchange="finSet('type',this.value)" class="${S}">${o('', 'Receitas e despesas', finF.type)}${o('receita', 'Só receitas', finF.type)}${o('despesa', 'Só despesas', finF.type)}${o('transferencia', 'Só transferências', finF.type)}</select>
@@ -4289,7 +4639,7 @@
                         ${card('Receitas', tr, 'text-emerald-600')}${card('Despesas', td, 'text-rose-600')}${card('Saldo do Período', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${card('Pendente', tp, 'text-amber-600')}
                     </div>
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-wallet text-teal-500"></i><span>Lançamentos Financeiros</span><span class="text-xs font-normal text-slate-400">(${list.length})</span></h3>
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-wallet text-teal-500"></i><span>Lançamentos Financeiros</span><span class="text-xs font-normal text-slate-400">(${list.length}) · ${financeFilterDate ? fmtYM(financeFilterDate) : 'Todos os meses'}</span></h3>
                         ${list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhuma transação encontrada para este filtro.</p></div>` : `
                         <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                             <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
@@ -4412,20 +4762,40 @@
         // ---------- Tela inicial: situação financeira com filtros + cartão de crédito ----------
         function finDash() {
             let r = 0, d = 0;
-            appData.financeiro.transactions.forEach(t => { const e = finEffect(t, dashAcc); r += e.r; d += e.d; });
+            appData.financeiro.transactions.forEach(t => {
+                if (dashMonth && !(t.date && t.date.startsWith(dashMonth))) return;
+                if (dashBase === 'atual' && finSt(t) === 'pendente') return;
+                const e = finEffect(t, dashAcc); r += e.r; d += e.d;
+            });
             return { r, d, value: dashMode === 'receita' ? r : dashMode === 'despesa' ? d : r - d };
         }
-        function dashSet(k, v) { if (k === 'acc') dashAcc = v; else dashMode = v; renderCurrentTabContent(); }
+        function dashSet(k, v) {
+            if (k === 'acc') dashAcc = v;
+            else if (k === 'base') dashBase = v;
+            else if (k === 'month') dashMonth = v;
+            else dashMode = v;
+            renderCurrentTabContent();
+        }
         function finDashHtml() {
             const f = finDash();
             const lbl = { saldo: 'Saldo Financeiro', receita: 'Receitas', despesa: 'Despesas' }[dashMode];
             const col = dashMode === 'receita' ? 'text-emerald-600' : dashMode === 'despesa' ? 'text-rose-600' : (f.value >= 0 ? 'text-emerald-600' : 'text-rose-600');
-            const S = 'px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[10px] max-w-[120px]';
+            const cur = localDateStr().slice(0, 7);
+            const baseTxt = dashBase === 'geral' ? 'Geral (com pendentes)' : 'Atual (só pagos/recebidos)';
+            const perTxt = dashMonth ? fmtYM(dashMonth) : 'Todos os meses';
+            const S = 'px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[10px] max-w-[150px]';
+            const B = 'px-1.5 py-0.5 rounded-md text-[10px] font-semibold';
+            const bOn = 'bg-teal-600 text-white', bOff = 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
             return `<p class="text-xs font-medium text-slate-400 uppercase">${lbl}</p>
                 <h3 class="text-xl font-bold ${col} mt-1">R$ ${money(f.value)}</h3>
+                <p class="text-[10px] text-slate-400 mt-0.5">${baseTxt} · ${perTxt}</p>
                 <div class="mt-1.5 flex flex-wrap gap-1">
+                    <select onchange="dashSet('base',this.value)" class="${S}"><option value="geral" ${dashBase === 'geral' ? 'selected' : ''}>Geral (com pendentes)</option><option value="atual" ${dashBase === 'atual' ? 'selected' : ''}>Atual (pagos/recebidos)</option></select>
                     <select onchange="dashSet('acc',this.value)" class="${S}"><option value="">Total geral</option>${contasData().map(a => `<option value="${a.id}" ${dashAcc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select>
                     <select onchange="dashSet('mode',this.value)" class="${S}"><option value="saldo" ${dashMode === 'saldo' ? 'selected' : ''}>Saldo final</option><option value="receita" ${dashMode === 'receita' ? 'selected' : ''}>Só receita</option><option value="despesa" ${dashMode === 'despesa' ? 'selected' : ''}>Só despesa</option></select>
+                    <input type="month" value="${dashMonth}" onchange="dashSet('month',this.value)" title="Mês" class="${S}">
+                    <button onclick="dashSet('month','${cur}')" class="${B} ${dashMonth === cur ? bOn : bOff}">Mês atual</button>
+                    <button onclick="dashSet('month','')" class="${B} ${dashMonth === '' ? bOn : bOff}">Todos</button>
                 </div>`;
         }
         function dashCreditHtml() {
