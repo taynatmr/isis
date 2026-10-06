@@ -196,6 +196,10 @@
                     <i class="fa-solid fa-hammer w-5 text-center text-amber-400 group-hover:scale-110 transition-transform"></i>
                     <span>Habitação (Obra)</span>
                 </a>
+                <a href="#" onclick="switchTab('docs')" id="nav-docs" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-id-card w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
+                    <span>Documentos Pessoais</span>
+                </a>
                 <a href="#" onclick="switchTab('configuracoes')" id="nav-configuracoes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-gear w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Configurações</span>
@@ -334,6 +338,10 @@
         let dashAcc = '', dashMode = 'saldo';
         let dashBase = 'geral', dashMonth = localDateStr().slice(0, 7); // início: geral do mês atual
         let hobbyCat = '', saudeDiagOpen = false, diagQuery = '';
+        let saudeVacOpen = false, vacQuery = '';
+        let recOpen = false, recViewId = null, recQuery = '';
+        let finSel = new Set();
+        let dashCardMonth = localDateStr().slice(0, 7); // fatura do cartão na tela inicial: mês atual por padrão ('' = total)
         let agView = 'calendario', agMonth = localDateStr().slice(0, 7), agSel = localDateStr();
         let catRankQuery = '', catRankPeriod = 'all';
         let muralView = 'bloco', muralScope = 'mes', muralMonth = localDateStr().slice(0, 7), muralPhotos = true;
@@ -454,6 +462,10 @@
             appData.habitacao.docFolders.forEach(f => f.files.forEach(a => { if (a.id === id) name = a.name; }));
             (appData.hobbies || []).forEach(h => (h.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
             ((appData.saude && appData.saude.exams) || []).forEach(x => (x.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
+            vacData().forEach(v => (v.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
+            recData().forEach(r => (r.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
+            docsData().files.forEach(a => { if (a.id === id) name = a.name; });
+            docsData().folders.forEach(fo => (fo.files || []).forEach(a => { if (a.id === id) name = a.name; }));
             downloadStoredFile(id, name);
         }
         function fmtSize(bytes) {
@@ -498,6 +510,11 @@
             if (!appData.saude.medLog) appData.saude.medLog = {};
             if (!appData.saude.meds) appData.saude.meds = [];
             if (!Array.isArray(appData.saude.exams)) appData.saude.exams = [];
+            if (!Array.isArray(appData.saude.vacinas)) appData.saude.vacinas = [];
+            if (!Array.isArray(appData.receitas)) appData.receitas = [];
+            if (!appData.docsPessoais || typeof appData.docsPessoais !== 'object') appData.docsPessoais = { folders: [], files: [] };
+            if (!Array.isArray(appData.docsPessoais.folders)) appData.docsPessoais.folders = [];
+            if (!Array.isArray(appData.docsPessoais.files)) appData.docsPessoais.files = [];
             if (!Array.isArray(appData.hobbies)) appData.hobbies = [];
             appData.hobbies.forEach(h => { if (!Array.isArray(h.attachments)) h.attachments = []; if (h.rating === undefined) h.rating = 0; });
             if (appData.saude.water && Object.keys(appData.saude.waterLog).length === 0) {
@@ -608,6 +625,7 @@
             const h = d.habitacao || {};
             const lists = [d.financeiro && d.financeiro.transactions, d.agenda, d.lembretes, d.hobbies, d.atalhos, d.metas,
                            h.contributions, h.budgets, h.suppliers, h.docFolders, d.saude && d.saude.meds,
+                           d.saude && d.saude.exams, d.saude && d.saude.vacinas, d.receitas, d.docsPessoais && d.docsPessoais.folders, d.docsPessoais && d.docsPessoais.files,
                            d.aniversarios, d.notas, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups];
             let n = lists.reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
             n += Object.keys((d.saude && d.saude.waterLog) || {}).length;
@@ -865,7 +883,9 @@
             currentActiveTab = tabId;
             if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; }
             if (tabId === 'financeiro') financeFilterDate = localDateStr().slice(0, 7); // sempre abre no mês atual
-            if (tabId !== 'saude') saudeDiagOpen = false;
+            if (tabId !== 'saude') { saudeDiagOpen = false; saudeVacOpen = false; }
+            if (tabId !== 'hobbies') { recOpen = false; recViewId = null; }
+            if (tabId !== 'docs') { docFolderId = null; docUnlocked.clear(); } // pastas com senha voltam a ficar trancadas
             document.querySelectorAll('.nav-item').forEach(el => {
                 el.classList.remove('bg-side-900', 'text-white', 'shadow-inner');
                 el.classList.add('text-slate-300');
@@ -883,6 +903,7 @@
                 cartao: 'Cartão de Crédito',
                 contas: 'Cartão (Débito e Poupança)',
                 notas: 'Notas',
+                docs: 'Documentos Pessoais',
                 agenda: 'Agenda Pessoal',
                 lembretes: 'Lembretes & Tarefas',
                 hobbies: 'Hobbies & Projetos',
@@ -929,6 +950,7 @@
                 case 'cartao': renderCartao(container); break;
                 case 'contas': renderContas(container); break;
                 case 'notas': renderNotas(container); break;
+                case 'docs': renderDocs(container); break;
                 case 'agenda': renderAgenda(container); break;
                 case 'lembretes': renderLembretes(container); break;
                 case 'hobbies': renderHobbies(container); break;
@@ -1092,6 +1114,7 @@
 
         function renderSaude(container) {
             if (saudeDiagOpen) { renderDiagnostico(container); return; }
+            if (saudeVacOpen) { renderVacinas(container); return; }
             const waterToday = getWater(waterDate);
             const goal = appData.saude.waterGoal || 3000;
             const pct = Math.min(100, (waterToday / goal) * 100);
@@ -1130,6 +1153,10 @@
                                     <i class="fa-solid fa-file-medical"></i>
                                     <span>Diagnóstico</span>
                                 </button>
+                                <button onclick="openVac()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
+                                    <i class="fa-solid fa-syringe"></i>
+                                    <span>Vacinas</span>
+                                </button>
 <button onclick="openMedModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
                                 <i class="fa-solid fa-plus"></i>
                                 <span>Inserir Remédio</span>
@@ -1137,7 +1164,64 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                    <!-- MEDICAMENTOS -->
+                    <div class="p-5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                            <h3 class="font-semibold text-indigo-800 dark:text-indigo-300">Medicamentos e Vitaminas</h3>
+                            <span class="text-xs text-slate-500">Marcando para <b>${fmtBR(medSelectedDate)}</b>${medSelectedDate !== todayStr ? ` · <button onclick="selectMedDate('${todayStr}')" class="text-teal-600 underline font-semibold">voltar para hoje</button>` : ' (hoje)'}</span>
+                        </div>
+                        ${appData.saude.meds.length === 0 ? '<p class="text-sm text-slate-400 py-4 text-center">Nenhum medicamento cadastrado.</p>' : `
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                ${appData.saude.meds.map(med => {
+                                    const taken = isMedTaken(med.id, medSelectedDate);
+                                    return `
+                                    <div class="p-4 rounded-2xl ${taken ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'} border">
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <h4 class="font-bold text-slate-800 dark:text-white text-sm">${esc(med.name)}</h4>
+                                                <p class="text-xs text-slate-500 mt-0.5"><i class="fa-regular fa-clock mr-1"></i> ${esc(med.time)}</p>
+                                            </div>
+                                            <div class="flex items-center space-x-1">
+                                                <button onclick="editMed('${med.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                                                <button onclick="deleteMed('${med.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                        <button onclick="toggleMedTaken('${med.id}')" class="mt-3 w-full py-2 rounded-xl text-xs font-bold transition-all ${taken ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow' : 'bg-white dark:bg-slate-800 border border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50'}">
+                                            <i class="fa-solid ${taken ? 'fa-circle-check' : 'fa-pills'} mr-1"></i> ${taken ? 'Tomado (clique para desfazer)' : 'Tomei'}
+                                        </button>
+                                    </div>`;
+                                }).join('')}
+                            </div>
+                        `}
+                    </div>
+
+                            <!-- CALENDÁRIO DE REMÉDIOS -->
+                            <div class="p-5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900">
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="font-semibold text-indigo-800 dark:text-indigo-300">Calendário de Remédios</span>
+                                    <i class="fa-solid fa-calendar-check text-indigo-500 text-xl"></i>
+                                </div>
+                                <div class="flex items-center justify-between mb-3">
+                                    <button onclick="changeMedMonth(-1)" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm text-xs"><i class="fa-solid fa-chevron-left"></i></button>
+                                    <span class="text-sm font-bold capitalize text-slate-700 dark:text-slate-200">${monthLabel}</span>
+                                    <button onclick="changeMedMonth(1)" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm text-xs"><i class="fa-solid fa-chevron-right"></i></button>
+                                </div>
+                                <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                    <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+                                </div>
+                                <div class="grid grid-cols-7 gap-1">${cells}</div>
+                                <div class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[10px] text-slate-500">
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-emerald-500"></span> Todos tomados</span>
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-amber-200"></span> Alguns tomados</span>
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded ring-2 ring-teal-600"></span> Dia selecionado</span>
+                                </div>
+                                <div class="mt-4 pt-3 border-t border-indigo-100 dark:border-indigo-900 text-xs text-slate-600 dark:text-slate-300">
+                                    <span class="font-bold">${fmtBR(medSelectedDate)}:</span>
+                                    ${selTaken.length === 0 ? 'nenhum remédio marcado.' : selTaken.map(m => `<span class="inline-block bg-emerald-100 text-emerald-700 rounded px-2 py-0.5 ml-1 font-semibold">${esc(m.name)}</span>`).join('')}
+                                </div>
+                            </div>
+
                             <!-- HIDRATAÇÃO -->
                             <div class="p-5 rounded-2xl bg-teal-50/50 dark:bg-teal-950/30 border border-teal-100 dark:border-teal-900">
                                 <div class="flex justify-between items-center mb-3">
@@ -1189,70 +1273,17 @@
                                 </div>
                             </div>
 
-                    <!-- MEDICAMENTOS -->
-                    <div class="p-5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900">
-                        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                            <h3 class="font-semibold text-indigo-800 dark:text-indigo-300">Medicamentos e Vitaminas</h3>
-                            <span class="text-xs text-slate-500">Marcando para <b>${fmtBR(medSelectedDate)}</b>${medSelectedDate !== todayStr ? ` · <button onclick="selectMedDate('${todayStr}')" class="text-teal-600 underline font-semibold">voltar para hoje</button>` : ' (hoje)'}</span>
-                        </div>
-                        ${appData.saude.meds.length === 0 ? '<p class="text-sm text-slate-400 py-4 text-center">Nenhum medicamento cadastrado.</p>' : `
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                ${appData.saude.meds.map(med => {
-                                    const taken = isMedTaken(med.id, medSelectedDate);
-                                    return `
-                                    <div class="p-4 rounded-2xl ${taken ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'} border">
-                                        <div class="flex justify-between items-start">
-                                            <div>
-                                                <h4 class="font-bold text-slate-800 dark:text-white text-sm">${esc(med.name)}</h4>
-                                                <p class="text-xs text-slate-500 mt-0.5"><i class="fa-regular fa-clock mr-1"></i> ${esc(med.time)}</p>
-                                            </div>
-                                            <div class="flex items-center space-x-1">
-                                                <button onclick="editMed('${med.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
-                                                <button onclick="deleteMed('${med.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
-                                            </div>
-                                        </div>
-                                        <button onclick="toggleMedTaken('${med.id}')" class="mt-3 w-full py-2 rounded-xl text-xs font-bold transition-all ${taken ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow' : 'bg-white dark:bg-slate-800 border border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50'}">
-                                            <i class="fa-solid ${taken ? 'fa-circle-check' : 'fa-pills'} mr-1"></i> ${taken ? 'Tomado (clique para desfazer)' : 'Tomei'}
-                                        </button>
-                                    </div>`;
-                                }).join('')}
-                            </div>
-                        `}
-                    </div>
-                        </div>
 
-                            <!-- CALENDÁRIO DE REMÉDIOS -->
-                            <div class="mt-6 max-w-xl mx-auto p-5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900">
-                                <div class="flex justify-between items-center mb-3">
-                                    <span class="font-semibold text-indigo-800 dark:text-indigo-300">Calendário de Remédios</span>
-                                    <i class="fa-solid fa-calendar-check text-indigo-500 text-xl"></i>
-                                </div>
-                                <div class="flex items-center justify-between mb-3">
-                                    <button onclick="changeMedMonth(-1)" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm text-xs"><i class="fa-solid fa-chevron-left"></i></button>
-                                    <span class="text-sm font-bold capitalize text-slate-700 dark:text-slate-200">${monthLabel}</span>
-                                    <button onclick="changeMedMonth(1)" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm text-xs"><i class="fa-solid fa-chevron-right"></i></button>
-                                </div>
-                                <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 uppercase mb-1">
-                                    <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
-                                </div>
-                                <div class="grid grid-cols-7 gap-1">${cells}</div>
-                                <div class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[10px] text-slate-500">
-                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-emerald-500"></span> Todos tomados</span>
-                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-amber-200"></span> Alguns tomados</span>
-                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded ring-2 ring-teal-600"></span> Dia selecionado</span>
-                                </div>
-                                <div class="mt-4 pt-3 border-t border-indigo-100 dark:border-indigo-900 text-xs text-slate-600 dark:text-slate-300">
-                                    <span class="font-bold">${fmtBR(medSelectedDate)}:</span>
-                                    ${selTaken.length === 0 ? 'nenhum remédio marcado.' : selTaken.map(m => `<span class="inline-block bg-emerald-100 text-emerald-700 rounded px-2 py-0.5 ml-1 font-semibold">${esc(m.name)}</span>`).join('')}
-                                </div>
-                            </div>
+                            ${diagDuePanelHtml()}
+                        </div>
                     </div>
 
                 </div>
             `;
         }
 
-        // ---------- SAÚDE: DIAGNÓSTICO (exames e evolução) ----------
+        // ---------- SAÚDE: DIAGNÓSTICO (exames, evolução e prazo para refazer) ----------
+        let diagOpen = new Set(); // exames expandidos (chave normalizada do nome)
         function diagExams() {
             if (!Array.isArray(appData.saude.exams)) appData.saude.exams = [];
             return appData.saude.exams;
@@ -1260,6 +1291,8 @@
         function openDiag() { saudeDiagOpen = true; renderCurrentTabContent(); }
         function closeDiag() { saudeDiagOpen = false; renderCurrentTabContent(); }
         function setDiagQuery(v) { diagQuery = v; renderCurrentTabContent(); }
+        function toggleDiagExam(key) { if (diagOpen.has(key)) diagOpen.delete(key); else diagOpen.add(key); renderCurrentTabContent(); }
+        function openDiagExam(key) { saudeDiagOpen = true; diagQuery = ''; diagOpen.add(key); renderCurrentTabContent(); window.scrollTo(0, 0); }
 
         function diagNum(s) {
             const m = String(s == null ? '' : s).replace(/\s/g, '').match(/-?\d+(?:[.,]\d+)?/);
@@ -1293,6 +1326,7 @@
         }
         function diagFmt(n) { return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
         function diagMonthLabel(m) { const [y, mo] = String(m || '').split('-'); return y && mo ? `${mo}/${y}` : '—'; }
+        function ymIdx(k) { const [y, m] = String(k).split('-').map(Number); return y * 12 + (m - 1); }
 
         function diagGroups() {
             const g = {};
@@ -1307,6 +1341,60 @@
             });
             return Object.values(g).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
         }
+        // Prazo para refazer: conta a partir do último exame feito, usando o prazo (em meses) do último registro
+        function diagDue(g) {
+            const last = g.recs[g.recs.length - 1];
+            const n = Math.floor(Number(last.interval));
+            if (!n || n < 1 || !last.month) return null;
+            const key = ymAdd(last.month, n);
+            const diff = ymIdx(key) - ymIdx(localDateStr().slice(0, 7));
+            const lbl = diagMonthLabel(key);
+            if (diff < 0) return { key, diff, level: 'atrasado', text: `Atrasado há ${-diff} ${-diff === 1 ? 'mês' : 'meses'} (venceu em ${lbl})`, cls: 'bg-rose-100 text-rose-700' };
+            if (diff === 0) return { key, diff, level: 'mes', text: `Refazer neste mês (${lbl})`, cls: 'bg-amber-100 text-amber-700' };
+            if (diff <= 2) return { key, diff, level: 'perto', text: `Refazer em ${diff} ${diff === 1 ? 'mês' : 'meses'} (${lbl})`, cls: 'bg-amber-50 text-amber-700' };
+            return { key, diff, level: 'ok', text: `Próximo em ${lbl}`, cls: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300' };
+        }
+        function diagDueList() {
+            return diagGroups().map(g => ({ g, due: diagDue(g) })).filter(x => x.due && x.due.level !== 'ok').sort((a, b) => a.due.diff - b.due.diff);
+        }
+        // Espaço "Atenção" na tela de Saúde: exames para refazer e vacinas perto da próxima dose
+        function diagDuePanelHtml() {
+            const items = [];
+            diagDueList().forEach(({ g, due }) => {
+                const last = g.recs[g.recs.length - 1];
+                items.push({ sort: due.diff * 30, icon: 'fa-flask-vial text-indigo-500', title: g.name,
+                    sub: `Exame · último em ${diagMonthLabel(last.month)} · refazer a cada ${Math.floor(Number(last.interval))} ${Math.floor(Number(last.interval)) === 1 ? 'mês' : 'meses'}`,
+                    text: due.text, cls: due.cls, open: `openDiagExam('${g.key}')`, add: `openDiagModal(null, '${last.id}')`, addTitle: 'Registrar novo resultado' });
+            });
+            vacData().forEach(r => {
+                const n = vacNextInfo(r);
+                if (!n || n.days > 60) return;
+                items.push({ sort: n.days, icon: 'fa-syringe text-emerald-500', title: r.vaccine || 'Vacina sem nome',
+                    sub: `Vacina · última: ${r.dose || 'dose'}${r.date ? ' em ' + fmtBR(r.date) : ''}`,
+                    text: n.text, cls: n.cls, open: 'openVac()', add: 'openVac()', addTitle: 'Abrir carteirinha de vacinas' });
+            });
+            items.sort((a, b) => a.sort - b.sort);
+            return `<div class="p-5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="font-semibold text-amber-800 dark:text-amber-300">Atenção</span>
+                    <i class="fa-solid fa-triangle-exclamation text-amber-500 text-xl"></i>
+                </div>
+                ${items.length === 0 ? '<p class="text-sm text-slate-400 py-4 text-center">Nada pedindo atenção agora. Exames com prazo e vacinas com próxima dose aparecem aqui quando faltarem 2 meses ou menos.</p>' : `<div class="space-y-2">
+                    ${items.map(it => `
+                    <div class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                        <button onclick="${it.open}" class="text-left min-w-0">
+                            <p class="text-sm font-bold text-slate-800 dark:text-white truncate"><i class="fa-solid ${it.icon} mr-1.5"></i>${esc(it.title)}</p>
+                            <p class="text-xs text-slate-500">${it.sub}</p>
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold px-2 py-1 rounded-lg ${it.cls}">${it.text}</span>
+                            <button onclick="${it.add}" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold" title="${it.addTitle}"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                    </div>`).join('')}
+                </div>`}
+            </div>`;
+        }
+
         function diagSpark(recs) {
             const pts = recs.map(r => ({ v: /[<>≤≥]/.test(String(r.result || '')) ? null : diagNum(r.result), label: `${diagMonthLabel(r.month)}: ${r.result}` })).filter(p => p.v !== null);
             if (pts.length < 2) return '';
@@ -1330,7 +1418,7 @@
         function renderDiagnostico(container) {
             const q = normKey(diagQuery);
             let groups = diagGroups();
-            if (q) groups = groups.filter(g => normKey(g.name).includes(q) || g.recs.some(r => normKey(r.lab).includes(q)));
+            if (q) groups = groups.filter(g => normKey(g.name).includes(q) || g.recs.some(r => normKey(r.lab).includes(q) || normKey(r.requestedBy).includes(q)));
             const total = diagExams().length;
 
             container.innerHTML = `
@@ -1342,11 +1430,11 @@
                                 <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-file-medical text-indigo-500"></i><span>Diagnóstico — Exames</span></h2>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
-                                <input type="text" placeholder="Buscar exame ou laboratório..." value="${esc(diagQuery)}" onchange="setDiagQuery(this.value)" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs w-56">
+                                <input type="text" placeholder="Buscar exame, laboratório ou médico..." value="${esc(diagQuery)}" onchange="setDiagQuery(this.value)" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs w-60">
                                 <button onclick="openDiagModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Incluir exame</span></button>
                             </div>
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-3">Registre cada vez que fizer um exame: o novo resultado entra na linha do tempo do mesmo exame e a evolução aparece automaticamente. A marcação "dentro/acima/abaixo" é só uma comparação com o valor de referência que você digitou; quem interpreta o resultado é o seu médico.</p>
+                        <p class="text-[11px] text-slate-400 mt-3">Cada exame mostra só o último resultado. Clique no nome do exame para ver o histórico e a evolução. A marcação "dentro/acima/abaixo" é só uma comparação com o valor de referência digitado; quem interpreta o resultado é o seu médico.</p>
                     </div>
 
                     ${groups.length === 0 ? `
@@ -1355,52 +1443,60 @@
                             <p class="text-sm">${total ? 'Nenhum exame encontrado para esta busca.' : 'Nenhum exame cadastrado ainda. Clique em "Incluir exame".'}</p>
                         </div>` : groups.map(g => {
                             const last = g.recs[g.recs.length - 1];
+                            const open = diagOpen.has(g.key);
+                            const due = diagDue(g);
                             const rows = g.recs.map((r, i) => ({ r, prev: i > 0 ? g.recs[i - 1] : null })).reverse();
-                            const spark = diagSpark(g.recs);
                             return `
-                            <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                                <div class="flex flex-wrap justify-between items-start gap-4 mb-4">
-                                    <div>
-                                        <h3 class="font-bold text-lg text-slate-800 dark:text-white">${esc(g.name)}</h3>
-                                        <p class="text-xs text-slate-500 mt-0.5">${g.recs.length} resultado${g.recs.length > 1 ? 's' : ''} · último em ${diagMonthLabel(last.month)}: <b class="text-slate-700 dark:text-slate-200">${esc(last.result)}</b>${diagBadge(last)}</p>
-                                    </div>
-                                    <div class="flex items-center gap-4">
-                                        ${spark}
-                                        <button onclick="openDiagModal(null, '${last.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-1.5"><i class="fa-solid fa-plus"></i><span>Novo resultado</span></button>
-                                    </div>
+                            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                                <div class="p-5 flex flex-wrap items-center justify-between gap-3">
+                                    <button onclick="toggleDiagExam('${g.key}')" class="flex items-start gap-3 text-left min-w-0 flex-1">
+                                        <i class="fa-solid ${open ? 'fa-chevron-down' : 'fa-chevron-right'} text-slate-400 text-xs mt-1.5 w-3"></i>
+                                        <div class="min-w-0">
+                                            <h3 class="font-bold text-base text-slate-800 dark:text-white">${esc(g.name)} ${due ? `<span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${due.cls}">${due.text}</span>` : ''}</h3>
+                                            <p class="text-xs text-slate-500 mt-0.5">Último: ${diagMonthLabel(last.month)}${last.lab ? ' · ' + esc(last.lab) : ''} · <b class="text-slate-700 dark:text-slate-200">${esc(last.result)}</b>${diagBadge(last)}${last.ref ? ` <span class="text-slate-400">(ref.: ${esc(last.ref)})</span>` : ''}</p>
+                                            <p class="text-[11px] text-slate-400 mt-0.5">${g.recs.length} resultado${g.recs.length > 1 ? 's' : ''}${open ? '' : ' · clique para ver o histórico'}</p>
+                                        </div>
+                                    </button>
+                                    <button onclick="openDiagModal(null, '${last.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-1.5"><i class="fa-solid fa-plus"></i><span>Novo resultado</span></button>
                                 </div>
-                                <div class="overflow-x-auto"><table class="w-full text-left text-sm">
-                                    <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                                        <th class="p-3 rounded-l-xl">Mês/Ano</th><th class="p-3">Laboratório</th><th class="p-3">Resultado</th><th class="p-3">Variação</th><th class="p-3">Referência</th><th class="p-3">Observação</th><th class="p-3">Anexos</th><th class="p-3 text-right rounded-r-xl">Ações</th>
-                                    </tr></thead>
-                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                                    ${rows.map(({ r, prev }) => `
-                                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 align-top">
-                                            <td class="p-3 whitespace-nowrap font-medium text-slate-700 dark:text-slate-200">${diagMonthLabel(r.month)}</td>
-                                            <td class="p-3 text-slate-600 dark:text-slate-300">${esc(r.lab) || '<span class="text-slate-300">—</span>'}</td>
-                                            <td class="p-3 font-bold text-slate-800 dark:text-white whitespace-nowrap">${esc(r.result)}${diagBadge(r)}</td>
-                                            <td class="p-3">${diagDelta(r, prev)}</td>
-                                            <td class="p-3 text-xs text-slate-500">${esc(r.ref) || '<span class="text-slate-300">—</span>'}</td>
-                                            <td class="p-3 text-xs text-slate-500 max-w-[220px]">${esc(r.obs)}</td>
-                                            <td class="p-3 whitespace-nowrap">${(r.attachments || []).map(a => `<button onclick="openStoredFile('${a.id}')" title="${esc(a.name)}" class="px-1.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm"><i class="fa-solid ${fileIcon(a)}"></i></button>`).join(' ') || '<span class="text-slate-300">—</span>'}</td>
-                                            <td class="p-3 text-right whitespace-nowrap space-x-1">
-                                                <button onclick="openDiagModal('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
-                                                <button onclick="deleteDiag('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
-                                            </td>
-                                        </tr>`).join('')}
-                                    </tbody></table></div>
+                                ${open ? `
+                                <div class="px-5 pb-5 space-y-4">
+                                    ${diagSpark(g.recs) ? `<div class="flex justify-center">${diagSpark(g.recs)}</div>` : ''}
+                                    <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                                        <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
+                                            <th class="p-3 rounded-l-xl">Mês/Ano</th><th class="p-3">Laboratório</th><th class="p-3">Solicitado por</th><th class="p-3">Resultado</th><th class="p-3">Variação</th><th class="p-3">Referência</th><th class="p-3">Refazer a cada</th><th class="p-3">Observação</th><th class="p-3">Anexos</th><th class="p-3 text-right rounded-r-xl">Ações</th>
+                                        </tr></thead>
+                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                        ${rows.map(({ r, prev }) => `
+                                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 align-top">
+                                                <td class="p-3 whitespace-nowrap font-medium text-slate-700 dark:text-slate-200">${diagMonthLabel(r.month)}</td>
+                                                <td class="p-3 text-slate-600 dark:text-slate-300">${esc(r.lab) || '<span class="text-slate-300">—</span>'}</td>
+                                                <td class="p-3 text-slate-600 dark:text-slate-300">${esc(r.requestedBy) || '<span class="text-slate-300">—</span>'}</td>
+                                                <td class="p-3 font-bold text-slate-800 dark:text-white whitespace-nowrap">${esc(r.result)}${diagBadge(r)}</td>
+                                                <td class="p-3">${diagDelta(r, prev)}</td>
+                                                <td class="p-3 text-xs text-slate-500">${esc(r.ref) || '<span class="text-slate-300">—</span>'}</td>
+                                                <td class="p-3 text-xs text-slate-500 whitespace-nowrap">${Number(r.interval) > 0 ? Math.floor(Number(r.interval)) + ' ' + (Math.floor(Number(r.interval)) === 1 ? 'mês' : 'meses') : '<span class="text-slate-300">—</span>'}</td>
+                                                <td class="p-3 text-xs text-slate-500 max-w-[220px]">${esc(r.obs)}</td>
+                                                <td class="p-3 whitespace-nowrap">${(r.attachments || []).map(a => `<button onclick="openStoredFile('${a.id}')" title="${esc(a.name)}" class="px-1.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm"><i class="fa-solid ${fileIcon(a)}"></i></button>`).join(' ') || '<span class="text-slate-300">—</span>'}</td>
+                                                <td class="p-3 text-right whitespace-nowrap space-x-1">
+                                                    <button onclick="openDiagModal('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                                                    <button onclick="deleteDiag('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                                                </td>
+                                            </tr>`).join('')}
+                                        </tbody></table></div>
+                                </div>` : ''}
                             </div>`;
                         }).join('')}
                 </div>`;
         }
 
-        // id = editar um resultado; fromId = novo resultado do mesmo exame (repete nome, laboratório e referência)
+        // id = editar um resultado; fromId = novo resultado do mesmo exame (repete nome, laboratório, solicitante, referência e prazo)
         function openDiagModal(id = null, fromId = null) {
-            let r = { name: '', lab: '', month: localDateStr().slice(0, 7), ref: '', result: '', obs: '', attachments: [] };
+            let r = { name: '', lab: '', requestedBy: '', month: localDateStr().slice(0, 7), ref: '', result: '', interval: '', obs: '', attachments: [] };
             if (id) r = diagExams().find(x => x.id === id) || r;
             else if (fromId) {
                 const src = diagExams().find(x => x.id === fromId);
-                if (src) r = Object.assign(r, { name: src.name, lab: src.lab || '', ref: src.ref || '' });
+                if (src) r = Object.assign(r, { name: src.name, lab: src.lab || '', requestedBy: src.requestedBy || '', ref: src.ref || '', interval: src.interval || '' });
             }
             draftInit(r.attachments);
             const uniq = f => [...new Set(diagExams().map(x => String(x[f] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -1409,7 +1505,7 @@
                 <form onsubmit="saveDiag(event, '${id || ''}')" class="space-y-4">
                     <div>
                         <label class="${LBL}">Nome do exame</label>
-                        <input type="text" id="dg-name" list="dg-names" value="${esc(r.name)}" required placeholder="Ex.: Colesterol total, TSH, Glicemia" class="${INP}">
+                        <input type="text" id="dg-name" list="dg-names" value="${esc(r.name)}" required placeholder="Ex.: Colesterol total, TSH, Vitamina D" class="${INP}">
                         <datalist id="dg-names">${uniq('name').map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -1419,20 +1515,32 @@
                             <datalist id="dg-labs">${uniq('lab').map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
                         </div>
                         <div>
+                            <label class="${LBL}">Solicitado por <span class="normal-case font-normal text-slate-400">(opcional)</span></label>
+                            <input type="text" id="dg-req" list="dg-reqs" value="${esc(r.requestedBy || '')}" placeholder="Ex.: Dra. Ana" class="${INP}">
+                            <datalist id="dg-reqs">${uniq('requestedBy').map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
                             <label class="${LBL}">Mês/Ano</label>
                             <input type="month" id="dg-month" value="${esc(r.month)}" required class="${INP}">
+                        </div>
+                        <div>
+                            <label class="${LBL}">Refazer a cada (meses) <span class="normal-case font-normal text-slate-400">(opcional)</span></label>
+                            <input type="number" id="dg-interval" min="1" max="120" step="1" value="${esc(r.interval || '')}" placeholder="Ex.: 6" class="${INP}">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="${LBL}">Valor de referência</label>
-                            <input type="text" id="dg-ref" value="${esc(r.ref)}" placeholder="Ex.: 70 a 99 mg/dL" class="${INP}">
+                            <input type="text" id="dg-ref" value="${esc(r.ref)}" placeholder="Ex.: 30 a 100 ng/mL" class="${INP}">
                         </div>
                         <div>
                             <label class="${LBL}">Resultado</label>
-                            <input type="text" id="dg-result" value="${esc(r.result)}" required placeholder="Ex.: 92 mg/dL" class="${INP}">
+                            <input type="text" id="dg-result" value="${esc(r.result)}" required placeholder="Ex.: 42 ng/mL" class="${INP}">
                         </div>
                     </div>
+                    <p class="text-[11px] text-slate-400 -mt-2">O prazo é contado a partir do último exame feito: o sistema avisa na tela de Saúde quando faltarem 2 meses ou menos.</p>
                     <div>
                         <label class="${LBL}">Anexo (laudo, foto, PDF)</label>
                         <div id="draft-att-list">${draftListHtml()}</div>
@@ -1450,10 +1558,13 @@
             e.preventDefault();
             const btn = e.target.querySelector('button[type=submit]');
             if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+            const iv = Math.floor(Number(document.getElementById('dg-interval').value));
             const data = {
                 name: document.getElementById('dg-name').value.trim(),
                 lab: document.getElementById('dg-lab').value.trim(),
+                requestedBy: document.getElementById('dg-req').value.trim(),
                 month: document.getElementById('dg-month').value,
+                interval: iv > 0 ? iv : '',
                 ref: document.getElementById('dg-ref').value.trim(),
                 result: document.getElementById('dg-result').value.trim(),
                 obs: document.getElementById('dg-obs').value.trim()
@@ -1473,6 +1584,557 @@
             if (r) for (const a of (r.attachments || [])) await deleteStoredFile(a.id);
             appData.saude.exams = diagExams().filter(x => x.id !== id);
             saveAppData(); renderCurrentTabContent();
+        }
+
+        // =====================================================
+        // SAÚDE: CARTEIRINHA DE VACINAS (com importação do Meu SUS Digital)
+        // =====================================================
+        function vacData() {
+            if (!Array.isArray(appData.saude.vacinas)) appData.saude.vacinas = [];
+            return appData.saude.vacinas;
+        }
+        function openVac() { saudeVacOpen = true; saudeDiagOpen = false; renderCurrentTabContent(); }
+        function closeVac() { saudeVacOpen = false; renderCurrentTabContent(); }
+        function setVacQuery(v) { vacQuery = v; renderCurrentTabContent(); }
+
+        function vacNextInfo(r) {
+            if (!r.next) return null;
+            // se já existe uma dose mais recente da mesma vacina, o lembrete deixa de valer
+            const later = vacData().some(x => x.id !== r.id && normKey(x.vaccine) === normKey(r.vaccine) && (x.date || '') > (r.date || ''));
+            if (later) return null;
+            const days = Math.round((new Date(r.next + 'T00:00:00') - new Date(localDateStr() + 'T00:00:00')) / 864e5);
+            if (days < 0) return { days, text: `Atrasada há ${-days} dia${-days === 1 ? '' : 's'} (${fmtBR(r.next)})`, cls: 'bg-rose-100 text-rose-700' };
+            if (days <= 30) return { days, text: days === 0 ? `É hoje (${fmtBR(r.next)})` : `Em ${days} dia${days === 1 ? '' : 's'} (${fmtBR(r.next)})`, cls: 'bg-amber-100 text-amber-700' };
+            return { days, text: `Prevista para ${fmtBR(r.next)}`, cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' };
+        }
+
+        function renderVacinas(container) {
+            const q = normKey(vacQuery);
+            const all = vacData();
+            const g = {};
+            all.forEach(r => {
+                if (q && !(normKey(r.vaccine).includes(q) || normKey(r.place).includes(q) || normKey(r.lot).includes(q) || normKey(r.lab).includes(q))) return;
+                const k = normKey(r.vaccine); if (!g[k]) g[k] = { name: r.vaccine || 'Vacina sem nome', recs: [] }; g[k].recs.push(r);
+            });
+            const groups = Object.values(g).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+            groups.forEach(x => x.recs.sort((a, b) => (a.date || '').localeCompare(b.date || '')));
+            const upcoming = all.map(r => ({ r, n: vacNextInfo(r) })).filter(x => x.n).sort((a, b) => a.n.days - b.n.days);
+
+            container.innerHTML = `
+                <div class="space-y-6 max-w-7xl mx-auto">
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <div class="flex flex-wrap justify-between items-center gap-3">
+                            <div class="flex items-center gap-3">
+                                <button onclick="closeVac()" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> Saúde</button>
+                                <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-syringe text-emerald-500"></i><span>Carteirinha de Vacinas</span></h2>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <input type="text" placeholder="Buscar vacina, lote ou local..." value="${esc(vacQuery)}" onchange="setVacQuery(this.value)" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs w-56">
+                                <button onclick="openVacImport()" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-file-import"></i><span>Importar do Meu SUS Digital</span></button>
+                                <button onclick="openVacModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Registrar vacina</span></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${upcoming.length ? `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2 mb-3"><i class="fa-solid fa-bell text-amber-500"></i><span>Próximas doses</span></h3>
+                        <div class="space-y-2">${upcoming.map(({ r, n }) => `
+                            <div class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/50">
+                                <p class="text-sm font-bold text-slate-800 dark:text-white">${esc(r.vaccine) || 'Vacina sem nome'} <span class="text-xs font-normal text-slate-500">· última: ${esc(r.dose) || 'dose'}${r.date ? ' em ' + fmtBR(r.date) : ''}</span></p>
+                                <span class="text-[11px] font-bold px-2 py-1 rounded-lg ${n.cls}">${n.text}</span>
+                            </div>`).join('')}</div>
+                    </div>` : ''}
+
+                    ${groups.length === 0 ? `
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl p-10 shadow-sm border border-slate-100 dark:border-slate-700 text-center text-slate-400">
+                            <i class="fa-solid fa-syringe text-4xl mb-2"></i>
+                            <p class="text-sm">${all.length ? 'Nenhuma vacina encontrada para esta busca.' : 'Nenhuma vacina registrada. Importe do Meu SUS Digital ou clique em "Registrar vacina".'}</p>
+                        </div>` : groups.map(x => `
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                            <h3 class="font-bold text-base text-slate-800 dark:text-white mb-3">${esc(x.name)} <span class="text-xs font-normal text-slate-400">· ${x.recs.length} dose${x.recs.length > 1 ? 's' : ''}</span></h3>
+                            <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
+                                    <th class="p-3 rounded-l-xl">Dose</th><th class="p-3">Data</th><th class="p-3">Lote</th><th class="p-3">Laboratório</th><th class="p-3">Local</th><th class="p-3">Próxima</th><th class="p-3">Anexos</th><th class="p-3 text-right rounded-r-xl">Ações</th>
+                                </tr></thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                ${x.recs.map(r => { const n = vacNextInfo(r); return `
+                                    <tr class="align-top hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                                        <td class="p-3 font-semibold text-slate-800 dark:text-white whitespace-nowrap">${esc(r.dose) || '—'}${r.source === 'meusus' ? ' <span class="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Meu SUS</span>' : ''}</td>
+                                        <td class="p-3 whitespace-nowrap text-slate-600 dark:text-slate-300">${r.date ? fmtBR(r.date) : '—'}</td>
+                                        <td class="p-3 text-xs text-slate-500">${esc(r.lot) || '<span class="text-slate-300">—</span>'}</td>
+                                        <td class="p-3 text-xs text-slate-500">${esc(r.lab) || '<span class="text-slate-300">—</span>'}</td>
+                                        <td class="p-3 text-xs text-slate-500">${esc(r.place) || '<span class="text-slate-300">—</span>'}${r.obs ? `<div class="text-slate-400 mt-0.5">${esc(r.obs)}</div>` : ''}</td>
+                                        <td class="p-3 text-xs">${n ? `<span class="font-bold px-1.5 py-0.5 rounded ${n.cls}">${n.text}</span>` : '<span class="text-slate-300">—</span>'}</td>
+                                        <td class="p-3 whitespace-nowrap">${(r.attachments || []).map(a => `<button onclick="openStoredFile('${a.id}')" title="${esc(a.name)}" class="px-1.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm"><i class="fa-solid ${fileIcon(a)}"></i></button>`).join(' ') || '<span class="text-slate-300">—</span>'}</td>
+                                        <td class="p-3 text-right whitespace-nowrap space-x-1">
+                                            <button onclick="openVacModal('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                                            <button onclick="deleteVac('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>`; }).join('')}
+                                </tbody></table></div>
+                        </div>`).join('')}
+                </div>`;
+        }
+
+        // --- cadastro manual ---
+        function openVacModal(id = null) {
+            let r = { vaccine: '', dose: '', date: localDateStr(), lot: '', lab: '', place: '', next: '', obs: '', attachments: [] };
+            if (id) r = vacData().find(x => x.id === id) || r;
+            draftInit(r.attachments);
+            const names = [...new Set(vacData().map(x => String(x.vaccine || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            const doses = ['1ª dose', '2ª dose', '3ª dose', 'Dose única', 'Reforço', '1º reforço', '2º reforço', 'Dose anual'];
+            showModal(id ? 'Editar vacina' : 'Registrar vacina', `
+                <form onsubmit="saveVac(event, '${id || ''}')" class="space-y-4">
+                    <p class="text-[11px] text-slate-400">Nenhum campo é obrigatório. Preencha o que tiver.</p>
+                    <div><label class="${LBL}">Vacina</label>
+                        <input type="text" id="vc-name" list="vc-names" value="${esc(r.vaccine)}" placeholder="Ex.: Febre amarela, Influenza, Hepatite B" class="${INP}">
+                        <datalist id="vc-names">${names.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Dose</label><input type="text" id="vc-dose" list="vc-doses" value="${esc(r.dose)}" class="${INP}"><datalist id="vc-doses">${doses.map(n => `<option value="${n}"></option>`).join('')}</datalist></div>
+                        <div><label class="${LBL}">Data da aplicação</label><input type="date" id="vc-date" value="${esc(r.date)}" class="${INP}"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Lote</label><input type="text" id="vc-lot" value="${esc(r.lot)}" class="${INP}"></div>
+                        <div><label class="${LBL}">Laboratório</label><input type="text" id="vc-lab" value="${esc(r.lab || '')}" placeholder="Ex.: Pfizer, Butantan" class="${INP}"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Local / unidade</label><input type="text" id="vc-place" value="${esc(r.place)}" class="${INP}"></div>
+                        <div><label class="${LBL}">Próxima dose / reforço</label><input type="date" id="vc-next" value="${esc(r.next || '')}" class="${INP}"></div>
+                    </div>
+                    <div><label class="${LBL}">Anexo (foto da carteirinha, comprovante)</label>
+                        <div id="draft-att-list">${draftListHtml()}</div>
+                        <input type="file" id="vc-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs"></div>
+                    <div><label class="${LBL}">Observação</label><textarea id="vc-obs" rows="2" class="${INP}">${esc(r.obs || '')}</textarea></div>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                </form>`);
+        }
+        async function saveVac(e, id) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type=submit]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+            const data = {
+                vaccine: document.getElementById('vc-name').value.trim(),
+                dose: document.getElementById('vc-dose').value.trim(),
+                date: document.getElementById('vc-date').value,
+                lot: document.getElementById('vc-lot').value.trim(),
+                lab: document.getElementById('vc-lab').value.trim(),
+                place: document.getElementById('vc-place').value.trim(),
+                next: document.getElementById('vc-next').value,
+                obs: document.getElementById('vc-obs').value.trim()
+            };
+            data.attachments = await draftCommit('vc-files');
+            if (id) { const r = vacData().find(x => x.id === id); if (r) Object.assign(r, data); }
+            else vacData().push(Object.assign({ id: uid(), source: 'manual' }, data));
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Vacina salva!', 'success');
+        }
+        async function deleteVac(id) {
+            if (!confirm('Excluir este registro de vacina?')) return;
+            const r = vacData().find(x => x.id === id);
+            if (r) for (const a of (r.attachments || [])) await deleteStoredFile(a.id);
+            appData.saude.vacinas = vacData().filter(x => x.id !== id);
+            saveAppData(); renderCurrentTabContent();
+        }
+
+        // --- importação (Meu SUS Digital): texto colado, PDF, CSV ou JSON ---
+        const vacIso = (d, m, y) => `${y}-${m}-${d}`;
+        function vacParseText(text) {
+            const lines = String(text).replace(/\u00a0/g, ' ').split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+            const dateRe = /\b(\d{2})\/(\d{2})\/(\d{4})\b/;
+            const doseRe = /(\d+\s*[ªºao°]?\s*dose|dose\s*(?:[úu]nica|adicional|de refor[çc]o|\d+)|\d+\s*[ºo°ª]?\s*refor[çc]o|refor[çc]o|[úu]nica|anual)/i;
+            const lotRe = /lote\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9\-./]*)/i;
+            const placeRe = /(?:estabelecimento|unidade|local|ubs|posto)\s*[:\-]?\s*(.+)/i;
+            const skipRe = /(meu sus|caderneta|cart[ãa]o|\bcpf\b|\bcns\b|nome:|nascimento|conecte|minist[ée]rio|p[áa]gina|emitido|comprovante|certificado|gov\.br|^vacinas?$|^dose$|^data$|^lote$|^unidade$|^estabelecimento$)/i;
+            const out = []; let name = '', pendingDose = '';
+            lines.forEach(line => {
+                const dm = line.match(dateRe);
+                const isMeta = doseRe.test(line) || lotRe.test(line) || placeRe.test(line);
+                if (dm) {
+                    const place = (line.match(placeRe) || [])[1] || '';
+                    const lot = (line.match(lotRe) || [])[1] || '';
+                    const dose = (line.match(doseRe) || [])[1] || pendingDose;
+                    let vac = line.replace(placeRe, ' ').replace(lotRe, ' ').replace(dateRe, ' ').replace(doseRe, ' ')
+                        .replace(/\b(data|aplica[çc][ãa]o|aplicada|em)\b\s*:?/ig, ' ').replace(/[|;:–\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+                    if (vac.length < 3) vac = name;
+                    out.push({ vaccine: vac, dose: dose.trim(), date: vacIso(dm[1], dm[2], dm[3]), lot, place: place.trim(), _open: true });
+                    pendingDose = '';
+                } else if (isMeta) {
+                    const last = out[out.length - 1];
+                    if (last && last._open) {
+                        if (!last.dose && doseRe.test(line)) last.dose = line.match(doseRe)[1];
+                        if (!last.lot && lotRe.test(line)) last.lot = line.match(lotRe)[1];
+                        if (!last.place && placeRe.test(line)) last.place = line.match(placeRe)[1].trim();
+                    } else if (doseRe.test(line)) pendingDose = line.match(doseRe)[1];
+                } else if (!skipRe.test(line) && line.length >= 3 && line.length <= 90) {
+                    name = line; pendingDose = '';
+                    if (out.length) out[out.length - 1]._open = false;
+                }
+            });
+            return out.map(({ _open, ...r }) => r).filter(r => r.date);
+        }
+        // JSON (inclusive recursos FHIR "Immunization") e CSV simples
+        function vacParseAny(text) {
+            const t = String(text || '').trim();
+            if (!t) return [];
+            if (/^[\[{]/.test(t)) {
+                try {
+                    const res = [];
+                    const walk = o => {
+                        if (!o || typeof o !== 'object') return;
+                        if (Array.isArray(o)) { o.forEach(walk); return; }
+                        if (o.resourceType === 'Immunization') {
+                            const vc = o.vaccineCode || {};
+                            const nm = vc.text || (vc.coding && vc.coding[0] && (vc.coding[0].display || vc.coding[0].code)) || '';
+                            const dt = String(o.occurrenceDateTime || o.date || '').slice(0, 10);
+                            const pa = (o.protocolApplied && o.protocolApplied[0]) || {};
+                            const dn = pa.doseNumberPositiveInt || pa.doseNumberString || '';
+                            res.push({ vaccine: nm, dose: dn ? (/^\d+$/.test(String(dn)) ? dn + 'ª dose' : String(dn)) : '', date: dt, lot: o.lotNumber || '', place: (o.location && o.location.display) || (o.performer && o.performer[0] && o.performer[0].actor && o.performer[0].actor.display) || '' });
+                            return;
+                        }
+                        const nm = o.vacina || o.nome || o.vaccine || o.immunobiologico || o.imunobiologico;
+                        const dt = o.data || o.dataAplicacao || o.date;
+                        if (nm && dt) {
+                            const s = String(dt), m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+                            res.push({ vaccine: String(nm), dose: String(o.dose || ''), date: m ? vacIso(m[1], m[2], m[3]) : s.slice(0, 10), lot: String(o.lote || o.lot || ''), place: String(o.unidade || o.local || o.estabelecimento || '') });
+                            return;
+                        }
+                        Object.values(o).forEach(walk);
+                    };
+                    walk(JSON.parse(t));
+                    if (res.length) return res.filter(r => r.vaccine && /^\d{4}-\d{2}-\d{2}$/.test(r.date));
+                } catch (e) { /* segue para texto */ }
+            }
+            const first = t.split(/\r?\n/)[0];
+            if (/(vacina|imunobiol)/i.test(first) && /[;,\t]/.test(first)) {
+                const sep = first.includes(';') ? ';' : first.includes('\t') ? '\t' : ',';
+                const cols = first.split(sep).map(c => normKey(c));
+                const ix = re => cols.findIndex(c => re.test(c));
+                const iN = ix(/vacina|imunobiol/), iD = ix(/^dose/), iDt = ix(/data/), iL = ix(/lote/), iP = ix(/unidade|local|estabelec/);
+                if (iN >= 0 && iDt >= 0) {
+                    return t.split(/\r?\n/).slice(1).map(l => {
+                        const c = l.split(sep).map(x => x.replace(/^"|"$/g, '').trim());
+                        const m = (c[iDt] || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+                        return { vaccine: c[iN] || '', dose: iD >= 0 ? c[iD] || '' : '', date: m ? vacIso(m[1], m[2], m[3]) : (c[iDt] || '').slice(0, 10), lot: iL >= 0 ? c[iL] || '' : '', place: iP >= 0 ? c[iP] || '' : '' };
+                    }).filter(r => r.vaccine && /^\d{4}-\d{2}-\d{2}$/.test(r.date));
+                }
+            }
+            return vacParseText(t);
+        }
+        async function vacLoadPdfJs() {
+            if (window.pdfjsLib) return window.pdfjsLib;
+            await new Promise((ok, fail) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                s.onload = ok; s.onerror = () => fail(new Error('Sem acesso ao leitor de PDF (precisa de internet).'));
+                document.head.appendChild(s);
+            });
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            return window.pdfjsLib;
+        }
+        async function vacPdfText(file) {
+            const lib = await vacLoadPdfJs();
+            const pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+            let out = '';
+            for (let p = 1; p <= pdf.numPages; p++) {
+                const tc = await (await pdf.getPage(p)).getTextContent();
+                tc.items.forEach(it => { out += it.str + (it.hasEOL ? '\n' : ' '); });
+                out += '\n';
+            }
+            return out;
+        }
+
+        let _vacPrev = [];
+        function openVacImport() {
+            showModal('Importar do Meu SUS Digital', `
+                <div class="space-y-4">
+                    <p class="text-xs text-slate-500">No Meu SUS Digital, abra a sua caderneta de vacinação e use uma das opções: <b>copie a lista e cole aqui</b>, ou escolha o <b>PDF do comprovante/certificado</b> (ou um arquivo de texto, CSV ou JSON). Você confere tudo antes de importar.</p>
+                    <div><label class="${LBL}">Arquivo (PDF, TXT, CSV ou JSON)</label>
+                        <input type="file" accept=".pdf,.txt,.csv,.json,application/pdf,text/plain" onchange="vacReadFile(this.files[0])" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs"></div>
+                    <div><label class="${LBL}">...ou cole o texto copiado</label>
+                        <textarea id="vac-text" rows="6" placeholder="Cole aqui a lista de vacinas copiada do Meu SUS Digital" class="${INP}"></textarea></div>
+                    <button type="button" onclick="vacAnalyze()" class="w-full bg-sky-600 text-white py-2.5 rounded-xl font-bold text-sm shadow">Analisar</button>
+                    <p id="vac-msg" class="text-xs text-slate-500"></p>
+                    <div id="vac-preview"></div>
+                </div>`);
+        }
+        async function vacReadFile(file) {
+            if (!file) return;
+            const msg = document.getElementById('vac-msg');
+            try {
+                msg.textContent = 'Lendo o arquivo...';
+                const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+                document.getElementById('vac-text').value = isPdf ? await vacPdfText(file) : await file.text();
+                await vacAnalyze();
+            } catch (e) {
+                console.error(e);
+                msg.textContent = 'Não consegui ler este arquivo' + (e && e.message ? ' (' + e.message + ')' : '') + '. Tente copiar o texto da caderneta e colar acima.';
+            }
+        }
+        function vacAnalyze() {
+            const msg = document.getElementById('vac-msg'), box = document.getElementById('vac-preview');
+            const rows = vacParseAny(document.getElementById('vac-text').value);
+            if (!rows.length) { _vacPrev = []; box.innerHTML = ''; msg.textContent = 'Não encontrei vacinas neste conteúdo. O texto precisa ter o nome da vacina e a data (dd/mm/aaaa). Você também pode registrar manualmente.'; return; }
+            const have = new Set(vacData().map(x => normKey(x.vaccine) + '|' + x.date + '|' + normKey(x.dose)));
+            _vacPrev = rows.map(r => Object.assign({ dup: have.has(normKey(r.vaccine) + '|' + r.date + '|' + normKey(r.dose)) }, r));
+            msg.textContent = `${rows.length} registro(s) encontrado(s). Confira e ajuste o que for preciso; os que já existem vêm desmarcados.`;
+            box.innerHTML = `<div class="space-y-2 max-h-80 overflow-y-auto pr-1">${_vacPrev.map((r, i) => `
+                <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/50 space-y-2">
+                    <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300"><input type="checkbox" id="vp-ck-${i}" ${r.dup ? '' : 'checked'}> Importar ${r.dup ? '<span class="text-amber-600 font-semibold">(já cadastrada)</span>' : ''}</label>
+                    <input type="text" id="vp-name-${i}" value="${esc(r.vaccine)}" class="${INP}">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="vp-dose-${i}" value="${esc(r.dose)}" placeholder="Dose" class="${INP}">
+                        <input type="date" id="vp-date-${i}" value="${esc(r.date)}" class="${INP}">
+                        <input type="text" id="vp-lot-${i}" value="${esc(r.lot)}" placeholder="Lote" class="${INP}">
+                        <input type="text" id="vp-place-${i}" value="${esc(r.place)}" placeholder="Local" class="${INP}">
+                    </div>
+                </div>`).join('')}</div>
+                <button type="button" onclick="vacImportCommit()" class="mt-3 w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Importar selecionadas</button>`;
+        }
+        function vacImportCommit() {
+            let n = 0;
+            _vacPrev.forEach((_, i) => {
+                if (!document.getElementById('vp-ck-' + i).checked) return;
+                const v = id => document.getElementById(id).value.trim();
+                const vaccine = v('vp-name-' + i), date = v('vp-date-' + i);
+                if (!vaccine || !date) return;
+                vacData().push({ id: uid(), source: 'meusus', vaccine, dose: v('vp-dose-' + i), date, lot: v('vp-lot-' + i), place: v('vp-place-' + i), next: '', obs: '', attachments: [] });
+                n++;
+            });
+            if (!n) { showToast('Nenhum registro selecionado.', 'warning'); return; }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast(`${n} vacina(s) importada(s)!`, 'success');
+        }
+
+        // =====================================================
+        // DOCUMENTOS PESSOAIS (PDF, PNG, JPG, JPEG) — pastas, renomear, baixar e senha opcional por pasta
+        // =====================================================
+        let docFolderId = null, docUnlocked = new Set();
+        const DOC_ACCEPT = '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg';
+        function docsData() {
+            if (!appData.docsPessoais || typeof appData.docsPessoais !== 'object') appData.docsPessoais = { folders: [], files: [] };
+            if (!Array.isArray(appData.docsPessoais.folders)) appData.docsPessoais.folders = [];
+            if (!Array.isArray(appData.docsPessoais.files)) appData.docsPessoais.files = [];
+            return appData.docsPessoais;
+        }
+        function docAllowed(f) {
+            const n = (f.name || '').toLowerCase(), t = (f.type || '').toLowerCase();
+            return /\.(pdf|png|jpe?g)$/.test(n) || ['application/pdf', 'image/png', 'image/jpeg'].includes(t);
+        }
+        function docFolder(id) { return docsData().folders.find(f => f.id === id); }
+        function docIsOpen(f) { return !f.lock || docUnlocked.has(f.id); }
+        // Hash da senha (PBKDF2) — usado só para liberar o acesso à pasta dentro do sistema
+        async function docHash(pw, saltB64) {
+            const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+            const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: nUnB64(saltB64), iterations: 150000, hash: 'SHA-256' }, base, 256);
+            return nB64(bits);
+        }
+        async function docMakeLock(pw) {
+            const salt = nB64(crypto.getRandomValues(new Uint8Array(16)));
+            return { salt, hash: await docHash(pw, salt) };
+        }
+        async function docCheckPw(f, pw) { return f.lock && (await docHash(pw, f.lock.salt)) === f.lock.hash; }
+
+        function docOpenFolder(id) { docFolderId = id; renderCurrentTabContent(); }
+        function docCloseFolder() { docFolderId = null; renderCurrentTabContent(); }
+
+        function docFileRow(f, ctx) {
+            const isImg = (f.type || '').startsWith('image/');
+            return `<div class="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-3 min-w-0">
+                    ${isImg ? `<img data-att="${f.id}" alt="" onclick="openStoredFile('${f.id}')" class="w-12 h-12 rounded-xl object-cover bg-slate-200 dark:bg-slate-600 cursor-pointer flex-shrink-0">` : `<i class="fa-solid ${fileIcon(f)} text-2xl w-12 text-center flex-shrink-0"></i>`}
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold text-slate-800 dark:text-white truncate">${esc(f.name)}</p>
+                        <p class="text-xs text-slate-400">${fmtSize(f.size)} · ${fmtBR(f.date)}</p>
+                    </div>
+                </div>
+                <div class="flex gap-1 flex-shrink-0 text-xs">
+                    <button onclick="openStoredFile('${f.id}')" class="px-3 py-1.5 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 rounded-lg font-bold">Abrir</button>
+                    <button onclick="docRenameFile('${f.id}')" class="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-600 rounded-lg" title="Renomear"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="downloadMeta('${f.id}')" class="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-600 rounded-lg" title="Baixar"><i class="fa-solid fa-download"></i></button>
+                    <button onclick="docDeleteFile('${f.id}')" class="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-600 rounded-lg hover:text-rose-600" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </div>`;
+        }
+        function docUploadArea(label) {
+            return `<div ondragover="event.preventDefault(); this.classList.add('ring-2','ring-teal-400')" ondragleave="this.classList.remove('ring-2','ring-teal-400')" ondrop="event.preventDefault(); this.classList.remove('ring-2','ring-teal-400'); docUpload(event.dataTransfer.files)"
+                class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-600 p-4 text-center text-xs text-slate-400 mb-4">
+                <i class="fa-solid fa-cloud-arrow-up mr-1"></i>${label} — arraste PDF, PNG, JPG ou JPEG para cá ou
+                <label class="text-teal-600 dark:text-teal-400 font-bold underline cursor-pointer">escolha os arquivos<input type="file" multiple accept="${DOC_ACCEPT}" class="hidden" onchange="docUpload(this.files); this.value=''"></label>
+            </div>`;
+        }
+
+        function renderDocs(container) {
+            const D = docsData();
+            let folder = docFolderId ? docFolder(docFolderId) : null;
+            if (docFolderId && !folder) { docFolderId = null; folder = null; }
+
+            const banner = `<div class="bg-gradient-to-r from-slate-800 via-teal-900 to-teal-800 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    ${folder ? `<button onclick="docCloseFolder()" class="text-teal-200 hover:text-white text-xs font-semibold mb-2 flex items-center space-x-1"><i class="fa-solid fa-arrow-left"></i><span>Todas as pastas</span></button>` : ''}
+                    <h2 class="text-2xl sm:text-3xl font-bold"><i class="fa-solid fa-id-card mr-2"></i> Documentos Pessoais</h2>
+                    <p class="text-teal-100 mt-1 text-sm">${folder ? `Pasta: <b>${esc(folder.name)}</b>${folder.lock ? ' <i class="fa-solid fa-lock ml-1"></i>' : ''}` : 'RG, CPF, certidões, contratos... Guarde em PDF, PNG, JPG ou JPEG e organize em pastas.'}</p>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    ${folder ? '' : `<button onclick="docFolderModal()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm"><i class="fa-solid fa-folder-plus"></i><span>Nova Pasta</span></button>`}
+                </div>
+            </div>`;
+
+            let body = '';
+            if (folder && !docIsOpen(folder)) {
+                body = `<div class="max-w-md mx-auto bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-sm border border-slate-100 dark:border-slate-700 text-center">
+                    <i class="fa-solid fa-lock text-4xl text-amber-500 mb-3"></i>
+                    <h3 class="font-bold text-slate-800 dark:text-white">Pasta protegida por senha</h3>
+                    <form onsubmit="docUnlock(event, '${folder.id}')" class="mt-4 space-y-3">
+                        <input type="password" id="doc-unlock-pw" autocomplete="off" required placeholder="Senha da pasta" class="${INP}">
+                        <button type="submit" class="w-full bg-teal-600 text-white py-2.5 rounded-xl font-bold text-sm shadow">Abrir pasta</button>
+                    </form>
+                    <p class="text-[11px] text-slate-400 mt-3">Não há como recuperar a senha. Se esquecer, só é possível excluir a pasta.</p>
+                </div>`;
+            } else if (folder) {
+                const files = [...folder.files].reverse();
+                body = `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-folder-open text-amber-500"></i><span>${esc(folder.name)}</span><span class="text-xs font-normal text-slate-400">(${files.length} arquivo${files.length === 1 ? '' : 's'})</span></h3>
+                    ${docUploadArea('Nesta pasta')}
+                    ${files.length ? `<div class="space-y-2">${files.map(f => docFileRow(f)).join('')}</div>` : '<p class="text-center text-sm text-slate-400 py-6">Pasta vazia.</p>'}
+                </div>`;
+            } else {
+                const rootFiles = [...D.files].reverse();
+                body = `
+                    ${D.folders.length ? `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${D.folders.map(f => `
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-all">
+                            <button onclick="docOpenFolder('${f.id}')" class="w-full text-left flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950 text-amber-500 flex items-center justify-center text-2xl flex-shrink-0"><i class="fa-solid ${f.lock ? 'fa-folder-closed' : 'fa-folder'}"></i></div>
+                                <div class="min-w-0">
+                                    <h4 class="font-bold text-slate-800 dark:text-white truncate">${esc(f.name)} ${f.lock ? '<i class="fa-solid fa-lock text-amber-500 text-xs ml-1"></i>' : ''}</h4>
+                                    <p class="text-xs text-slate-500">${f.files.length} arquivo${f.files.length === 1 ? '' : 's'}</p>
+                                </div>
+                            </button>
+                            <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-between text-xs">
+                                <button onclick="docFolderModal('${f.id}')" class="text-slate-500 hover:text-teal-600 font-semibold"><i class="fa-solid fa-pen mr-1"></i> Renomear / senha</button>
+                                <button onclick="docDeleteFolder('${f.id}')" class="text-slate-500 hover:text-rose-600 font-semibold"><i class="fa-solid fa-trash mr-1"></i> Excluir</button>
+                            </div>
+                        </div>`).join('')}
+                    </div>` : ''}
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-file text-teal-500"></i><span>Documentos sem pasta</span><span class="text-xs font-normal text-slate-400">(${rootFiles.length})</span></h3>
+                        ${docUploadArea('Sem pasta')}
+                        ${rootFiles.length ? `<div class="space-y-2">${rootFiles.map(f => docFileRow(f)).join('')}</div>` : '<p class="text-center text-sm text-slate-400 py-4">Nenhum documento solto. Crie uma pasta ou anexe arquivos aqui.</p>'}
+                    </div>`;
+            }
+            container.innerHTML = `<div class="space-y-6 max-w-7xl mx-auto">${banner}${body}</div>`;
+            hydrateThumbs();
+        }
+
+        async function docUpload(files) {
+            const D = docsData();
+            const target = docFolderId ? docFolder(docFolderId) : null;
+            if (docFolderId && (!target || !docIsOpen(target))) return;
+            const all = Array.from(files || []);
+            const ok = all.filter(docAllowed), bad = all.length - ok.length;
+            if (bad) showToast(`${bad} arquivo(s) ignorado(s): só PDF, PNG, JPG e JPEG.`, 'warning');
+            if (!ok.length) return;
+            const metas = await storeFiles(ok);
+            if (!metas.length) return;
+            if (target) target.files = target.files.concat(metas); else D.files = D.files.concat(metas);
+            saveAppData(); renderCurrentTabContent();
+            showToast(`${metas.length} documento(s) adicionado(s)!`, 'success');
+        }
+        function docFindFile(id) {
+            const D = docsData();
+            let hit = D.files.find(f => f.id === id);
+            if (hit) return { file: hit, list: D.files, owner: null };
+            for (const fo of D.folders) { hit = fo.files.find(f => f.id === id); if (hit) return { file: hit, list: fo.files, owner: fo }; }
+            return null;
+        }
+        function docRenameFile(id) {
+            const r = docFindFile(id); if (!r) return;
+            const m = r.file.name.match(/^(.*?)(\.[^.]+)?$/);
+            showModal('Renomear documento', `
+                <form onsubmit="docSaveRename(event, '${id}')" class="space-y-4">
+                    <div><label class="${LBL}">Novo nome</label>
+                    <div class="flex items-center gap-2"><input type="text" id="doc-newname" value="${esc(m[1])}" required maxlength="100" class="${INP}"><span class="text-sm text-slate-400">${esc(m[2] || '')}</span></div></div>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar nome</button>
+                </form>`);
+            setTimeout(() => { const el = document.getElementById('doc-newname'); if (el) { el.focus(); el.select(); } }, 50);
+        }
+        function docSaveRename(e, id) {
+            e.preventDefault();
+            const r = docFindFile(id); if (!r) return;
+            const base = document.getElementById('doc-newname').value.trim().replace(/[\\/:*?"<>|]/g, '-');
+            if (!base) return;
+            const ext = (r.file.name.match(/(\.[^.]+)$/) || ['', ''])[1];
+            r.file.name = base + ext;
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Nome alterado!', 'success');
+        }
+        function docDeleteFile(id) {
+            const r = docFindFile(id); if (!r || !confirm(`Excluir "${r.file.name}"?`)) return;
+            deleteStoredFile(id);
+            const i = r.list.indexOf(r.file); if (i >= 0) r.list.splice(i, 1);
+            saveAppData(); renderCurrentTabContent();
+        }
+
+        // --- pastas (com senha opcional) ---
+        function docFolderModal(id = null) {
+            const f = id ? docFolder(id) : null;
+            const locked = !!(f && f.lock);
+            showModal(id ? 'Renomear pasta / senha' : 'Nova pasta', `
+                <form onsubmit="docSaveFolder(event, '${id || ''}')" class="space-y-4">
+                    <div><label class="${LBL}">Nome da pasta</label><input type="text" id="df-name" value="${esc(f ? f.name : '')}" placeholder="Ex.: Identidade, Veículo, Saúde" required maxlength="60" class="${INP}"></div>
+                    ${locked ? `<div><label class="${LBL}">Senha atual <span class="normal-case font-normal text-slate-400">(só se for mudar a senha)</span></label><input type="password" id="df-cur" autocomplete="off" class="${INP}"></div>` : ''}
+                    <div><label class="${LBL}">Senha da pasta</label>
+                        <select id="df-mode" onchange="document.getElementById('df-pwbox').classList.toggle('hidden', this.value !== 'set')" class="${INP}">
+                            ${locked ? `<option value="keep" selected>Manter a senha atual</option><option value="set">Trocar a senha</option><option value="remove">Remover a senha</option>`
+                                     : `<option value="none" selected>Sem senha</option><option value="set">Proteger com senha</option>`}
+                        </select></div>
+                    <div id="df-pwbox" class="hidden space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="password" id="df-pw" autocomplete="new-password" placeholder="Senha (mín. 4)" class="${INP}">
+                            <input type="password" id="df-pw2" autocomplete="new-password" placeholder="Repetir senha" class="${INP}">
+                        </div>
+                        <p class="text-[11px] text-amber-600">A senha bloqueia o acesso à pasta dentro do sistema. Os arquivos em si não são criptografados. Não há como recuperar uma senha esquecida.</p>
+                    </div>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar pasta</button>
+                </form>`);
+            setTimeout(() => { const el = document.getElementById('df-name'); if (el) el.focus(); }, 50);
+        }
+        async function docSaveFolder(e, id) {
+            e.preventDefault();
+            const name = document.getElementById('df-name').value.trim(); if (!name) return;
+            const mode = document.getElementById('df-mode').value;
+            const f = id ? docFolder(id) : null;
+            let lock = f ? f.lock : null;
+            if (mode === 'set' || mode === 'remove') {
+                if (!nCryptoOk()) return;
+                if (f && f.lock) {
+                    const cur = document.getElementById('df-cur').value;
+                    if (!cur || !(await docCheckPw(f, cur))) { showToast('Senha atual incorreta.', 'error'); return; }
+                }
+            }
+            if (mode === 'set') {
+                const p1 = document.getElementById('df-pw').value, p2 = document.getElementById('df-pw2').value;
+                if (p1.length < 4) { showToast('A senha precisa ter ao menos 4 caracteres.', 'warning'); return; }
+                if (p1 !== p2) { showToast('As senhas não conferem.', 'warning'); return; }
+                lock = await docMakeLock(p1);
+            } else if (mode === 'remove') lock = null;
+            if (f) { f.name = name; f.lock = lock; if (!lock) docUnlocked.delete(f.id); else docUnlocked.add(f.id); }
+            else { const nf = { id: uid(), name, lock, files: [] }; docsData().folders.push(nf); if (lock) docUnlocked.add(nf.id); }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Pasta salva!', 'success');
+        }
+        async function docUnlock(e, id) {
+            e.preventDefault();
+            if (!nCryptoOk()) return;
+            const f = docFolder(id); if (!f) return;
+            const pw = document.getElementById('doc-unlock-pw').value;
+            if (await docCheckPw(f, pw)) { docUnlocked.add(id); renderCurrentTabContent(); }
+            else { showToast('Senha incorreta.', 'error'); document.getElementById('doc-unlock-pw').value = ''; }
+        }
+        function docDeleteFolder(id) {
+            const f = docFolder(id); if (!f) return;
+            const msg = f.files.length ? `Excluir a pasta "${f.name}" e os ${f.files.length} arquivo(s) dentro dela? Essa ação não pode ser desfeita.` : `Excluir a pasta "${f.name}"?`;
+            if (!confirm(msg)) return;
+            f.files.forEach(x => deleteStoredFile(x.id));
+            docsData().folders = docsData().folders.filter(x => x.id !== id);
+            docUnlocked.delete(id);
+            saveAppData(); renderCurrentTabContent(); showToast('Pasta excluída.', 'info');
         }
 
         // --- SAÚDE: ÁGUA POR DIA ---
@@ -1752,6 +2414,7 @@
         }
 
         function renderHobbies(container) {
+            if (recOpen) { renderReceitas(container); return; }
             const cats = hobbyCategories();
             if (hobbyCat && !cats.some(c => normKey(c) === normKey(hobbyCat))) hobbyCat = '';
             let filteredHobbies = appData.hobbies;
@@ -1776,10 +2439,13 @@
                                     ${cats.map(c => `<option value="${esc(c)}" ${normKey(c) === normKey(hobbyCat) ? 'selected' : ''}>${esc(c)}</option>`).join('')}
                                 </select>
                             </div>
-                            <button onclick="openHobbyModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button onclick="openRec()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-utensils"></i><span>Receitas</span></button>
+                                <button onclick="openHobbyModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
                                 <i class="fa-solid fa-plus"></i>
                                 <span>Inserir Hobby / Projeto</span>
                             </button>
+                            </div>
                         </div>
 
                         ${filteredHobbies.length === 0 ? `
@@ -1823,6 +2489,281 @@
                 </div>
             `;
             hydrateThumbs();
+        }
+
+        // =====================================================
+        // HOBBIES: RECEITAS (manual ou importadas) — ver, baixar, editar e excluir
+        // =====================================================
+        const REC_UNITS = ['g', 'kg', 'mg', 'ml', 'l', 'xícara', '1/2 xícara', 'colher de sopa', 'colher de chá', 'pitada', 'un', 'fatia', 'dente', 'maço', 'lata', 'caixa', 'pacote', 'a gosto'];
+        const REC_TYPES = ['Doce', 'Salgado', 'Bebida', 'Massa', 'Carne', 'Sobremesa', 'Salada', 'Sopa', 'Lanche'];
+        function recData() { if (!Array.isArray(appData.receitas)) appData.receitas = []; return appData.receitas; }
+        function openRec() { recOpen = true; recViewId = null; renderCurrentTabContent(); }
+        function closeRec() { recOpen = false; recViewId = null; renderCurrentTabContent(); }
+        function recView(id) { recViewId = id; renderCurrentTabContent(); window.scrollTo(0, 0); }
+        function recBack() { recViewId = null; renderCurrentTabContent(); }
+        function setRecQuery(v) { recQuery = v; renderCurrentTabContent(); }
+        function recIngLine(i) { return [i.qty, i.unit, i.name].map(x => String(x || '').trim()).filter(Boolean).join(' '); }
+
+        function renderReceitas(container) {
+            const r = recViewId ? recData().find(x => x.id === recViewId) : null;
+            if (recViewId && !r) recViewId = null;
+            if (r) { renderRecView(container, r); return; }
+            const q = normKey(recQuery);
+            const list = recData().filter(x => !q || normKey(x.name).includes(q) || normKey(x.type).includes(q) || (x.ingredients || []).some(i => normKey(i.name).includes(q)));
+            container.innerHTML = `
+                <div class="space-y-6 max-w-7xl mx-auto">
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <div class="flex flex-wrap justify-between items-center gap-3">
+                            <div class="flex items-center gap-3">
+                                <button onclick="closeRec()" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> Hobbies</button>
+                                <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-utensils text-amber-500"></i><span>Receitas</span></h2>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <input type="text" placeholder="Buscar receita, tipo ou ingrediente..." value="${esc(recQuery)}" onchange="setRecQuery(this.value)" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs w-60">
+                                <button onclick="openRecImport()" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-file-import"></i><span>Importar</span></button>
+                                <button onclick="openRecModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Nova receita</span></button>
+                            </div>
+                        </div>
+                    </div>
+                    ${list.length === 0 ? `<div class="bg-white dark:bg-slate-800 rounded-3xl p-10 shadow-sm border border-slate-100 dark:border-slate-700 text-center text-slate-400">
+                            <i class="fa-solid fa-book-open text-4xl mb-2"></i>
+                            <p class="text-sm">${recData().length ? 'Nenhuma receita encontrada para esta busca.' : 'Nenhuma receita ainda. Use "Nova receita" ou "Importar".'}</p>
+                        </div>` : `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                        ${list.map(x => {
+                            const img = (x.attachments || []).find(a => (a.type || '').startsWith('image/'));
+                            return `<div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden flex flex-col">
+                                <button onclick="recView('${x.id}')" class="text-left flex-1">
+                                    ${img ? `<img data-att="${img.id}" alt="" class="w-full h-40 object-cover bg-slate-200 dark:bg-slate-600">` : `<div class="w-full h-40 bg-amber-50 dark:bg-amber-950/30 text-amber-300 flex items-center justify-center text-5xl"><i class="fa-solid fa-utensils"></i></div>`}
+                                    <div class="p-5">
+                                        <h4 class="font-bold text-slate-800 dark:text-white text-base">${esc(x.name) || 'Receita sem nome'}</h4>
+                                        <div class="flex flex-wrap gap-1.5 mt-2 text-[11px] font-semibold">
+                                            ${x.type ? `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700">${esc(x.type)}</span>` : ''}
+                                            ${x.level ? `<span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">${esc(x.level)}</span>` : ''}
+                                            ${Number(x.servings) > 0 ? `<span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="fa-solid fa-user-group mr-1"></i>${esc(x.servings)}</span>` : ''}
+                                        </div>
+                                        ${Number(x.rating) > 0 ? `<div class="text-xs mt-2 flex gap-0.5">${starsHtml(x.rating)}</div>` : ''}
+                                    </div>
+                                </button>
+                                <div class="px-5 pb-4 pt-0 flex justify-end gap-1 text-xs">
+                                    <button onclick="recDownload('${x.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg" title="Baixar"><i class="fa-solid fa-download"></i></button>
+                                    <button onclick="openRecModal('${x.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                                    <button onclick="deleteRec('${x.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg hover:text-rose-600" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>`}
+                </div>`;
+            hydrateThumbs();
+        }
+
+        function renderRecView(container, r) {
+            const imgs = (r.attachments || []).filter(a => (a.type || '').startsWith('image/'));
+            const others = (r.attachments || []).filter(a => !(a.type || '').startsWith('image/'));
+            const ings = (r.ingredients || []).filter(i => recIngLine(i));
+            container.innerHTML = `
+                <div class="space-y-6 max-w-4xl mx-auto">
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <div class="flex flex-wrap justify-between items-start gap-3 mb-4">
+                            <button onclick="recBack()" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> Receitas</button>
+                            <div class="flex gap-2 text-xs">
+                                <button onclick="recDownload('${r.id}')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold"><i class="fa-solid fa-download mr-1"></i>Baixar</button>
+                                <button onclick="openRecModal('${r.id}')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
+                                <button onclick="deleteRec('${r.id}')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold hover:text-rose-600"><i class="fa-solid fa-trash mr-1"></i>Excluir</button>
+                            </div>
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-white">${esc(r.name) || 'Receita sem nome'}</h2>
+                        <div class="flex flex-wrap items-center gap-2 mt-3 text-xs font-semibold">
+                            ${r.type ? `<span class="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700">${esc(r.type)}</span>` : ''}
+                            ${r.level ? `<span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Nível: ${esc(r.level)}</span>` : ''}
+                            ${Number(r.servings) > 0 ? `<span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="fa-solid fa-user-group mr-1"></i>Serve ${esc(r.servings)} pessoa${Number(r.servings) === 1 ? '' : 's'}</span>` : ''}
+                            ${Number(r.rating) > 0 ? `<span class="flex gap-0.5 text-sm">${starsHtml(r.rating)}</span>` : ''}
+                        </div>
+                        ${imgs.length ? `<div class="flex flex-wrap gap-3 mt-5">${imgs.map(a => `<img data-att="${a.id}" alt="${esc(a.name)}" onclick="openStoredFile('${a.id}')" class="h-48 max-w-full rounded-2xl object-cover bg-slate-200 dark:bg-slate-600 cursor-pointer">`).join('')}</div>` : ''}
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-8 mt-6">
+                            <div class="md:col-span-2">
+                                <h3 class="font-bold text-slate-800 dark:text-white mb-3"><i class="fa-solid fa-basket-shopping text-teal-500 mr-2"></i>Ingredientes</h3>
+                                ${ings.length ? `<ul class="space-y-1.5 text-sm text-slate-700 dark:text-slate-200">${ings.map(i => `<li class="flex gap-2"><i class="fa-solid fa-circle text-[5px] text-teal-500 mt-2"></i><span>${i.qty || i.unit ? `<b>${esc([i.qty, i.unit].filter(Boolean).join(' '))}</b> ` : ''}${esc(i.name)}</span></li>`).join('')}</ul>` : '<p class="text-sm text-slate-400">Não informados.</p>'}
+                            </div>
+                            <div class="md:col-span-3">
+                                <h3 class="font-bold text-slate-800 dark:text-white mb-3"><i class="fa-solid fa-kitchen-set text-amber-500 mr-2"></i>Modo de preparo</h3>
+                                ${r.steps ? `<p class="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">${esc(r.steps)}</p>` : '<p class="text-sm text-slate-400">Não informado.</p>'}
+                            </div>
+                        </div>
+                        ${r.obs ? `<div class="mt-6 p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/50"><p class="text-xs font-bold text-slate-500 uppercase mb-1">Observações</p><p class="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">${esc(r.obs)}</p></div>` : ''}
+                        ${others.length ? `<div class="flex flex-wrap gap-2 mt-5">${others.map(a => `<button onclick="openStoredFile('${a.id}')" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-semibold"><i class="fa-solid ${fileIcon(a)} mr-1"></i>${esc(a.name)}</button>`).join('')}</div>` : ''}
+                    </div>
+                </div>`;
+            hydrateThumbs();
+        }
+
+        // --- formulário (manual, edição ou rascunho vindo da importação) ---
+        function recIngRow(i) {
+            i = i || { qty: '', unit: '', name: '' };
+            return `<div class="rec-ing grid grid-cols-12 gap-2 items-center">
+                <input type="text" class="rec-qty col-span-2 ${INP}" value="${esc(i.qty)}" placeholder="Qtd" inputmode="decimal">
+                <input type="text" class="rec-unit col-span-4 ${INP}" list="rec-units" value="${esc(i.unit)}" placeholder="Unidade">
+                <input type="text" class="rec-iname col-span-5 ${INP}" value="${esc(i.name)}" placeholder="Ingrediente">
+                <button type="button" onclick="this.closest('.rec-ing').remove()" class="col-span-1 text-slate-400 hover:text-rose-600" title="Remover"><i class="fa-solid fa-xmark"></i></button>
+            </div>`;
+        }
+        function recAddIng() { document.getElementById('rec-ings').insertAdjacentHTML('beforeend', recIngRow()); }
+        function setRecStar(i) {
+            const inp = document.getElementById('rec-rating');
+            const next = Number(inp.value) === i ? 0 : i;
+            inp.value = next;
+            document.getElementById('rec-stars').innerHTML = starPickerHtml(next, 'setRecStar');
+        }
+        function openRecModal(id = null, draft = null) {
+            let r = { name: '', type: '', level: '', servings: '', ingredients: [], steps: '', rating: 0, obs: '', attachments: [] };
+            if (id) r = recData().find(x => x.id === id) || r;
+            else if (draft) r = Object.assign(r, draft);
+            draftInit(r.attachments);
+            const types = [...new Set([...REC_TYPES, ...recData().map(x => String(x.type || '').trim()).filter(Boolean)])];
+            const ings = (r.ingredients && r.ingredients.length) ? r.ingredients : [{}, {}, {}];
+            showModal(id ? 'Editar receita' : 'Nova receita', `
+                <form onsubmit="saveRec(event, '${id || ''}')" class="space-y-4">
+                    <p class="text-[11px] text-slate-400">Nenhum campo é obrigatório. Preencha o que tiver.</p>
+                    <div><label class="${LBL}">Receita</label><input type="text" id="rec-name" value="${esc(r.name)}" placeholder="Ex.: Bolo de cenoura" class="${INP}"></div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div><label class="${LBL}">Tipo</label><input type="text" id="rec-type" list="rec-types" value="${esc(r.type)}" class="${INP}"><datalist id="rec-types">${types.map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist></div>
+                        <div><label class="${LBL}">Nível</label><select id="rec-level" class="${INP}"><option value=""></option>${['Fácil', 'Médio', 'Difícil'].map(l => `<option ${r.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+                        <div><label class="${LBL}">Serve (pessoas)</label><input type="number" id="rec-serves" min="1" step="1" value="${esc(r.servings)}" class="${INP}"></div>
+                    </div>
+                    <div>
+                        <label class="${LBL}">Ingredientes</label>
+                        <datalist id="rec-units">${REC_UNITS.map(u => `<option value="${esc(u)}"></option>`).join('')}</datalist>
+                        <div id="rec-ings" class="space-y-2">${ings.map(recIngRow).join('')}</div>
+                        <button type="button" onclick="recAddIng()" class="mt-2 text-xs font-bold text-teal-600 dark:text-teal-400"><i class="fa-solid fa-plus mr-1"></i>Adicionar ingrediente</button>
+                        <p class="text-[10px] text-slate-400 mt-1">Quantidade, unidade (escolha da lista ou digite a sua) e o ingrediente.</p>
+                    </div>
+                    <div><label class="${LBL}">Modo de preparo</label><textarea id="rec-steps" rows="6" placeholder="Escreva como a receita é feita" class="${INP}">${esc(r.steps || '')}</textarea></div>
+                    <div>
+                        <label class="${LBL}">Nota</label>
+                        <div id="rec-stars" class="flex items-center text-2xl">${starPickerHtml(r.rating, 'setRecStar')}</div>
+                        <input type="hidden" id="rec-rating" value="${Number(r.rating) || 0}">
+                        <p class="text-[10px] text-slate-400 mt-1">Clique de novo na mesma estrela para limpar.</p>
+                    </div>
+                    <div><label class="${LBL}">Observação</label><textarea id="rec-obs" rows="2" class="${INP}">${esc(r.obs || '')}</textarea></div>
+                    <div><label class="${LBL}">Foto</label>
+                        <div id="draft-att-list">${draftListHtml()}</div>
+                        <input type="file" id="rec-files" multiple accept="image/*" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs"></div>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar receita</button>
+                </form>`);
+        }
+        async function saveRec(e, id) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type=submit]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+            const v = k => document.getElementById(k).value.trim();
+            const ingredients = Array.from(document.querySelectorAll('#rec-ings .rec-ing')).map(row => ({
+                qty: row.querySelector('.rec-qty').value.trim(), unit: row.querySelector('.rec-unit').value.trim(), name: row.querySelector('.rec-iname').value.trim()
+            })).filter(i => i.qty || i.unit || i.name);
+            const data = { name: v('rec-name'), type: v('rec-type'), level: document.getElementById('rec-level').value, servings: v('rec-serves'), ingredients, steps: document.getElementById('rec-steps').value.trim(), rating: Number(v('rec-rating')) || 0, obs: v('rec-obs') };
+            data.attachments = await draftCommit('rec-files');
+            if (id) { const r = recData().find(x => x.id === id); if (r) Object.assign(r, data); }
+            else recData().push(Object.assign({ id: uid() }, data));
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Receita salva!', 'success');
+        }
+        async function deleteRec(id) {
+            const r = recData().find(x => x.id === id); if (!r) return;
+            if (!confirm(`Excluir a receita "${r.name || 'sem nome'}"?`)) return;
+            for (const a of (r.attachments || [])) await deleteStoredFile(a.id);
+            appData.receitas = recData().filter(x => x.id !== id);
+            recViewId = null;
+            saveAppData(); renderCurrentTabContent(); showToast('Receita excluída.', 'info');
+        }
+
+        // --- baixar (arquivo de texto) ---
+        function recToText(r) {
+            const L = [];
+            L.push((r.name || 'Receita sem nome').toUpperCase());
+            if (r.type) L.push('Tipo: ' + r.type);
+            if (r.level) L.push('Nível: ' + r.level);
+            if (Number(r.servings) > 0) L.push('Serve: ' + r.servings + ' pessoa' + (Number(r.servings) === 1 ? '' : 's'));
+            if (Number(r.rating) > 0) L.push('Nota: ' + '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating));
+            const ings = (r.ingredients || []).map(recIngLine).filter(Boolean);
+            if (ings.length) { L.push('', 'INGREDIENTES'); ings.forEach(x => L.push('- ' + x)); }
+            if (r.steps) L.push('', 'MODO DE PREPARO', r.steps);
+            if (r.obs) L.push('', 'OBSERVAÇÕES', r.obs);
+            return L.join('\n') + '\n';
+        }
+        function recDownload(id) {
+            const r = recData().find(x => x.id === id); if (!r) return;
+            const blob = new Blob(['\ufeff' + recToText(r)], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = url; a.download = (r.name || 'receita').replace(/[\\/:*?"<>|]/g, '-') + '.txt';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
+
+        // --- importar (texto colado, TXT/MD ou PDF) — abre o formulário preenchido para você revisar ---
+        const REC_UNIT_MAP = { g: 'g', gr: 'g', grama: 'g', gramas: 'g', kg: 'kg', quilo: 'kg', quilos: 'kg', mg: 'mg', ml: 'ml', l: 'l', litro: 'l', litros: 'l', xic: 'xícara', xicara: 'xícara', xicaras: 'xícara', 'xícara': 'xícara', 'xícaras': 'xícara', un: 'un', und: 'un', unidade: 'un', unidades: 'un', pitada: 'pitada', pitadas: 'pitada', dente: 'dente', dentes: 'dente', fatia: 'fatia', fatias: 'fatia', lata: 'lata', latas: 'lata', caixa: 'caixa', caixas: 'caixa', pacote: 'pacote', pacotes: 'pacote', 'maço': 'maço' };
+        function recParseIng(line) {
+            const t = line.replace(/^[-–•*·]\s*/, '').trim();
+            let m = t.match(/^(\d+(?:[.,]\d+)?(?:\s+\d\/\d)?|\d+\/\d+)\s*(colheres?\s+de\s+sopa|colheres?\s+de\s+ch[áa]|colher\s+(?:de\s+)?(?:sopa|ch[áa])|c\.?\s?sopa|c\.?\s?ch[áa])\b\s*(?:de\s+)?(.*)$/i);
+            if (m) { const u = /ch[áa]/i.test(m[2]) ? 'colher de chá' : 'colher de sopa'; return { qty: m[1], unit: u, name: m[3].trim() }; }
+            m = t.match(/^(\d+(?:[.,]\d+)?(?:\s+\d\/\d)?|\d+\/\d+)\s*([A-Za-zÀ-ú]+)?\s*(?:de\s+)?(.*)$/);
+            if (m) {
+                const key = (m[2] || '').toLowerCase();
+                if (key && REC_UNIT_MAP[key]) return { qty: m[1], unit: REC_UNIT_MAP[key], name: m[3].trim() };
+                return { qty: m[1], unit: '', name: ((m[2] || '') + ' ' + m[3]).trim() };
+            }
+            return { qty: '', unit: '', name: t };
+        }
+        function recParseText(text) {
+            const lines = String(text).replace(/\u00a0/g, ' ').split(/\r?\n/).map(l => l.trim());
+            const hIng = /^(ingredientes?)\s*:?$/i, hPrep = /^(modo de preparo|modo de fazer|preparo|como fazer|instru[çc][õo]es)\s*:?$/i, hObs = /^(observa[çc][õo]es?|obs\.?|dicas?)\s*:?$/i;
+            const r = { name: '', type: '', level: '', servings: '', ingredients: [], steps: '', obs: '' };
+            let sec = '', steps = [], obs = [];
+            lines.forEach(line => {
+                if (!line) { if (sec === 'steps' && steps.length && steps[steps.length - 1] !== '') steps.push(''); return; }
+                const hdr = line.replace(/^#+\s*/, '');
+                if (hIng.test(hdr)) { sec = 'ing'; return; }
+                if (hPrep.test(hdr)) { sec = 'steps'; return; }
+                if (hObs.test(hdr)) { sec = 'obs'; return; }
+                let m;
+                if ((m = line.match(/^receita\s*:\s*(.+)/i))) { r.name = m[1]; return; }
+                if ((m = line.match(/^(?:tipo|categoria)\s*:\s*(.+)/i))) { r.type = m[1]; return; }
+                if ((m = line.match(/^(?:n[ií]vel|dificuldade)\s*:\s*(.+)/i))) { r.level = /f[áa]cil/i.test(m[1]) ? 'Fácil' : /m[ée]dio/i.test(m[1]) ? 'Médio' : /dif[ií]cil/i.test(m[1]) ? 'Difícil' : ''; return; }
+                if ((m = line.match(/^(?:serve|rende|por[çc][õo]es|rendimento)\s*:?\s*(\d+)/i))) { r.servings = m[1]; return; }
+                if (!r.name && !sec) { r.name = line.replace(/^#+\s*/, ''); return; }
+                if (sec === 'ing') r.ingredients.push(recParseIng(line));
+                else if (sec === 'obs') obs.push(line);
+                else steps.push(line);
+            });
+            r.steps = steps.join('\n').trim(); r.obs = obs.join('\n').trim();
+            return r;
+        }
+        function openRecImport() {
+            showModal('Importar receita', `
+                <div class="space-y-4">
+                    <p class="text-xs text-slate-500">Escolha um arquivo (TXT, MD ou PDF) ou cole o texto da receita. O sistema separa título, ingredientes e modo de preparo e abre o formulário para você <b>conferir e salvar</b>. Funciona melhor quando o texto tem os títulos "Ingredientes" e "Modo de preparo".</p>
+                    <div><label class="${LBL}">Arquivo</label>
+                        <input type="file" accept=".txt,.md,.pdf,text/plain,application/pdf" onchange="recReadFile(this.files[0])" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs"></div>
+                    <div><label class="${LBL}">...ou cole o texto</label><textarea id="rec-imp-text" rows="8" class="${INP}" placeholder="Cole aqui a receita"></textarea></div>
+                    <p id="rec-imp-msg" class="text-xs text-slate-500"></p>
+                    <button type="button" onclick="recImportGo()" class="w-full bg-sky-600 text-white py-2.5 rounded-xl font-bold text-sm shadow">Revisar receita</button>
+                </div>`);
+        }
+        async function recReadFile(file) {
+            if (!file) return;
+            const msg = document.getElementById('rec-imp-msg');
+            try {
+                msg.textContent = 'Lendo o arquivo...';
+                const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+                document.getElementById('rec-imp-text').value = isPdf ? await vacPdfText(file) : await file.text();
+                msg.textContent = 'Arquivo lido. Clique em "Revisar receita".';
+            } catch (e) {
+                console.error(e);
+                msg.textContent = 'Não consegui ler este arquivo' + (e && e.message ? ' (' + e.message + ')' : '') + '. Tente colar o texto.';
+            }
+        }
+        function recImportGo() {
+            const t = document.getElementById('rec-imp-text').value;
+            if (!t.trim()) { document.getElementById('rec-imp-msg').textContent = 'Cole um texto ou escolha um arquivo primeiro.'; return; }
+            const draft = recParseText(t);
+            closeModal();
+            setTimeout(() => openRecModal(null, draft), 50);
         }
 
         function setHobbyFilter(filter) {
@@ -2762,6 +3703,10 @@
             const atts = t.attachments || [];
             showModal(id ? 'Editar Transação' : 'Inserir Transação', `
                 <form onsubmit="saveFinance(event, '${id || ''}')" class="space-y-4">
+                    ${t.cardInvoice ? `<div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-xs text-indigo-800 dark:text-indigo-200">
+                        <i class="fa-solid fa-credit-card mr-1"></i><b>Fatura do cartão de crédito.</b> Escolha abaixo o banco/conta de onde sai o pagamento e o status. Valor, data e descrição vêm das compras do cartão.
+                        <button type="button" onclick="closeModal(); cardSelectedId='${t.cardInvoice.cardId}'; cardInvMonth='${t.cardInvoice.inv}'; switchTab('cartao')" class="ml-1 font-bold underline">Ver compras desta fatura</button>
+                    </div>` : ''}
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Tipo</label>
@@ -2823,6 +3768,11 @@
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>
             `);
+            if (t.cardInvoice) {
+                ['fin-type', 'fin-desc', 'fin-amount', 'fin-category', 'fin-date'].forEach(i => { const el = document.getElementById(i); if (el) el.disabled = true; });
+                const lb = document.getElementById('fin-acc-lbl'); if (lb) lb.textContent = 'Banco/conta que paga a fatura';
+                const ac = document.getElementById('fin-acc'); if (ac) ac.required = true;
+            }
         }
 
         function updateInstallmentPreview() {
@@ -2882,7 +3832,6 @@
         }
         function editFinance(id) {
             const t = appData.financeiro.transactions.find(x => x.id === id);
-            if (t && t.cardInvoice) { cardSelectedId = t.cardInvoice.cardId; cardInvMonth = t.cardInvoice.inv; switchTab('cartao'); return; }
             openFinanceModal(id);
         }
 
@@ -3008,9 +3957,9 @@
         function editLembrete(id) { openLembreteModal(id); }
         function deleteLembrete(id) { appData.lembretes = appData.lembretes.filter(l => l.id !== id); saveAppData(); renderCurrentTabContent(); }
 
-        function starPickerHtml(n) {
+        function starPickerHtml(n, fn = 'setHobStar') {
             n = Number(n) || 0;
-            return [1, 2, 3, 4, 5].map(i => `<button type="button" onclick="setHobStar(${i})" title="${i} estrela${i > 1 ? 's' : ''}" class="p-0.5 transition-transform hover:scale-110"><i class="fa-${i <= n ? 'solid' : 'regular'} fa-star ${i <= n ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'}"></i></button>`).join('');
+            return [1, 2, 3, 4, 5].map(i => `<button type="button" onclick="${fn}(${i})" title="${i} estrela${i > 1 ? 's' : ''}" class="p-0.5 transition-transform hover:scale-110"><i class="fa-${i <= n ? 'solid' : 'regular'} fa-star ${i <= n ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'}"></i></button>`).join('');
         }
         function setHobStar(i) {
             const inp = document.getElementById('hob-rating');
@@ -4210,6 +5159,10 @@
             appData.habitacao.docFolders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
             (appData.hobbies || []).forEach(h => (h.attachments || []).forEach(a => ids.push(a.id)));
             ((appData.saude && appData.saude.exams) || []).forEach(x => (x.attachments || []).forEach(a => ids.push(a.id)));
+            vacData().forEach(v => (v.attachments || []).forEach(a => ids.push(a.id)));
+            recData().forEach(r => (r.attachments || []).forEach(a => ids.push(a.id)));
+            docsData().files.forEach(a => ids.push(a.id));
+            docsData().folders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
             return ids;
         }
         async function driveUploadAttachment(id, blob) {
@@ -4641,9 +5594,10 @@
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                         <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-wallet text-teal-500"></i><span>Lançamentos Financeiros</span><span class="text-xs font-normal text-slate-400">(${list.length}) · ${financeFilterDate ? fmtYM(financeFilterDate) : 'Todos os meses'}</span></h3>
                         ${list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhuma transação encontrada para este filtro.</p></div>` : `
+                        <div id="fin-sel-bar">${finSelBar()}</div>
                         <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                             <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                                <th class="p-3.5 rounded-l-xl">Descrição</th><th class="p-3.5">Categoria</th><th class="p-3.5">Cartão/Conta</th><th class="p-3.5">Data</th><th class="p-3.5">Valor</th><th class="p-3.5">Status</th><th class="p-3.5">Anexos</th><th class="p-3.5 text-right rounded-r-xl">Ações</th>
+                                <th class="p-3.5 rounded-l-xl w-8"><input type="checkbox" id="fin-sel-all" title="Selecionar todos os lançamentos da lista" onchange="finSelAll(this.checked)" ${list.length && list.every(t => finSel.has(t.id)) ? 'checked' : ''}></th><th class="p-3.5">Descrição</th><th class="p-3.5">Categoria</th><th class="p-3.5">Cartão/Conta</th><th class="p-3.5">Data</th><th class="p-3.5">Valor</th><th class="p-3.5">Status</th><th class="p-3.5">Anexos</th><th class="p-3.5 text-right rounded-r-xl">Ações</th>
                             </tr></thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                             ${list.map(t => {
@@ -4655,6 +5609,7 @@
                                 const vc = tDir === 'mid' ? 'text-sky-600' : (tDir === 'in' || (!isT && t.type === 'receita')) ? 'text-emerald-600' : 'text-rose-600';
                                 const sg = tDir === 'mid' ? '⇄' : (tDir === 'in' || (!isT && t.type === 'receita')) ? '+' : '-';
                                 return `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                                    <td class="p-3.5"><input type="checkbox" ${finSel.has(t.id) ? 'checked' : ''} onchange="finSelToggle('${t.id}', this.checked)"></td>
                                     <td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
                                         ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
                                         ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}
@@ -4674,6 +5629,28 @@
                     </div>
                 </div>`;
         }
+        // ---------- Soma dos lançamentos selecionados ----------
+        function finSelBar() {
+            let n = 0, r = 0, d = 0;
+            finFiltered().forEach(t => { if (!finSel.has(t.id)) return; const e = finEffect(t, finF.acc); r += e.r; d += e.d; n++; });
+            if (!n) return `<p class="text-[11px] text-slate-400 mb-3"><i class="fa-regular fa-square-check mr-1"></i>Marque os lançamentos na lista para ver a soma.</p>`;
+            const net = r - d;
+            return `<div class="flex flex-wrap items-center gap-x-6 gap-y-1 p-3.5 mb-3 rounded-2xl bg-teal-50 dark:bg-teal-950/40 text-sm text-slate-700 dark:text-slate-200">
+                <b>${n} selecionado${n > 1 ? 's' : ''}</b>
+                <span>Receitas: <b class="text-emerald-600">R$ ${money(r)}</b></span>
+                <span>Despesas: <b class="text-rose-600">R$ ${money(d)}</b></span>
+                <span>Soma (receitas − despesas): <b class="${net >= 0 ? 'text-teal-600' : 'text-rose-600'}">R$ ${money(net)}</b></span>
+                <button onclick="finSelClear()" class="ml-auto text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button>
+            </div>`;
+        }
+        function finSelToggle(id, on) {
+            if (on) finSel.add(id); else finSel.delete(id);
+            const bar = document.getElementById('fin-sel-bar'); if (bar) bar.innerHTML = finSelBar();
+            const all = document.getElementById('fin-sel-all'), ids = finFiltered().map(t => t.id);
+            if (all) all.checked = ids.length > 0 && ids.every(i => finSel.has(i));
+        }
+        function finSelAll(on) { finFiltered().forEach(t => { if (on) finSel.add(t.id); else finSel.delete(t.id); }); renderCurrentTabContent(); }
+        function finSelClear() { finSel.clear(); renderCurrentTabContent(); }
         function toggleFinanceStatus(id) {
             const t = appData.financeiro.transactions.find(x => x.id === id);
             if (!t) return;
@@ -4798,17 +5775,29 @@
                     <button onclick="dashSet('month','')" class="${B} ${dashMonth === '' ? bOn : bOff}">Todos</button>
                 </div>`;
         }
+        function dashCardSet(v) { dashCardMonth = v; renderCurrentTabContent(); }
         function dashCreditHtml() {
             const tx = appData.financeiro.transactions.filter(t => t.cardInvoice);
+            const sel = dashCardMonth ? tx.filter(t => t.cardInvoice.inv === dashCardMonth) : tx;
             const sum = a => a.reduce((s, t) => s + (Number(t.amount) || 0), 0);
-            const open = sum(tx.filter(t => (t.status || 'pago') === 'pendente'));
-            const mk = localDateStr().slice(0, 7);
-            const month = sum(tx.filter(t => t.cardInvoice.inv === mk));
-            return `<div onclick="switchTab('cartao')" class="cursor-pointer bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                <div><p class="text-xs font-medium text-slate-400 uppercase">Cartão de Crédito</p>
-                <h3 class="text-xl font-bold text-rose-600 mt-1">R$ ${money(open)}</h3>
-                <p class="text-[10px] text-slate-400 mt-1">Faturas em aberto · fatura do mês: R$ ${money(month)}</p></div>
-                <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center text-xl"><i class="fa-solid fa-credit-card"></i></div></div>`;
+            const total = sum(sel), open = sum(sel.filter(t => (t.status || 'pago') === 'pendente')), paid = total - open;
+            const cur = localDateStr().slice(0, 7);
+            const S = 'px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[10px]';
+            const B = 'px-1.5 py-0.5 rounded-md text-[10px] font-semibold';
+            const bOn = 'bg-teal-600 text-white', bOff = 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
+            return `<div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+                <div onclick="switchTab('cartao')" class="cursor-pointer flex items-center justify-between">
+                    <div><p class="text-xs font-medium text-slate-400 uppercase">Fatura do Cartão de Crédito</p>
+                    <h3 class="text-xl font-bold text-rose-600 mt-1">R$ ${money(total)}</h3>
+                    <p class="text-[10px] text-slate-400 mt-1">${dashCardMonth ? fmtYM(dashCardMonth) : 'Total de todas as faturas'} · em aberto: R$ ${money(open)} · paga: R$ ${money(paid)}</p></div>
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center text-xl"><i class="fa-solid fa-credit-card"></i></div>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-1">
+                    <input type="month" value="${dashCardMonth}" onchange="dashCardSet(this.value)" title="Mês da fatura (vencimento)" class="${S}">
+                    <button onclick="dashCardSet('${cur}')" class="${B} ${dashCardMonth === cur ? bOn : bOff}">Mês atual</button>
+                    <button onclick="dashCardSet('')" class="${B} ${dashCardMonth === '' ? bOn : bOff}">Total</button>
+                </div>
+            </div>`;
         }
 
         // ---------- Agenda: repetição, dia todo e calendário ----------
