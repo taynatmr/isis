@@ -252,12 +252,14 @@
     </div>
 
     <!-- LOGIN GOOGLE DRIVE -->
+    <button id="drive-banner" onclick="driveBannerClick()" class="hidden fixed left-3 right-3 z-[55] bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-2xl shadow-lg px-4 py-3 items-center gap-2 text-left" style="bottom:calc(env(safe-area-inset-bottom,0px) + 12px)"><i class="fa-solid fa-cloud-arrow-up text-base"></i><span></span></button>
     <div id="login-gate" class="hidden fixed inset-0 z-[60] bg-slate-900/95 items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center">
             <div class="w-16 h-16 mx-auto mb-4 drop-shadow"><svg viewBox="0 0 64 64" class="w-full h-full" role="img" aria-label="Logo ISIS"><rect width="64" height="64" rx="16" fill="url(#isisGold)"/><circle cx="32" cy="16" r="4.2" fill="#fff"/><rect x="28.8" y="25" width="6.4" height="24" rx="3.2" fill="#fff"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"><path d="M29 31C21 31 14.500 28 10 21"/><path d="M29 38C22.500 38 17 35.500 12.500 30"/><path d="M29 45C24 45 19.500 43 15.500 39"/><path d="M35 31C43 31 49.500 28 54 21"/><path d="M35 38C41.500 38 47 35.500 51.500 30"/><path d="M35 45C40 45 44.500 43 48.500 39"/></g></svg></div>
             <h2 class="text-lg font-bold text-slate-800 mb-1">Sistema ISIS</h2>
             <p class="text-sm text-slate-500 mb-5">Entre com a conta Google do Drive para carregar suas informações.</p>
             <button onclick="driveSignIn()" class="w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-xl font-bold text-sm shadow flex items-center justify-center space-x-2"><i class="fa-brands fa-google"></i><span>Entrar com Google</span></button>
+            <button id="login-gate-mode" onclick="driveToggleMode()" class="text-[11px] text-teal-700 hover:text-teal-900 underline mt-3 leading-snug"></button>
             <p id="login-gate-msg" class="text-xs text-rose-500 mt-3 min-h-[1rem]"></p>
             <button onclick="showLoginGate(false)" class="text-[11px] text-slate-400 hover:text-slate-600 underline mt-2">Continuar sem entrar (dados só deste navegador)</button>
         </div>
@@ -307,6 +309,14 @@
             atalhos: [],
             metas: []
         };
+        const APP_DEFAULTS = JSON.stringify(appData); // estado "zerado" (usado ao trocar de conta)
+        // Modo do Drive: 'shared' = conta compartilhada (Tayná e Samuel, acesso à pasta deles); 'own' = uso pessoal (cada e-mail tem a sua pasta, começa zerado)
+        function driveMode() {
+            const m = localStorage.getItem('meusistema_drive_mode');
+            if (m === 'shared' || m === 'own') return m;
+            return localStorage.getItem('meusistema_drive_linked') === '1' ? 'shared' : 'own';
+        }
+        function neutralizeNames() { appData.profile.name = 'Meu Sistema'; (appData.habitacao.people || []).forEach((pp, i) => { pp.name = 'Pessoa ' + (i + 1); }); }
 
         let currentActiveTab = 'dashboard';
         let directoryHandle = null;
@@ -485,6 +495,7 @@
 
         function loadAppData() {
             const saved = localStorage.getItem('meusistema_pessoal_data');
+            if (!saved && driveMode() === 'own') neutralizeNames();
             if (saved) {
                 try {
                     appData = JSON.parse(saved);
@@ -5110,7 +5121,30 @@
         // GOOGLE DRIVE — login + sincronização automática
         // =====================================================
         const GOOGLE_CLIENT_ID = '737517508578-oh51pl1lmnav4c14cjqt3ptfikltjnm7.apps.googleusercontent.com';
-        const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive'; // acesso completo: necessário para ler a pasta compartilhada pela outra conta
+        const DRIVE_SCOPE_FULL = 'https://www.googleapis.com/auth/drive';      // conta compartilhada: precisa enxergar a pasta que a outra pessoa compartilhou
+        const DRIVE_SCOPE_OWN = 'https://www.googleapis.com/auth/drive.file';   // uso pessoal: o app só enxerga os arquivos que ele mesmo criou
+        const GOOGLE_CLIENT_ID_OWN = '';  // opcional: outro Client ID (só com drive.file) para uso pessoal; vazio = usa o mesmo
+        const DRIVE_MODE_KEY = 'meusistema_drive_mode';
+        const DRIVE_EMAIL_KEY = 'meusistema_drive_email';
+        const DRIVE_DIRTY_KEY = 'meusistema_drive_dirty'; // há alterações ainda não enviadas ao Drive
+        let driveNeedsLogin = false, driveCloudMod = '', driveRetryN = 0, driveRetryTimer = null, driveGuardDone = false;
+        function driveLinked() { return localStorage.getItem('meusistema_drive_linked') === '1'; }
+        function driveDirty() { return localStorage.getItem(DRIVE_DIRTY_KEY) === '1'; }
+        function driveBannerUpdate() {
+            const el = document.getElementById('drive-banner'); if (!el) return;
+            let msg = '';
+            if (driveLinked() && driveNeedsLogin) msg = 'Drive desconectado: ' + (driveDirty() ? 'suas últimas alterações ainda NÃO foram salvas na nuvem. ' : '') + 'Toque para reconectar.';
+            else if (driveLinked() && driveDirty() && driveErr) msg = 'Falha ao salvar no Drive. Toque para tentar de novo.';
+            el.classList.toggle('hidden', !msg); el.classList.toggle('flex', !!msg);
+            const sp = el.querySelector('span'); if (sp) sp.textContent = msg;
+        }
+        function driveBannerClick() { if (driveNeedsLogin || !driveToken) driveSignIn(); else { driveRetryN = 0; driveUpload(); } }
+        function driveScheduleRetry() {
+            clearTimeout(driveRetryTimer);
+            if (driveNeedsLogin) return; // precisa de um toque do usuário para reconectar
+            const wait = Math.min(120000, 10000 * Math.pow(2, driveRetryN++));
+            driveRetryTimer = setTimeout(() => { if (driveDirty()) driveUpload(); }, wait);
+        }
         const DRIVE_FOLDER = 'MeuSistema';
         const DRIVE_DATA = 'meusistema_dados.json';
         const DRIVE_LINK_KEY = 'meusistema_drive_linked';
@@ -5126,6 +5160,7 @@
             if (!g) return;
             g.classList.toggle('hidden', !show); g.classList.toggle('flex', !!show);
             const m = document.getElementById('login-gate-msg'); if (m) m.innerText = msg || '';
+            updateGateMode();
         }
         function loadGis() {
             return new Promise(res => {
@@ -5138,9 +5173,9 @@
         }
         function driveRequestToken(prompt) {
             return new Promise((resolve, reject) => {
-                const to = setTimeout(() => reject(new Error('tempo esgotado')), 20000);
-                _tokRes = v => { clearTimeout(to); resolve(v); };
-                _tokRej = e => { clearTimeout(to); reject(e); };
+                const to = setTimeout(() => { driveNeedsLogin = true; driveBannerUpdate(); reject(new Error('tempo esgotado')); }, 20000);
+                _tokRes = v => { clearTimeout(to); driveNeedsLogin = false; driveBannerUpdate(); resolve(v); };
+                _tokRej = e => { clearTimeout(to); driveNeedsLogin = true; driveBannerUpdate(); reject(e); };
                 driveClient.requestAccessToken({ prompt });
             });
         }
@@ -5196,33 +5231,43 @@
         async function driveUpload() {
             if (!driveReconciled || !driveToken && !driveClient) return;
             if (dataCount(appData) === 0 && driveHadData) { updateSyncStatus('Drive tem dados: não sobrescrevi', 'amber'); return; }
+            const sentAt = appData._savedAt || '';
             try {
                 if (driveFileId) {
-                    await driveFetch(`${DRIVE_UP}/${driveFileId}?uploadType=media&fields=id`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: dataBlob() });
+                    const rr = await driveFetch(`${DRIVE_UP}/${driveFileId}?uploadType=media&fields=id,modifiedTime`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: dataBlob() });
+                    try { driveCloudMod = (await rr.json()).modifiedTime || driveCloudMod; } catch (e) {}
                 } else {
                     await driveEnsureFolder();
                     driveFileId = await driveCreateFile(DRIVE_DATA, dataBlob(), 'application/json');
                 }
                 driveHadData = dataCount(appData) > 0;
-                localStorage.setItem(DRIVE_SYNC_KEY, appData._savedAt || '');
+                localStorage.setItem(DRIVE_SYNC_KEY, sentAt);
+                if ((appData._savedAt || '') === sentAt) localStorage.removeItem(DRIVE_DIRTY_KEY);
+                driveRetryN = 0; driveNeedsLogin = false;
                 driveLastSync = new Date(); driveErr = '';
+                driveBannerUpdate();
                 updateSyncStatus('Sincronizado no Drive', 'emerald');
                 updateFolderLabel(); refreshBackupTab();
             } catch (e) {
                 console.error(e); driveErr = e.message;
                 updateSyncStatus('Drive: falha ao salvar', 'rose');
+                driveBannerUpdate(); driveScheduleRetry();
             }
         }
         function scheduleDriveSave() {
+            if (!driveLinked()) return;
+            localStorage.setItem(DRIVE_DIRTY_KEY, '1'); driveBannerUpdate();
             if (!driveReconciled) return;
             clearTimeout(driveSaveTimer);
             driveSaveTimer = setTimeout(driveUpload, 1500);
         }
         async function driveReconcile() {
+            await driveGuardAccount();
             await driveEnsureFolder();
             const f = driveBestFile ? [{ id: driveBestFile }] : await driveList(`name='${DRIVE_DATA}' and '${driveFolderId}' in parents and trashed=false`, 'id,modifiedTime');
             if (!f.length) { driveFileId = null; driveReconciled = true; await driveUpload(); await driveSyncAttachments(); return; }
             driveFileId = f[0].id;
+            try { driveCloudMod = (await (await driveFetch(`${DRIVE_API}/${driveFileId}?fields=modifiedTime`)).json()).modifiedTime || ''; } catch (e) {}
             const cloud = await (await driveFetch(`${DRIVE_API}/${driveFileId}?alt=media`)).json();
             const cN = dataCount(cloud), lN = dataCount(appData);
             const cT = cloud._savedAt || '', lT = appData._savedAt || '';
@@ -5302,8 +5347,8 @@
         }
         function driveSignOut() {
             if (driveToken && window.google) google.accounts.oauth2.revoke(driveToken, () => {});
-            driveToken = null; driveFolderId = null; driveBestFile = null; driveFileId = null; driveReconciled = false;
-            localStorage.removeItem(DRIVE_LINK_KEY);
+            driveToken = null; driveFolderId = null; driveBestFile = null; driveFileId = null; driveReconciled = false; driveGuardDone = false;
+            localStorage.removeItem(DRIVE_LINK_KEY); driveBannerUpdate();
             updateSyncStatus('Drive desconectado', 'amber');
             updateFolderLabel(); refreshBackupTab();
         }
@@ -5312,11 +5357,11 @@
             try { await driveReconcile(); showToast('Drive sincronizado!', 'success'); }
             catch (e) { console.error(e); showToast('Falha ao sincronizar: ' + e.message, 'error'); }
         }
-        async function initDrive() {
-            if (!driveAvailable()) return;
-            if (!(await loadGis())) { showLoginGate(true, 'Google não carregou. Verifique a internet.'); return; }
+        function driveMakeClient() {
+            const mode = driveMode();
             driveClient = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID, scope: DRIVE_SCOPE,
+                client_id: (mode === 'own' && GOOGLE_CLIENT_ID_OWN) ? GOOGLE_CLIENT_ID_OWN : GOOGLE_CLIENT_ID,
+                scope: mode === 'shared' ? DRIVE_SCOPE_FULL : DRIVE_SCOPE_OWN,
                 callback: r => {
                     if (r.error) { _tokRej && _tokRej(new Error(r.error)); return; }
                     driveToken = r.access_token; driveTokenExp = Date.now() + (Number(r.expires_in) - 60) * 1000;
@@ -5324,15 +5369,72 @@
                 },
                 error_callback: e => { _tokRej && _tokRej(new Error(e.type || 'erro de login')); }
             });
+        }
+        function driveSetMode(m) {
+            if (driveToken && window.google) google.accounts.oauth2.revoke(driveToken, () => {});
+            driveToken = null; driveFolderId = null; driveBestFile = null; driveFileId = null; driveReconciled = false; driveGuardDone = false;
+            localStorage.setItem(DRIVE_MODE_KEY, m); localStorage.removeItem(DRIVE_LINK_KEY);
+            if (window.google && google.accounts && google.accounts.oauth2) driveMakeClient();
+            updateSyncStatus('Drive desconectado', 'amber');
+        }
+        function updateGateMode() {
+            const b = document.getElementById('login-gate-mode'); if (!b) return;
+            b.textContent = driveMode() === 'shared' ? 'Modo: conta compartilhada (Tayná e Samuel). Tocar para usar o modo pessoal, com dados separados.' : 'Modo: uso pessoal (dados só seus). Sou Tayná ou Samuel: usar a conta compartilhada.';
+        }
+        function driveToggleMode() { driveSetMode(driveMode() === 'shared' ? 'own' : 'shared'); updateGateMode(); driveSignIn(); }
+        function driveToggleModeCard() {
+            const next = driveMode() === 'shared' ? 'own' : 'shared';
+            if (!confirm(next === 'shared' ? 'Trocar para a conta compartilhada (Tayná e Samuel)? Você será desconectado e precisará entrar de novo.' : 'Trocar para o modo pessoal? Você será desconectado e precisará entrar de novo. Nada é apagado do Drive.')) return;
+            driveSetMode(next); refreshBackupTab(); showLoginGate(true);
+        }
+        // Protege os dados: se outra conta Google entrar neste aparelho, os dados locais da conta anterior NÃO vão para o Drive da nova.
+        async function driveGuardAccount() {
+            if (driveGuardDone) return;
+            let me = '';
+            try { const j = await (await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)')).json(); me = ((j.user && j.user.emailAddress) || '').toLowerCase(); } catch (e) { console.warn(e); }
+            if (!me) return;
+            const last = localStorage.getItem(DRIVE_EMAIL_KEY);
+            if (last && last !== me && dataCount(appData) > 0) {
+                downloadCurrentData('meusistema_copia_' + last.split('@')[0]);
+                localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(DRIVE_SYNC_KEY);
+                try { const db = await filesDB(); await new Promise(r => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').clear(); tx.oncomplete = r; tx.onerror = r; }); } catch (e) {}
+                appData = JSON.parse(APP_DEFAULTS); loadAppData(); applyTheme(); renderCurrentTabContent();
+                driveFolderId = null; driveBestFile = null; driveFileId = null; driveReconciled = false;
+                showToast('Este aparelho tinha dados de outra conta. Uma cópia foi baixada e o sistema foi limpo para você.', 'info');
+            }
+            localStorage.setItem(DRIVE_EMAIL_KEY, me);
+            driveGuardDone = true;
+        }
+        async function initDrive() {
+            if (!driveAvailable()) return;
+            if (!(await loadGis())) { showLoginGate(true, 'Google não carregou. Verifique a internet.'); return; }
+            driveMakeClient();
             if (localStorage.getItem(DRIVE_LINK_KEY) === '1') {
                 try { await driveRequestToken('none'); await driveReconcile(); return; }
                 catch (e) { console.warn('Login automático falhou:', e); }
             }
             showLoginGate(true);
         }
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && driveToken && driveReconciled && Date.now() < driveTokenExp) driveReconcile().catch(console.error);
-        });
+        function driveFlush() { if (driveDirty() && driveToken && driveReconciled) { clearTimeout(driveSaveTimer); driveUpload(); } }
+        async function driveWake() {
+            if (!driveLinked() || !driveClient) return;
+            try {
+                if (!driveToken || Date.now() > driveTokenExp) await driveRequestToken('none');
+                await driveReconcile(); // puxa o que veio de outro aparelho e envia o que ficou pendente
+            } catch (e) { console.warn('Drive:', e.message); driveBannerUpdate(); }
+        }
+        async function drivePoll() {
+            if (document.hidden || !driveToken || !driveReconciled || !driveFileId || Date.now() > driveTokenExp) return;
+            if (driveDirty()) { driveUpload(); return; }
+            try {
+                const j = await (await driveFetch(`${DRIVE_API}/${driveFileId}?fields=modifiedTime`)).json();
+                if (j.modifiedTime && driveCloudMod && j.modifiedTime !== driveCloudMod) await driveReconcile();
+            } catch (e) { console.warn(e.message); }
+        }
+        document.addEventListener('visibilitychange', () => { if (document.hidden) driveFlush(); else { driveBannerUpdate(); driveWake(); } });
+        window.addEventListener('pagehide', driveFlush);
+        window.addEventListener('online', () => { if (driveLinked()) driveWake(); });
+        setInterval(drivePoll, 45000);
         function driveCardHtml() {
             const btn = 'w-full sm:w-auto px-6 py-3 rounded-2xl text-sm font-bold shadow flex items-center justify-center space-x-2';
             let st, actions;
@@ -5345,7 +5447,8 @@
             return `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                 <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2"><i class="fa-brands fa-google-drive text-teal-500"></i><span>Google Drive</span></h3>
                 <p class="text-sm text-slate-500 mb-2">Salva automaticamente dados e anexos no seu Drive, na pasta <b>${DRIVE_FOLDER}</b>, e carrega em qualquer computador ao entrar com a mesma conta.</p>
-                <p class="text-sm mb-5">${st}</p>
+                <p class="text-sm mb-2">${st}</p>
+                <p class="text-xs text-slate-500 mb-5">Modo: <b>${driveMode() === 'shared' ? 'Conta compartilhada (Tayná e Samuel)' : 'Uso pessoal (dados só seus)'}</b> · <button onclick="driveToggleModeCard()" class="underline text-teal-600">trocar modo</button></p>
                 <div class="flex flex-col sm:flex-row gap-3">${actions}</div></div>`;
         }
 
