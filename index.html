@@ -319,6 +319,7 @@
         let obraFilterStatus = 'todos';
         let obraSortOrder = 'date-desc';
         let budgetFilterStatus = 'todos';
+        let finFilterOpen = false, finSort = { k: 'date', dir: 1 };
         let financeFilterStatus = 'todos'; // 'todos', 'pago', 'pendente'
         let waterDate = localDateStr();
         let medSelectedDate = localDateStr();
@@ -339,9 +340,9 @@
         let dashBase = 'geral', dashMonth = localDateStr().slice(0, 7); // início: geral do mês atual
         let hobbyCat = '', saudeDiagOpen = false, diagQuery = '';
         let saudeVacOpen = false, vacQuery = '';
-        let recOpen = false, recViewId = null, recQuery = '';
+        let recOpen = false, recViewId = null, recQuery = '', recSel = new Set();
         let finSel = new Set();
-        let dashCardMonth = localDateStr().slice(0, 7); // fatura do cartão na tela inicial: mês atual por padrão ('' = total)
+        let dashCardMonth = 'auto'; // fatura do cartão na tela inicial: 'auto' = fatura em aberto mais próxima; 'AAAA-MM' = mês; '' = total
         let agView = 'calendario', agMonth = localDateStr().slice(0, 7), agSel = localDateStr();
         let catRankQuery = '', catRankPeriod = 'all';
         let muralView = 'bloco', muralScope = 'mes', muralMonth = localDateStr().slice(0, 7), muralPhotos = true;
@@ -2157,6 +2158,7 @@
             showToast(`Água de ${fmtBR(date)}: ${appData.saude.waterLog[date]} ml`, 'success');
         }
         function resetWater(date = localDateStr()) {
+            if (!confirm('Zerar a hidratação deste dia?')) return;
             delete appData.saude.waterLog[date];
             saveAppData();
             renderCurrentTabContent();
@@ -2376,6 +2378,7 @@
                 </div>`).join('')}</div>`;
         }
         function draftRemove(id) {
+            if (!confirm('Remover este anexo?')) return;
             _draftAtt = _draftAtt.filter(a => a.id !== id);
             _draftRemoved.push(id);
             const el = document.getElementById('draft-att-list');
@@ -2520,6 +2523,8 @@
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <input type="text" placeholder="Buscar receita, tipo ou ingrediente..." value="${esc(recQuery)}" onchange="setRecQuery(this.value)" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs w-60">
+                                <button onclick="recSelAll()" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold"><i class="fa-regular fa-square-check mr-1"></i>Selecionar todas</button>
+                                <button onclick="recDownloadSelected()" class="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow"><i class="fa-solid fa-download mr-1"></i>Baixar selecionadas (${recSel.size})</button>
                                 <button onclick="openRecImport()" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-file-import"></i><span>Importar</span></button>
                                 <button onclick="openRecModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Nova receita</span></button>
                             </div>
@@ -2531,7 +2536,8 @@
                         </div>` : `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         ${list.map(x => {
                             const img = (x.attachments || []).find(a => (a.type || '').startsWith('image/'));
-                            return `<div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden flex flex-col">
+                            return `<div class="relative bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden flex flex-col">
+                                <label class="absolute top-3 left-3 z-10 w-7 h-7 rounded-lg bg-white/90 dark:bg-slate-900/80 shadow flex items-center justify-center cursor-pointer" title="Marcar para baixar"><input type="checkbox" ${recSel.has(x.id) ? 'checked' : ''} onchange="recToggleSel('${x.id}')"></label>
                                 <button onclick="recView('${x.id}')" class="text-left flex-1">
                                     ${img ? `<img data-att="${img.id}" alt="" class="w-full h-40 object-cover bg-slate-200 dark:bg-slate-600">` : `<div class="w-full h-40 bg-amber-50 dark:bg-amber-950/30 text-amber-300 flex items-center justify-center text-5xl"><i class="fa-solid fa-utensils"></i></div>`}
                                     <div class="p-5">
@@ -2540,6 +2546,7 @@
                                             ${x.type ? `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700">${esc(x.type)}</span>` : ''}
                                             ${x.level ? `<span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">${esc(x.level)}</span>` : ''}
                                             ${Number(x.servings) > 0 ? `<span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="fa-solid fa-user-group mr-1"></i>${esc(x.servings)}</span>` : ''}
+                                            ${x.prep ? `<span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="fa-regular fa-clock mr-1"></i>${esc(x.prep)}</span>` : ''}
                                         </div>
                                         ${Number(x.rating) > 0 ? `<div class="text-xs mt-2 flex gap-0.5">${starsHtml(x.rating)}</div>` : ''}
                                     </div>
@@ -2576,6 +2583,7 @@
                             ${r.type ? `<span class="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700">${esc(r.type)}</span>` : ''}
                             ${r.level ? `<span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Nível: ${esc(r.level)}</span>` : ''}
                             ${Number(r.servings) > 0 ? `<span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="fa-solid fa-user-group mr-1"></i>Serve ${esc(r.servings)} pessoa${Number(r.servings) === 1 ? '' : 's'}</span>` : ''}
+                            ${r.prep ? `<span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="fa-regular fa-clock mr-1"></i>Preparo: ${esc(r.prep)}</span>` : ''}
                             ${Number(r.rating) > 0 ? `<span class="flex gap-0.5 text-sm">${starsHtml(r.rating)}</span>` : ''}
                         </div>
                         ${imgs.length ? `<div class="flex flex-wrap gap-3 mt-5">${imgs.map(a => `<img data-att="${a.id}" alt="${esc(a.name)}" onclick="openStoredFile('${a.id}')" class="h-48 max-w-full rounded-2xl object-cover bg-slate-200 dark:bg-slate-600 cursor-pointer">`).join('')}</div>` : ''}
@@ -2600,8 +2608,8 @@
         function recIngRow(i) {
             i = i || { qty: '', unit: '', name: '' };
             return `<div class="rec-ing grid grid-cols-12 gap-2 items-center">
-                <input type="text" class="rec-qty col-span-2 ${INP}" value="${esc(i.qty)}" placeholder="Qtd" inputmode="decimal">
-                <input type="text" class="rec-unit col-span-4 ${INP}" list="rec-units" value="${esc(i.unit)}" placeholder="Unidade">
+                <input type="text" class="rec-qty col-span-3 ${INP}" value="${esc(i.qty)}" placeholder="Qtd" inputmode="text" autocapitalize="none" autocomplete="off">
+                <input type="text" class="rec-unit col-span-3 ${INP}" list="rec-units" value="${esc(i.unit)}" placeholder="Unidade">
                 <input type="text" class="rec-iname col-span-5 ${INP}" value="${esc(i.name)}" placeholder="Ingrediente">
                 <button type="button" onclick="this.closest('.rec-ing').remove()" class="col-span-1 text-slate-400 hover:text-rose-600" title="Remover"><i class="fa-solid fa-xmark"></i></button>
             </div>`;
@@ -2614,7 +2622,7 @@
             document.getElementById('rec-stars').innerHTML = starPickerHtml(next, 'setRecStar');
         }
         function openRecModal(id = null, draft = null) {
-            let r = { name: '', type: '', level: '', servings: '', ingredients: [], steps: '', rating: 0, obs: '', attachments: [] };
+            let r = { name: '', type: '', level: '', servings: '', prep: '', ingredients: [], steps: '', rating: 0, obs: '', attachments: [] };
             if (id) r = recData().find(x => x.id === id) || r;
             else if (draft) r = Object.assign(r, draft);
             draftInit(r.attachments);
@@ -2624,10 +2632,11 @@
                 <form onsubmit="saveRec(event, '${id || ''}')" class="space-y-4">
                     <p class="text-[11px] text-slate-400">Nenhum campo é obrigatório. Preencha o que tiver.</p>
                     <div><label class="${LBL}">Receita</label><input type="text" id="rec-name" value="${esc(r.name)}" placeholder="Ex.: Bolo de cenoura" class="${INP}"></div>
-                    <div class="grid grid-cols-3 gap-3">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div><label class="${LBL}">Tipo</label><input type="text" id="rec-type" list="rec-types" value="${esc(r.type)}" class="${INP}"><datalist id="rec-types">${types.map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist></div>
                         <div><label class="${LBL}">Nível</label><select id="rec-level" class="${INP}"><option value=""></option>${['Fácil', 'Médio', 'Difícil'].map(l => `<option ${r.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
                         <div><label class="${LBL}">Serve (pessoas)</label><input type="number" id="rec-serves" min="1" step="1" value="${esc(r.servings)}" class="${INP}"></div>
+                        <div><label class="${LBL}">Tempo de preparo</label><input type="text" id="rec-prep" value="${esc(r.prep || '')}" placeholder="Ex.: 45 min" class="${INP}"></div>
                     </div>
                     <div>
                         <label class="${LBL}">Ingredientes</label>
@@ -2658,7 +2667,7 @@
             const ingredients = Array.from(document.querySelectorAll('#rec-ings .rec-ing')).map(row => ({
                 qty: row.querySelector('.rec-qty').value.trim(), unit: row.querySelector('.rec-unit').value.trim(), name: row.querySelector('.rec-iname').value.trim()
             })).filter(i => i.qty || i.unit || i.name);
-            const data = { name: v('rec-name'), type: v('rec-type'), level: document.getElementById('rec-level').value, servings: v('rec-serves'), ingredients, steps: document.getElementById('rec-steps').value.trim(), rating: Number(v('rec-rating')) || 0, obs: v('rec-obs') };
+            const data = { name: v('rec-name'), type: v('rec-type'), level: document.getElementById('rec-level').value, servings: v('rec-serves'), prep: v('rec-prep'), ingredients, steps: document.getElementById('rec-steps').value.trim(), rating: Number(v('rec-rating')) || 0, obs: v('rec-obs') };
             data.attachments = await draftCommit('rec-files');
             if (id) { const r = recData().find(x => x.id === id); if (r) Object.assign(r, data); }
             else recData().push(Object.assign({ id: uid() }, data));
@@ -2669,7 +2678,7 @@
             if (!confirm(`Excluir a receita "${r.name || 'sem nome'}"?`)) return;
             for (const a of (r.attachments || [])) await deleteStoredFile(a.id);
             appData.receitas = recData().filter(x => x.id !== id);
-            recViewId = null;
+            recSel.delete(id); recViewId = null;
             saveAppData(); renderCurrentTabContent(); showToast('Receita excluída.', 'info');
         }
 
@@ -2680,6 +2689,7 @@
             if (r.type) L.push('Tipo: ' + r.type);
             if (r.level) L.push('Nível: ' + r.level);
             if (Number(r.servings) > 0) L.push('Serve: ' + r.servings + ' pessoa' + (Number(r.servings) === 1 ? '' : 's'));
+            if (r.prep) L.push('Tempo de preparo: ' + r.prep);
             if (Number(r.rating) > 0) L.push('Nota: ' + '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating));
             const ings = (r.ingredients || []).map(recIngLine).filter(Boolean);
             if (ings.length) { L.push('', 'INGREDIENTES'); ings.forEach(x => L.push('- ' + x)); }
@@ -2687,13 +2697,86 @@
             if (r.obs) L.push('', 'OBSERVAÇÕES', r.obs);
             return L.join('\n') + '\n';
         }
-        function recDownload(id) {
-            const r = recData().find(x => x.id === id); if (!r) return;
-            const blob = new Blob(['\ufeff' + recToText(r)], { type: 'text/plain;charset=utf-8' });
+        function recSaveText(text, filename) {
+            const blob = new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob), a = document.createElement('a');
-            a.href = url; a.download = (r.name || 'receita').replace(/[\\/:*?"<>|]/g, '-') + '.txt';
+            a.href = url; a.download = filename.replace(/[\\/:*?"<>|]/g, '-') + '.txt';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
+        function recDownload(id) { recAskFormat([id]); }
+        function recAskFormat(ids) {
+            const n = ids.length;
+            showModal(n > 1 ? `Baixar ${n} receitas` : 'Baixar receita', `
+                <p class="text-sm text-slate-500 mb-4">Escolha o formato do arquivo.</p>
+                <div class="space-y-2">
+                    <button onclick='recExport(${JSON.stringify(ids)}, "pdf")' class="w-full bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl text-sm font-bold shadow"><i class="fa-solid fa-file-pdf mr-2"></i>PDF</button>
+                    <button onclick='recExport(${JSON.stringify(ids)}, "txt")' class="w-full bg-slate-100 dark:bg-slate-700 py-3 rounded-xl text-sm font-bold"><i class="fa-solid fa-file-lines mr-2"></i>Texto (.txt)</button>
+                </div>`);
+        }
+        function recExport(ids, fmt) {
+            const list = ids.map(id => recData().find(x => x.id === id)).filter(Boolean);
+            if (!list.length) return;
+            closeModal();
+            const name = list.length === 1 ? (list[0].name || 'receita') : 'receitas (' + list.length + ')';
+            if (fmt === 'pdf') { recPdf(list, name); return; }
+            recSaveText(list.map(recToText).join('\n' + '='.repeat(40) + '\n\n'), name);
+        }
+        function recLoadPdf() {
+            return new Promise((res, rej) => {
+                if (window.jspdf) return res(window.jspdf);
+                const sc = document.createElement('script');
+                sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                sc.onload = () => window.jspdf ? res(window.jspdf) : rej(new Error('jspdf')); sc.onerror = () => rej(new Error('offline'));
+                document.head.appendChild(sc);
+            });
+        }
+        async function recPdf(list, filename) {
+            let J;
+            try { J = await recLoadPdf(); } catch (e) { showToast('Não consegui carregar o gerador de PDF. Verifique a internet e tente de novo.', 'error'); return; }
+            const clean = t => String(t == null ? '' : t).replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, '-').replace(/\u2026/g, '...').replace(/\u2022/g, '-').replace(/[^\u0009\u000a\u0020-\u00ff]/g, '');
+            const doc = new J.jsPDF({ unit: 'mm', format: 'a4' });
+            const W = 210, H = 297, M = 18, MW = W - 2 * M; let y = M;
+            const write = (txt, size, style, color, gap) => {
+                doc.setFont('helvetica', style); doc.setFontSize(size); doc.setTextColor(color[0], color[1], color[2]);
+                const lh = size * 0.3528 * 1.4;
+                clean(txt).split('\n').forEach(par => {
+                    doc.splitTextToSize(par || ' ', MW).forEach(l => { if (y + lh > H - M) { doc.addPage(); y = M; } doc.text(l, M, y + lh * 0.8); y += lh; });
+                });
+                y += gap || 0;
+            };
+            const head = t => { y += 3; write(t, 11, 'bold', [156, 112, 32], 1.5); };
+            list.forEach((r, idx) => {
+                if (idx > 0) { doc.addPage(); }
+                doc.setFillColor(156, 112, 32); doc.rect(0, 0, W, 10, 'F');
+                y = 20;
+                write(r.name || 'Receita sem nome', 20, 'bold', [46, 31, 18], 2);
+                const meta = [r.type, r.level ? 'Nível: ' + r.level : '', Number(r.servings) > 0 ? 'Serve ' + r.servings + ' pessoa' + (Number(r.servings) === 1 ? '' : 's') : '', r.prep ? 'Preparo: ' + r.prep : '', Number(r.rating) > 0 ? 'Nota: ' + r.rating + '/5' : ''].filter(Boolean).join('   |   ');
+                if (meta) write(meta, 10, 'normal', [110, 110, 110], 2);
+                doc.setDrawColor(220, 210, 190); doc.line(M, y, W - M, y); y += 2;
+                const ings = (r.ingredients || []).map(recIngLine).filter(Boolean);
+                if (ings.length) { head('INGREDIENTES'); ings.forEach(x => write('- ' + x, 11, 'normal', [40, 40, 40], 0.5)); }
+                if (r.steps) { head('MODO DE PREPARO'); write(r.steps, 11, 'normal', [40, 40, 40], 1); }
+                if (r.obs) { head('OBSERVAÇÕES'); write(r.obs, 10, 'normal', [90, 90, 90], 1); }
+            });
+            const n = doc.getNumberOfPages();
+            for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('ISIS  -  página ' + i + ' de ' + n, W / 2, H - 8, { align: 'center' }); }
+            doc.save(filename.replace(/[\\/:*?"<>|]/g, '-') + '.pdf');
+        }
+        function recVisible() {
+            const q = normKey(recQuery);
+            return recData().filter(x => !q || normKey(x.name).includes(q) || normKey(x.type).includes(q) || (x.ingredients || []).some(i => normKey(i.name).includes(q)));
+        }
+        function recToggleSel(id) { if (recSel.has(id)) recSel.delete(id); else recSel.add(id); renderCurrentTabContent(); }
+        function recSelAll() {
+            const vis = recVisible();
+            if (vis.length && vis.every(x => recSel.has(x.id))) vis.forEach(x => recSel.delete(x.id)); else vis.forEach(x => recSel.add(x.id));
+            renderCurrentTabContent();
+        }
+        function recDownloadSelected() {
+            const list = recData().filter(x => recSel.has(x.id));
+            if (!list.length) { showToast('Marque ao menos uma receita para baixar.', 'warning'); return; }
+            recAskFormat(list.map(x => x.id));
         }
 
         // --- importar (texto colado, TXT/MD ou PDF) — abre o formulário preenchido para você revisar ---
@@ -3376,6 +3459,7 @@
         }
         function editBudget(id) { openBudgetModal(id); }
         function deleteBudget(id) {
+            if (!confirm('Excluir este orçamento?')) return;
             appData.habitacao.budgets = appData.habitacao.budgets.filter(b => b.id !== id);
             budgetSelected = budgetSelected.filter(x => x !== id);
             pruneBudgetGroups();
@@ -3461,6 +3545,7 @@
             } else finish(null, null);
         }
         function dissolveGroup(id) {
+            if (!confirm('Desfazer este grupo? Os orçamentos serão mantidos.')) return;
             const H = appData.habitacao;
             H.budgets.forEach(b => { if (b.groupId === id) b.groupId = ''; });
             H.budgetGroups = (H.budgetGroups || []).filter(g => g.id !== id);
@@ -3542,6 +3627,7 @@
         }
 
         function deleteSupplier(id) {
+            if (!confirm('Excluir este fornecedor?')) return;
             appData.habitacao.suppliers = appData.habitacao.suppliers.filter(s => s.id !== id);
             saveAppData();
             openSupplierModal();
@@ -3688,6 +3774,7 @@
         }
         function editMed(id) { openMedModal(id); }
         function deleteMed(id) {
+            if (!confirm('Excluir este remédio e o histórico dele?')) return;
             appData.saude.meds = appData.saude.meds.filter(m => m.id !== id);
             Object.keys(appData.saude.medLog).forEach(d => {
                 appData.saude.medLog[d] = appData.saude.medLog[d].filter(i => i !== id);
@@ -3849,6 +3936,7 @@
                     </div>
                 `);
             } else {
+                if (!confirm(`Excluir o lançamento "${t.desc || ''}"?`)) return;
                 removeFinance(id, false);
             }
         }
@@ -3899,6 +3987,7 @@
             showToast('Anexo adicionado!', 'success');
         }
         async function removeTxAttachment(txId, attId) {
+            if (!confirm('Excluir este anexo?')) return;
             const t = appData.financeiro.transactions.find(x => x.id === txId);
             if (!t) return;
             await deleteStoredFile(attId);
@@ -3908,7 +3997,7 @@
             openAttachmentsModal(txId);
         }
         function editAgenda(id) { openAgendaModal(id); }
-        function deleteAgenda(id) { appData.agenda = appData.agenda.filter(a => a.id !== id); saveAppData(); renderCurrentTabContent(); }
+        function deleteAgenda(id) { if (!confirm('Excluir este compromisso?')) return; appData.agenda = appData.agenda.filter(a => a.id !== id); saveAppData(); renderCurrentTabContent(); }
 
         function openLembreteModal(id = null) {
             let item = { title: '', date: '', priority: 'Média', completed: false };
@@ -3955,7 +4044,7 @@
             if (l) { l.completed = !l.completed; saveAppData(); renderCurrentTabContent(); }
         }
         function editLembrete(id) { openLembreteModal(id); }
-        function deleteLembrete(id) { appData.lembretes = appData.lembretes.filter(l => l.id !== id); saveAppData(); renderCurrentTabContent(); }
+        function deleteLembrete(id) { if (!confirm('Excluir este lembrete?')) return; appData.lembretes = appData.lembretes.filter(l => l.id !== id); saveAppData(); renderCurrentTabContent(); }
 
         function starPickerHtml(n, fn = 'setHobStar') {
             n = Number(n) || 0;
@@ -4034,7 +4123,7 @@
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast("Salvo!", "success");
         }
         function editHobby(id) { openHobbyModal(id); }
-        function deleteHobby(id) { appData.hobbies = appData.hobbies.filter(h => h.id !== id); saveAppData(); renderCurrentTabContent(); }
+        function deleteHobby(id) { if (!confirm('Excluir este hobby?')) return; appData.hobbies = appData.hobbies.filter(h => h.id !== id); saveAppData(); renderCurrentTabContent(); }
 
         function editPerson(id) {
             const p = appData.habitacao.people.find(x => x.id === id);
@@ -4103,6 +4192,7 @@
         function deleteHabitacaoContrib(id) {
             const c = appData.habitacao.contributions.find(x => x.id === id);
             if (c && c.linkKey) { showToast('Esta movimentação vem de uma Transferência no Financeiro. Exclua por lá.', 'warning'); return; }
+            if (!confirm('Excluir esta movimentação?')) return;
             appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
 
         // =====================================================
@@ -4335,6 +4425,7 @@
             openCardCategories();
         }
         function removeCardCategory(n) {
+            if (!confirm(`Excluir a categoria "${n}"?`)) return;
             appData.cartao.categories = appData.cartao.categories.filter(c => c !== n);
             saveAppData(); openCardCategories();
         }
@@ -4420,7 +4511,10 @@
                         <button onclick="removeCardEntry('${id}', false)" class="w-full bg-slate-100 dark:bg-slate-700 py-2.5 rounded-xl text-sm font-bold">Só esta parcela (${en.installment.n}/${en.installment.total})</button>
                         <button onclick="removeCardEntry('${id}', true)" class="w-full bg-rose-600 text-white py-2.5 rounded-xl text-sm font-bold">Todas as ${sib.length} parcelas</button>
                     </div>`);
-            } else removeCardEntry(id, false);
+            } else {
+                if (!confirm(`Excluir o lançamento "${en.name || ''}"?`)) return;
+                removeCardEntry(id, false);
+            }
         }
         function removeCardEntry(id, whole) {
             const C = appData.cartao, en = C.entries.find(x => x.id === id); if (!en) return;
@@ -5532,6 +5626,21 @@
         // ---------- Tela Financeiro (filtro geral) ----------
         function finSet(k, v) { finF[k] = v; renderCurrentTabContent(); }
         function finClear() { finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' }; financeFilterDate = localDateStr().slice(0, 7); financeFilterStatus = 'todos'; renderCurrentTabContent(); }
+        function finToggleFilter() { finFilterOpen = !finFilterOpen; renderCurrentTabContent(); }
+        function finSortBy(k) {
+            if (finSort.k === k) finSort.dir *= -1; else finSort = { k, dir: (k === 'amount' || k === 'date') ? -1 : 1 };
+            renderCurrentTabContent();
+        }
+        function finCmp(a, b) {
+            const k = finSort.k; let r;
+            if (k === 'amount') r = (Number(a.amount) || 0) - (Number(b.amount) || 0);
+            else if (k === 'date') r = (a.date || '').localeCompare(b.date || '');
+            else if (k === 'acc') r = normKey((accById(a.accId) || {}).name || '').localeCompare(normKey((accById(b.accId) || {}).name || ''));
+            else if (k === 'status') r = finStLabel(a).localeCompare(finStLabel(b));
+            else r = normKey(a[k] || '').localeCompare(normKey(b[k] || ''));
+            if (r === 0) r = (a.date || '').localeCompare(b.date || '');
+            return r * finSort.dir;
+        }
         function finNavMonth(d) { financeFilterDate = ymAdd(financeFilterDate || localDateStr().slice(0, 7), d); renderCurrentTabContent(); }
         function finFiltered() {
             const f = finF;
@@ -5546,7 +5655,7 @@
                 if (f.max !== '' && a > Number(f.max)) return false;
                 if (f.q && !normKey((t.desc || '') + ' ' + (t.category || '')).includes(normKey(f.q))) return false;
                 return true;
-            }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+            }).sort(finCmp);
         }
         function renderFinanceiro(container) {
             const list = finFiltered();
@@ -5557,21 +5666,16 @@
                 if (finSt(t) === 'pendente') tp += e.r + e.d;
             });
             const saldo = tr - td;
+            const nAct = ['acc', 'cat', 'type'].filter(k => finF[k]).length + (finF.min !== '' ? 1 : 0) + (finF.max !== '' ? 1 : 0) + (finF.q ? 1 : 0) + (financeFilterStatus !== 'todos' ? 1 : 0);
+            const sh = (l, k) => `<th class="p-3.5 cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-200 whitespace-nowrap" onclick="finSortBy('${k}')" title="Clique para ordenar">${l}${finSort.k === k ? ` <i class="fa-solid fa-arrow-${finSort.dir > 0 ? 'up' : 'down'} text-[9px]"></i>` : ''}</th>`;
             const cats = [...new Set(appData.financeiro.transactions.map(t => t.category).filter(Boolean))].sort();
             const o = (v, l, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`;
             const S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
             const card = (l, v, c) => `<div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700"><p class="text-xs font-semibold text-slate-400 uppercase">${l}</p><h3 class="text-2xl font-bold ${c} mt-1">R$ ${money(v)}</h3></div>`;
             container.innerHTML = `
                 <div class="space-y-6 max-w-7xl mx-auto">
-                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 space-y-3">
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
                         <div class="flex flex-wrap items-center justify-between gap-3">
-                            <span class="text-xs font-bold text-slate-500 uppercase"><i class="fa-solid fa-filter mr-1"></i> Filtro geral</span>
-                            <div class="flex gap-2">
-                                <button onclick="finClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Limpar filtros (volta ao mês atual)</button>
-                                <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
                             <div class="flex items-center gap-1">
                                 <button onclick="finNavMonth(-1)" title="Mês anterior" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-left"></i></button>
                                 <input type="month" value="${financeFilterDate}" onchange="changeFinanceFilter(this.value)" title="Mês" class="${S}">
@@ -5579,6 +5683,12 @@
                                 <button onclick="changeFinanceFilter(localDateStr().slice(0, 7))" class="px-3 py-1.5 rounded-xl text-xs font-bold ${financeFilterDate === localDateStr().slice(0, 7) ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Mês atual</button>
                                 <button onclick="changeFinanceFilter('')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${financeFilterDate === '' ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Todos os meses</button>
                             </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button onclick="finToggleFilter()" class="px-3 py-2 rounded-xl text-xs font-bold ${finFilterOpen || nAct ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid fa-filter mr-1"></i>Filtro${nAct ? ' (' + nAct + ')' : ''}<i class="fa-solid fa-chevron-${finFilterOpen ? 'up' : 'down'} ml-1.5 text-[9px]"></i></button>
+                                <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
+                            </div>
+                        </div>
+                        ${finFilterOpen ? `<div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-2">
                             <select onchange="finSet('acc',this.value)" class="${S}"><option value="">Todos os bancos/cartões</option>${contasData().map(a => o(a.id, accLabel(a), finF.acc)).join('')}</select>
                             <select onchange="finSet('cat',this.value)" class="${S}"><option value="">Todas as categorias</option>${cats.map(c => o(c, c, finF.cat)).join('')}</select>
                             <select onchange="finSet('type',this.value)" class="${S}">${o('', 'Receitas e despesas', finF.type)}${o('receita', 'Só receitas', finF.type)}${o('despesa', 'Só despesas', finF.type)}${o('transferencia', 'Só transferências', finF.type)}</select>
@@ -5586,7 +5696,8 @@
                             <input type="number" step="0.01" min="0" placeholder="Valor mín." value="${finF.min}" onchange="finSet('min',this.value)" class="${S} w-28">
                             <input type="number" step="0.01" min="0" placeholder="Valor máx." value="${finF.max}" onchange="finSet('max',this.value)" class="${S} w-28">
                             <input type="text" placeholder="Buscar descrição..." value="${esc(finF.q)}" onchange="finSet('q',this.value)" class="${S} w-44">
-                        </div>
+                            <button onclick="finClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Limpar filtros</button>
+                        </div>` : ''}
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                         ${card('Receitas', tr, 'text-emerald-600')}${card('Despesas', td, 'text-rose-600')}${card('Saldo do Período', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${card('Pendente', tp, 'text-amber-600')}
@@ -5597,7 +5708,7 @@
                         <div id="fin-sel-bar">${finSelBar()}</div>
                         <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                             <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                                <th class="p-3.5 rounded-l-xl w-8"><input type="checkbox" id="fin-sel-all" title="Selecionar todos os lançamentos da lista" onchange="finSelAll(this.checked)" ${list.length && list.every(t => finSel.has(t.id)) ? 'checked' : ''}></th><th class="p-3.5">Descrição</th><th class="p-3.5">Categoria</th><th class="p-3.5">Cartão/Conta</th><th class="p-3.5">Data</th><th class="p-3.5">Valor</th><th class="p-3.5">Status</th><th class="p-3.5">Anexos</th><th class="p-3.5 text-right rounded-r-xl">Ações</th>
+                                <th class="p-3.5 rounded-l-xl w-8"><input type="checkbox" id="fin-sel-all" title="Selecionar todos os lançamentos da lista" onchange="finSelAll(this.checked)" ${list.length && list.every(t => finSel.has(t.id)) ? 'checked' : ''}></th>${sh('Descrição','desc')}${sh('Categoria','category')}${sh('Cartão/Conta','acc')}${sh('Data','date')}${sh('Valor','amount')}${sh('Status','status')}<th class="p-3.5">Anexos</th><th class="p-3.5 text-right rounded-r-xl">Ações</th>
                             </tr></thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                             ${list.map(t => {
@@ -5778,10 +5889,14 @@
         function dashCardSet(v) { dashCardMonth = v; renderCurrentTabContent(); }
         function dashCreditHtml() {
             const tx = appData.financeiro.transactions.filter(t => t.cardInvoice);
-            const sel = dashCardMonth ? tx.filter(t => t.cardInvoice.inv === dashCardMonth) : tx;
+            const cur = localDateStr().slice(0, 7);
+            // 'auto': fatura em aberto mais próxima de hoje (mês atual se estiver em aberto; senão a próxima a vencer; senão a atrasada mais recente)
+            const openM = [...new Set(tx.filter(t => (t.status || 'pago') === 'pendente').map(t => t.cardInvoice.inv))].sort();
+            const autoM = openM.includes(cur) ? cur : (openM.find(m => m > cur) || openM[openM.length - 1] || cur);
+            const mon = dashCardMonth === 'auto' ? autoM : dashCardMonth;
+            const sel = mon ? tx.filter(t => t.cardInvoice.inv === mon) : tx;
             const sum = a => a.reduce((s, t) => s + (Number(t.amount) || 0), 0);
             const total = sum(sel), open = sum(sel.filter(t => (t.status || 'pago') === 'pendente')), paid = total - open;
-            const cur = localDateStr().slice(0, 7);
             const S = 'px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[10px]';
             const B = 'px-1.5 py-0.5 rounded-md text-[10px] font-semibold';
             const bOn = 'bg-teal-600 text-white', bOff = 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
@@ -5789,11 +5904,12 @@
                 <div onclick="switchTab('cartao')" class="cursor-pointer flex items-center justify-between">
                     <div><p class="text-xs font-medium text-slate-400 uppercase">Fatura do Cartão de Crédito</p>
                     <h3 class="text-xl font-bold text-rose-600 mt-1">R$ ${money(total)}</h3>
-                    <p class="text-[10px] text-slate-400 mt-1">${dashCardMonth ? fmtYM(dashCardMonth) : 'Total de todas as faturas'} · em aberto: R$ ${money(open)} · paga: R$ ${money(paid)}</p></div>
+                    <p class="text-[10px] text-slate-400 mt-1">${mon ? fmtYM(mon) : 'Total de todas as faturas'}${dashCardMonth === 'auto' ? ' (fatura em aberto)' : ''} · em aberto: R$ ${money(open)} · paga: R$ ${money(paid)}</p></div>
                     <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center text-xl"><i class="fa-solid fa-credit-card"></i></div>
                 </div>
                 <div class="mt-2 flex flex-wrap gap-1">
-                    <input type="month" value="${dashCardMonth}" onchange="dashCardSet(this.value)" title="Mês da fatura (vencimento)" class="${S}">
+                    <input type="month" value="${mon}" onchange="dashCardSet(this.value)" title="Mês da fatura (vencimento)" class="${S}">
+                    <button onclick="dashCardSet('auto')" class="${B} ${dashCardMonth === 'auto' ? bOn : bOff}">Em aberto</button>
                     <button onclick="dashCardSet('${cur}')" class="${B} ${dashCardMonth === cur ? bOn : bOff}">Mês atual</button>
                     <button onclick="dashCardSet('')" class="${B} ${dashCardMonth === '' ? bOn : bOff}">Total</button>
                 </div>
