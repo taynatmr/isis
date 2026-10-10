@@ -552,6 +552,9 @@
             // Orçamentos: valor pago, observação e grupos
             appData.habitacao.budgets.forEach(b => {
                 if (b.paidAmount === undefined) b.paidAmount = '';
+                if (b.brand === undefined) b.brand = '';
+                if (b.unitPrice === undefined) b.unitPrice = '';
+                if (b.qty === undefined) b.qty = '';
                 if (b.obs === undefined) b.obs = '';
                 if (b.paidDate === undefined) b.paidDate = '';
             });
@@ -3211,9 +3214,11 @@
                     </div>
                     <h4 class="font-bold text-slate-800 dark:text-white text-base mb-1">${esc(b.title)}</h4>
                     <p class="text-xs text-slate-500 mb-1"><i class="fa-solid fa-store mr-1"></i> Fornecedor: <span class="font-semibold text-slate-700 dark:text-slate-300">${esc(b.supplier)}</span></p>
+                    ${b.brand ? `<p class="text-xs text-slate-500 mb-1"><i class="fa-solid fa-tag mr-1"></i> Marca: <span class="font-semibold text-slate-700 dark:text-slate-300">${esc(b.brand)}</span></p>` : ''}
+                    ${b.unitPrice !== '' && b.unitPrice !== undefined ? `<p class="text-xs text-slate-500 mb-1"><i class="fa-solid fa-calculator mr-1"></i> ${b.qty !== '' && b.qty !== undefined ? esc(String(b.qty)) : '1'} × R$ ${money(Number(b.unitPrice) || 0)}</p>` : ''}
                     <p class="text-xs text-slate-500 mb-2"><i class="fa-regular fa-calendar mr-1"></i> ${fmtBR(b.date)}${b.status === 'Pago' && b.paidDate ? ` · <span class="text-sky-600 font-semibold">pago em ${fmtBR(b.paidDate)}</span>` : ''}</p>
                     <div class="grid grid-cols-2 gap-2 mb-2">
-                        <div><p class="text-[10px] uppercase font-semibold text-slate-400">Valor</p><p class="text-base font-extrabold text-amber-600">R$ ${money(amt)}</p></div>
+                        <div><p class="text-[10px] uppercase font-semibold text-slate-400">Valor total</p><p class="text-base font-extrabold text-amber-600">R$ ${money(amt)}</p></div>
                         <div><p class="text-[10px] uppercase font-semibold text-slate-400">Valor pago</p><p class="text-base font-extrabold ${paid > 0 ? 'text-emerald-600' : 'text-slate-400'}">R$ ${money(paid)}</p></div>
                     </div>
                     ${paid > 0 && paid < amt ? `<p class="text-[11px] text-rose-500 font-semibold mb-2">Falta pagar R$ ${money(amt - paid)}</p>` : ''}
@@ -3234,7 +3239,7 @@
                     <div class="flex items-center">${budgetSelCheck(b)}<span class="font-semibold text-slate-800 dark:text-white">${esc(b.title)}</span></div>
                     ${b.obs ? `<p class="text-[11px] text-slate-400 italic mt-0.5 max-w-xs truncate" title="${esc(b.obs)}">${esc(b.obs)}</p>` : ''}
                 </td>
-                <td class="p-3 text-slate-500">${esc(b.supplier)}</td>
+                <td class="p-3 text-slate-500">${esc(b.supplier)}${b.brand ? `<p class="text-[10px] text-slate-400">${esc(b.brand)}</p>` : ''}${b.unitPrice !== '' && b.unitPrice !== undefined ? `<p class="text-[10px] text-slate-400">${b.qty !== '' && b.qty !== undefined ? esc(String(b.qty)) : '1'} × R$ ${money(Number(b.unitPrice) || 0)}</p>` : ''}</td>
                 <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(b.date)}</td>
                 <td class="p-3">${budgetBadge(b)}${b.status === 'Pago' && b.paidDate ? `<p class="text-[10px] text-sky-600 mt-0.5">${fmtBR(b.paidDate)}</p>` : ''}</td>
                 <td class="p-3 font-bold text-amber-600 whitespace-nowrap">R$ ${money(amt)}</td>
@@ -3295,7 +3300,7 @@
             } else {
                 body = `<div class="overflow-x-auto"><table class="w-full text-left text-sm">
                     <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                        <th class="p-3 rounded-l-xl">Orçamento</th><th class="p-3">Fornecedor</th><th class="p-3">Data</th><th class="p-3">Status</th><th class="p-3">Valor</th><th class="p-3">Pago</th><th class="p-3">Anexo</th><th class="p-3 text-right rounded-r-xl">Ações</th>
+                        <th class="p-3 rounded-l-xl">Orçamento</th><th class="p-3">Fornecedor / Marca</th><th class="p-3">Data</th><th class="p-3">Status</th><th class="p-3">Valor total</th><th class="p-3">Pago</th><th class="p-3">Anexo</th><th class="p-3 text-right rounded-r-xl">Ações</th>
                     </tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         ${blocks.map(({ g, all, shown }) => {
@@ -3351,7 +3356,7 @@
             const btn = document.getElementById('bud-group-btn'); if (btn) btn.disabled = budgetSelected.length < 2;
         }
         function openBudgetModal(id = null) {
-            let b = { title: '', supplier: '', amount: '', paidAmount: '', date: localDateStr(), status: 'Pendente', paidDate: '', obs: '', groupId: '', fileName: '', fileData: '' };
+            let b = { title: '', supplier: '', brand: '', unitPrice: '', qty: '', amount: '', paidAmount: '', date: localDateStr(), status: 'Pendente', paidDate: '', obs: '', groupId: '', fileName: '', fileData: '' };
             if (id && appData.habitacao.budgets) b = appData.habitacao.budgets.find(x => x.id === id) || b;
             const sup = (appData.habitacao.suppliers || []).map(s => s.name);
             if (b.supplier && b.supplier !== 'Geral' && !sup.includes(b.supplier)) sup.push(b.supplier);
@@ -3369,17 +3374,33 @@
                             <input type="text" id="budget-supplier" list="budget-supplier-opts" value="${esc(b.supplier && b.supplier !== 'Geral' ? b.supplier : '')}" placeholder="Digite ou escolha um fornecedor" autocomplete="off" class="${INP}"><datalist id="budget-supplier-opts">${sup.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
                         </div>
                         <div>
+                            <label class="${LBL}">Marca <span class="text-slate-400 font-normal normal-case">(opcional)</span></label>
+                            <input type="text" id="budget-brand" value="${esc(b.brand || '')}" placeholder="Ex: Portobello" autocomplete="off" class="${INP}">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
                             <label class="${LBL}">Status</label>
                             <select id="budget-status" onchange="toggleBudgetPaidDate()" class="${INP}">
                                 ${BUDGET_STATUSES.map(s => `<option value="${s}" ${b.status === s ? 'selected' : ''}>${s}</option>`).join('')}
                             </select>
                         </div>
+                        <div>
+                            <label class="${LBL}">Quantidade</label>
+                            <input type="number" step="any" min="0" id="budget-qty" value="${b.qty === undefined ? '' : b.qty}" oninput="budgetCalcTotal()" placeholder="1" class="${INP}">
+                        </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="${LBL}">Valor (R$)</label>
+                            <label class="${LBL}">Valor unitário (R$)</label>
+                            <input type="number" step="0.01" min="0" id="budget-unit" value="${b.unitPrice === undefined ? '' : b.unitPrice}" oninput="budgetCalcTotal()" placeholder="0,00" class="${INP}">
+                        </div>
+                        <div>
+                            <label class="${LBL}">Valor total (R$)</label>
                             <input type="number" step="0.01" min="0" id="budget-amount" value="${b.amount}" required class="${INP}">
                         </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="${LBL}">Valor pago (R$)</label>
                             <input type="number" step="0.01" min="0" id="budget-paid" value="${b.paidAmount === undefined ? '' : b.paidAmount}" placeholder="0,00" class="${INP}">
@@ -3413,6 +3434,13 @@
                 </form>
             `);
         }
+        function budgetCalcTotal() {
+            const u = parseFloat(document.getElementById('budget-unit').value);
+            let q = parseFloat(document.getElementById('budget-qty').value);
+            if (isNaN(u)) return;
+            if (isNaN(q)) q = 1;
+            document.getElementById('budget-amount').value = (Math.round(u * q * 100) / 100).toFixed(2);
+        }
         function toggleBudgetPaidDate() {
             const isPaid = document.getElementById('budget-status').value === 'Pago';
             document.getElementById('budget-paiddate-wrap').classList.toggle('hidden', !isPaid);
@@ -3430,6 +3458,9 @@
             const data = {
                 title: document.getElementById('budget-title').value,
                 supplier: document.getElementById('budget-supplier').value.trim() || 'Geral',
+                brand: document.getElementById('budget-brand').value.trim(),
+                unitPrice: document.getElementById('budget-unit').value,
+                qty: document.getElementById('budget-qty').value,
                 status,
                 amount: document.getElementById('budget-amount').value,
                 paidAmount: document.getElementById('budget-paid').value,
