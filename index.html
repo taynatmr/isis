@@ -237,6 +237,9 @@
                     <span id="current-date-badge" class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
                         <i class="fa-regular fa-calendar mr-2"></i> <span id="header-date-text">--/--/----</span>
                     </span>
+                    <button id="header-sync-btn" onclick="syncNow()" title="Sincronizar com o Drive" aria-label="Sincronizar" class="w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-teal-600 transition-colors">
+                        <i id="header-sync-icon" class="fa-solid fa-rotate text-sm"></i>
+                    </button>
                     <button onclick="toggleDarkMode()" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                         <i class="fa-solid fa-moon dark:hidden"></i>
                         <i class="fa-solid fa-sun hidden dark:inline"></i>
@@ -2354,7 +2357,8 @@
                                             <input type="checkbox" onclick="toggleLembrete('${item.id}')" ${item.completed ? 'checked' : ''} class="w-5 h-5 text-teal-600 rounded border-slate-300">
                                             <div>
                                                 <h4 class="font-semibold text-sm ${item.completed ? 'line-through text-slate-400' : 'text-slate-800 dark:text-white'}">${item.title}</h4>
-                                                ${item.date ? `<span class="text-xs text-slate-500"><i class="fa-regular fa-calendar mr-1"></i> ${item.date}</span>` : ''}
+                                                ${item.date ? `<span class="text-xs text-slate-500"><i class="fa-regular fa-calendar mr-1"></i> ${fmtBR(item.date)}</span>` : ''}
+                                                ${lemRecLabel(item) ? `<span class="text-[10px] ml-2 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold"><i class="fa-solid fa-repeat mr-1"></i>${lemRecLabel(item)}</span>` : ''}
                                             </div>
                                         </div>
                                         <div class="flex items-center space-x-3">
@@ -3362,7 +3366,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="${LBL}">Fornecedor</label>
-                            <select id="budget-supplier" class="${INP}"><option value="">Selecione o Fornecedor</option>${supplierOptions}</select>
+                            <input type="text" id="budget-supplier" list="budget-supplier-opts" value="${esc(b.supplier && b.supplier !== 'Geral' ? b.supplier : '')}" placeholder="Digite ou escolha um fornecedor" autocomplete="off" class="${INP}"><datalist id="budget-supplier-opts">${sup.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
                         </div>
                         <div>
                             <label class="${LBL}">Status</label>
@@ -3425,7 +3429,7 @@
             const status = document.getElementById('budget-status').value;
             const data = {
                 title: document.getElementById('budget-title').value,
-                supplier: document.getElementById('budget-supplier').value || 'Geral',
+                supplier: document.getElementById('budget-supplier').value.trim() || 'Geral',
                 status,
                 amount: document.getElementById('budget-amount').value,
                 paidAmount: document.getElementById('budget-paid').value,
@@ -3999,14 +4003,53 @@
         function editAgenda(id) { openAgendaModal(id); }
         function deleteAgenda(id) { if (!confirm('Excluir este compromisso?')) return; appData.agenda = appData.agenda.filter(a => a.id !== id); saveAppData(); renderCurrentTabContent(); }
 
+        // --- Período do lembrete: unico | diario | mensal | anual | cada (a cada X dias) | dias (dias da semana) ---
+        const LEM_WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        function lemRecLabel(l) {
+            const r = l && l.rec; if (!r || !r.type || r.type === 'unico') return '';
+            if (r.type === 'diario') return 'Diário';
+            if (r.type === 'mensal') return 'Mensal';
+            if (r.type === 'anual') return 'Anual';
+            if (r.type === 'cada') return `A cada ${r.every || 1} dia(s)`;
+            if (r.type === 'dias') return (r.weekdays || []).slice().sort((a, b) => a - b).map(d => LEM_WD[d]).join(', ') || 'Dias da semana';
+            return '';
+        }
+        function lemFmt(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+        function lemStep(dateStr, r) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            if (r.type === 'diario') return lemFmt(new Date(y, m - 1, d + 1));
+            if (r.type === 'cada') return lemFmt(new Date(y, m - 1, d + Math.max(1, Number(r.every) || 1)));
+            if (r.type === 'dias') {
+                const wd = (r.weekdays && r.weekdays.length) ? r.weekdays : [new Date(y, m - 1, d).getDay()];
+                for (let i = 1; i <= 7; i++) { const x = new Date(y, m - 1, d + i); if (wd.includes(x.getDay())) return lemFmt(x); }
+            }
+            if (r.type === 'mensal') { const day = Number(r.day) || d, last = new Date(y, m + 1, 0).getDate(); return lemFmt(new Date(y, m, Math.min(day, last))); }
+            if (r.type === 'anual') { const day = Number(r.day) || d, last = new Date(y + 1, m, 0).getDate(); return lemFmt(new Date(y + 1, m - 1, Math.min(day, last))); }
+            return dateStr;
+        }
+        // Próxima ocorrência depois da data atual do lembrete e depois de hoje
+        function nextLembreteDate(l) {
+            const today = localDateStr();
+            let n = lemStep(l.date, l.rec), guard = 0;
+            while (n <= today && guard++ < 4000) n = lemStep(n, l.rec);
+            return n;
+        }
+        function lemRecChange() {
+            const t = document.getElementById('lem-rec').value;
+            document.getElementById('lem-rec-cada').classList.toggle('hidden', t !== 'cada');
+            document.getElementById('lem-rec-dias').classList.toggle('hidden', t !== 'dias');
+        }
         function openLembreteModal(id = null) {
-            let item = { title: '', date: '', priority: 'Média', completed: false };
+            let item = { title: '', date: '', priority: 'Média', completed: false, rec: { type: 'unico' } };
             if (id) item = appData.lembretes.find(l => l.id === id) || item;
+            const rec = item.rec || { type: 'unico' };
+            const T = rec.type || 'unico';
+            const opt = (v, t) => `<option value="${v}" ${T === v ? 'selected' : ''}>${t}</option>`;
             showModal(id ? 'Editar Lembrete' : 'Inserir Lembrete', `
                 <form onsubmit="saveLembrete(event, '${id || ''}')" class="space-y-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Título</label>
-                        <input type="text" id="lem-title" value="${item.title}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        <input type="text" id="lem-title" value="${esc(item.title)}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -4022,6 +4065,17 @@
                             </select>
                         </div>
                     </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Período</label>
+                        <select id="lem-rec" onchange="lemRecChange()" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            ${opt('unico', 'Único')}${opt('diario', 'Diário')}${opt('mensal', 'Mensal')}${opt('anual', 'Anual')}${opt('cada', 'A cada X dias')}${opt('dias', 'Nos dias da semana…')}
+                        </select>
+                        <div id="lem-rec-cada" class="${T === 'cada' ? '' : 'hidden'} mt-2 flex items-center gap-2 text-sm text-slate-500">A cada <input type="number" min="1" id="lem-every" value="${rec.every || 2}" class="w-20 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm"> dia(s)</div>
+                        <div id="lem-rec-dias" class="${T === 'dias' ? '' : 'hidden'} mt-2 flex flex-wrap gap-2">
+                            ${LEM_WD.map((n, i) => `<label class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-semibold"><input type="checkbox" class="lem-wd" value="${i}" ${(rec.weekdays || []).includes(i) ? 'checked' : ''}>${n}</label>`).join('')}
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-1.5">Em lembretes repetidos, ao marcar como concluído a data avança para a próxima ocorrência.</p>
+                    </div>
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>
             `);
@@ -4029,19 +4083,35 @@
         function saveLembrete(e, id) {
             e.preventDefault();
             const title = document.getElementById('lem-title').value;
-            const date = document.getElementById('lem-date').value;
+            let date = document.getElementById('lem-date').value;
             const priority = document.getElementById('lem-priority').value;
+            const type = document.getElementById('lem-rec').value;
+            const rec = { type };
+            if (type === 'cada') rec.every = Math.max(1, parseInt(document.getElementById('lem-every').value) || 1);
+            if (type === 'dias') {
+                rec.weekdays = Array.from(document.querySelectorAll('.lem-wd:checked')).map(c => Number(c.value));
+                if (!rec.weekdays.length) { showToast('Marque pelo menos um dia da semana.', 'warning'); return; }
+            }
+            if (type !== 'unico' && !date) date = localDateStr();
+            if (date) rec.day = Number(date.split('-')[2]);
             if (id) {
                 const l = appData.lembretes.find(x => x.id === id);
-                if (l) { l.title = title; l.date = date; l.priority = priority; }
+                if (l) { l.title = title; l.date = date; l.priority = priority; l.rec = rec; }
             } else {
-                appData.lembretes.push({ id: Date.now().toString(), title, date, priority, completed: false });
+                appData.lembretes.push({ id: Date.now().toString(), title, date, priority, completed: false, rec });
             }
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast("Salvo!", "success");
         }
         function toggleLembrete(id) {
             const l = appData.lembretes.find(x => x.id === id);
-            if (l) { l.completed = !l.completed; saveAppData(); renderCurrentTabContent(); }
+            if (!l) return;
+            if (!l.completed && l.rec && l.rec.type && l.rec.type !== 'unico' && l.date) {
+                l.date = nextLembreteDate(l);
+                saveAppData(); renderCurrentTabContent();
+                showToast('Próxima ocorrência: ' + fmtBR(l.date), 'success');
+                return;
+            }
+            l.completed = !l.completed; saveAppData(); renderCurrentTabContent();
         }
         function editLembrete(id) { openLembreteModal(id); }
         function deleteLembrete(id) { if (!confirm('Excluir este lembrete?')) return; appData.lembretes = appData.lembretes.filter(l => l.id !== id); saveAppData(); renderCurrentTabContent(); }
@@ -4235,7 +4305,7 @@
                 const card = cardById(cardId);
                 t.type = 'despesa'; t.category = 'Cartão de Crédito';
                 t.desc = 'Cartão de Crédito' + (C.cards.length > 1 ? ' — ' + card.name : '');
-                t.amount = (sums[cardId + '|' + inv]).toFixed(2);
+                t.amount = Math.max(0, sums[cardId + '|' + inv]).toFixed(2); // crédito maior que a fatura não gera despesa negativa
                 t.date = cardDueDate(card, inv);
             };
             appData.financeiro.transactions.forEach(t => {
@@ -4349,7 +4419,7 @@
                             <td class="p-3"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(e.category)}</span></td>
                             <td class="p-3">${e.installment ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${e.installment.n}/${e.installment.total}</span>` : '<span class="text-slate-300">—</span>'}</td>
                             <td class="p-3 text-slate-500 text-xs max-w-[220px] truncate" title="${esc(e.obs || '')}">${esc(e.obs || '')}</td>
-                            <td class="p-3 font-bold text-rose-600 whitespace-nowrap">R$ ${money(e.amount)}</td>
+                            <td class="p-3 font-bold whitespace-nowrap ${Number(e.amount) < 0 ? 'text-emerald-600' : 'text-rose-600'}">${Number(e.amount) < 0 ? '− R$ ' + money(Math.abs(e.amount)) + ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">crédito</span>' : 'R$ ' + money(e.amount)}</td>
                             <td class="p-3 text-right space-x-1 whitespace-nowrap">
                                 <button onclick="openCardEntryModal('${e.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
                                 <button onclick="deleteCardEntry('${e.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
@@ -4450,8 +4520,13 @@
                 <form onsubmit="saveCardEntry(event, '${id || ''}')" class="space-y-4">
                     ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ce-card" onchange="cardAutoInvoice()" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ce-card" value="${card.id}">`}
                     <div><label class="${LBL}">Nome</label><input id="ce-name" required value="${esc(e.name)}" placeholder="Ex: Posto Shell" class="${INP}"></div>
+                    <div><label class="${LBL}">Tipo do lançamento</label>
+                        <select id="ce-kind" class="${INP}">
+                            <option value="compra" ${Number(e.amount) >= 0 || e.amount === '' ? 'selected' : ''}>Compra / despesa (soma na fatura)</option>
+                            <option value="credito" ${Number(e.amount) < 0 ? 'selected' : ''}>Estorno / desconto / crédito (abate da fatura)</option>
+                        </select></div>
                     <div class="grid grid-cols-2 gap-4">
-                        <div><label class="${LBL}">Valor (R$)</label><input type="number" step="0.01" min="0" id="ce-amount" required value="${e.amount}" class="${INP}"></div>
+                        <div><label class="${LBL}">Valor (R$)</label><input type="number" step="0.01" min="0" id="ce-amount" required value="${e.amount === '' ? '' : Math.abs(Number(e.amount))}" class="${INP}"></div>
                         ${id ? `<div><label class="${LBL}">Parcela</label><div class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-sm text-slate-500">${en.installment ? `${en.installment.n} de ${en.installment.total}` : 'À vista'}</div></div>` : `
                         <div><label class="${LBL}">Parcelas (opcional)</label><input type="number" min="1" max="60" id="ce-inst" placeholder="À vista" class="${INP}"></div>`}
                     </div>
@@ -4480,7 +4555,8 @@
                 if (!C.categories.some(c => normKey(c) === normKey(category))) C.categories.push(category);
             }
             const base = { cardId: g('ce-card').value, name: g('ce-name').value.trim(), date: g('ce-date').value, invoice: g('ce-inv').value, category, obs: g('ce-obs').value.trim() };
-            const amount = Number(g('ce-amount').value) || 0;
+            const sgn = g('ce-kind').value === 'credito' ? -1 : 1;
+            const amount = sgn * Math.abs(Number(g('ce-amount').value) || 0);
             if (id) {
                 const en = C.entries.find(x => x.id === id);
                 Object.assign(en, base, { amount });
@@ -4491,10 +4567,10 @@
                 if (n === 1) C.entries.push(Object.assign({ id: uid(), amount }, base));
                 else {
                     const group = uid(), each = g('ce-mode').value === 'each';
-                    const totalCents = Math.round(amount * 100), per = Math.floor(totalCents / n);
+                    const totalCents = Math.round(Math.abs(amount) * 100), per = Math.floor(totalCents / n);
                     for (let i = 0; i < n; i++) {
-                        const cents = each ? Math.round(amount * 100) : (i === n - 1 ? totalCents - per * (n - 1) : per);
-                        C.entries.push(Object.assign({}, base, { id: uid(), amount: cents / 100, date: addMonthsToDate(base.date, i), invoice: ymAdd(base.invoice, i), installment: { group, n: i + 1, total: n } }));
+                        const cents = each ? totalCents : (i === n - 1 ? totalCents - per * (n - 1) : per);
+                        C.entries.push(Object.assign({}, base, { id: uid(), amount: sgn * cents / 100, date: addMonthsToDate(base.date, i), invoice: ymAdd(base.invoice, i), installment: { group, n: i + 1, total: n } }));
                     }
                 }
                 cardSelectedId = base.cardId; cardInvMonth = base.invoice;
@@ -5346,6 +5422,34 @@
             try { await driveReconcile(); showToast('Drive sincronizado!', 'success'); }
             catch (e) { console.error(e); showToast('Falha ao sincronizar: ' + e.message, 'error'); }
         }
+        // Botão discreto do cabeçalho: sincroniza na hora (envia o pendente e puxa o que mudou no Drive)
+        let _syncBusy = false;
+        async function syncNow() {
+            if (_syncBusy) return;
+            _syncBusy = true;
+            const ic = document.getElementById('header-sync-icon');
+            if (ic) ic.classList.add('fa-spin');
+            try {
+                if (!driveAvailable() || !(driveLinked() || driveToken)) {
+                    saveAppData();
+                    showToast('Drive não conectado. Dados salvos neste aparelho.', 'info');
+                } else if (!driveToken || Date.now() > driveTokenExp) {
+                    await driveSignIn();
+                } else {
+                    driveErr = '';
+                    if (driveDirty() && driveReconciled) { clearTimeout(driveSaveTimer); await driveUpload(); }
+                    await driveReconcile();
+                    if (driveErr) showToast('Falha ao sincronizar: ' + driveErr, 'error');
+                    else { showToast('Sincronizado com o Drive!', 'success'); renderCurrentTabContent(); }
+                }
+            } catch (e) {
+                console.error(e);
+                showToast('Falha ao sincronizar: ' + (e && e.message ? e.message : e), 'error');
+            } finally {
+                _syncBusy = false;
+                if (ic) ic.classList.remove('fa-spin');
+            }
+        }
         function driveMakeClient() {
             const mode = driveMode();
             driveClient = google.accounts.oauth2.initTokenClient({
@@ -5525,6 +5629,8 @@
         // NOTAS (texto ou lista) COM SENHA OPCIONAL — criptografia AES-GCM no próprio aparelho
         // =====================================================
         let nEd = {}, nQuery = '';
+        let nView = (() => { try { return localStorage.getItem('meusistema_notas_view') === 'linhas' ? 'linhas' : 'cards'; } catch (e) { return 'cards'; } })();
+        function setNotasView(v) { nView = v; try { localStorage.setItem('meusistema_notas_view', v); } catch (e) {} renderCurrentTabContent(); }
         function notasData() { if (!Array.isArray(appData.notas)) appData.notas = []; return appData.notas; }
         function nB64(buf) { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
         function nUnB64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
@@ -5559,12 +5665,26 @@
                 }
                 return `<p class="mt-2 text-xs text-slate-500 line-clamp-4 whitespace-pre-line">${esc((n.text || '').slice(0, 220)) || '<span class="text-slate-400">Nota vazia</span>'}</p>`;
             };
+            const lineTxt = n => {
+                if (n.locked) return '<span class="text-amber-600 dark:text-amber-400"><i class="fa-solid fa-lock mr-1"></i>Protegida por senha</span>';
+                if (n.kind === 'lista') { const it = n.items || [], d = it.filter(i => i.done).length; return it.length ? `${d}/${it.length} concluídos · ` + esc(it.slice(0, 3).map(i => i.t).join(', ')) : 'Lista vazia'; }
+                return esc((n.text || '').replace(/\s+/g, ' ').slice(0, 160)) || 'Nota vazia';
+            };
+            const vbtn = (k, ic, t) => `<button onclick="setNotasView('${k}')" title="${t}" class="px-3 py-2 text-xs font-bold ${nView === k ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${ic} mr-1"></i>${t}</button>`;
+            const linhas = `<div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 overflow-hidden">${list.map(n => `
+                <button onclick="openNote('${n.id}')" class="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition">
+                    <i class="fa-solid ${n.locked ? 'fa-lock text-amber-500' : n.kind === 'lista' ? 'fa-list-check text-teal-500' : 'fa-note-sticky text-teal-500'} text-sm w-5 text-center shrink-0"></i>
+                    <span class="font-bold text-sm text-slate-800 dark:text-white shrink-0 max-w-[40%] truncate">${esc(n.title || 'Sem título')}</span>
+                    <span class="text-xs text-slate-500 truncate flex-1 min-w-0">${lineTxt(n)}</span>
+                    <span class="text-[10px] text-slate-400 shrink-0">${n.updated ? new Date(n.updated).toLocaleDateString('pt-BR') : ''}</span>
+                </button>`).join('')}</div>`;
             container.innerHTML = `<div class="space-y-5 max-w-7xl mx-auto">
                 <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                     <input type="text" placeholder="Buscar notas..." value="${esc(nQuery)}" onchange="nQuery=this.value;renderCurrentTabContent()" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm w-full sm:w-64">
+                    <div class="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${vbtn('cards', 'fa-table-cells-large', 'Cartões')}${vbtn('linhas', 'fa-list', 'Linhas')}</div>
                     <button onclick="openNoteEditor(null)" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Nova nota</span></button>
                 </div>
-                ${list.length ? `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">${list.map(n => `
+                ${list.length && nView === 'linhas' ? linhas : list.length ? `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">${list.map(n => `
                     <button onclick="openNote('${n.id}')" class="text-left bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700 hover:border-teal-400 transition">
                         <div class="flex items-start justify-between gap-2"><h4 class="font-bold text-sm text-slate-800 dark:text-white break-words">${esc(n.title || 'Sem título')}</h4>
                             <i class="fa-solid ${n.locked ? 'fa-lock text-amber-500' : n.kind === 'lista' ? 'fa-list-check text-teal-500' : 'fa-note-sticky text-teal-500'} text-sm mt-0.5"></i></div>
@@ -6224,10 +6344,11 @@
                 if (libVia && (l.via || '') !== libVia) return false;
                 if (libFrom && (!l.dateRec || l.dateRec < libFrom)) return false;
                 if (libTo && (!l.dateRec || l.dateRec > libTo)) return false;
-                if (q && !normKey([l.via, l.parcela, (l.accounts || []).join(' '), l.obs, l.valor, l.dateRec ? fmtBR(l.dateRec) : '', l.dateRep ? fmtBR(l.dateRep) : ''].join(' ')).includes(q)) return false;
+                if (q && !normKey([l.via, l.parcela, (l.accounts || []).join(' '), l.origem, l.obs, l.valor, l.dateRec ? fmtBR(l.dateRec) : '', l.dateRep ? fmtBR(l.dateRep) : ''].join(' ')).includes(q)) return false;
                 return true;
             }).sort((a, b) => (b.dateRec || '').localeCompare(a.dateRec || '') || (b.dateRep || '').localeCompare(a.dateRep || ''));
         }
+        function libAccLine(l, i) { const a = (l.accounts || [])[i], v = (l.accAmounts || [])[i]; return esc(a) + (v !== '' && v != null && !isNaN(Number(v)) ? ` <b class="text-emerald-600">— R$ ${money(v)}</b>` : ''); }
         function renderHabLib(container) {
             const all = libData(), list = libFiltered();
             const total = list.reduce((s, l) => s + (Number(l.valor) || 0), 0);
@@ -6249,17 +6370,18 @@
                     </div>
                     <div class="mt-2 flex flex-wrap gap-1.5 text-xs">${chips(l)}${l.parcela ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 font-bold">Parcela ${esc(l.parcela)}</span>` : ''}
                         ${l.valor !== '' && l.valor != null ? `<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold">R$ ${money(l.valor)}</span>` : ''}</div>
-                    ${(l.accounts || []).length ? `<div class="mt-2 space-y-0.5">${l.accounts.map(a => `<p class="text-xs text-slate-600 dark:text-slate-300"><i class="fa-solid fa-building-columns mr-1.5 text-slate-400"></i>${esc(a)}</p>`).join('')}</div>` : ''}
+                    ${(l.accounts || []).length ? `<div class="mt-2 space-y-0.5">${l.accounts.map((a, i) => `<p class="text-xs text-slate-600 dark:text-slate-300"><i class="fa-solid fa-building-columns mr-1.5 text-slate-400"></i>${libAccLine(l, i)}</p>`).join('')}</div>` : ''}
+                    ${l.origem ? `<p class="mt-1.5 text-xs text-slate-600 dark:text-slate-300"><span class="text-[10px] text-slate-400 uppercase mr-1">Conta origem</span><i class="fa-solid fa-arrow-right-from-bracket mr-1 text-slate-400"></i>${esc(l.origem)}</p>` : ''}
                     ${l.obs ? `<p class="mt-2 text-xs text-slate-500 whitespace-pre-line">${esc(l.obs)}</p>` : ''}
                 </div>`).join('')}</div>`;
             const rows = `<div class="overflow-x-auto"><table class="w-full text-left text-sm">
-                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr><th class="p-3 rounded-l-xl">Recebimento</th><th class="p-3">Repasse</th><th class="p-3">Via</th><th class="p-3">Parcela</th><th class="p-3">Valor</th><th class="p-3">Contas para repasse</th><th class="p-3">Observação</th><th class="p-3 text-right rounded-r-xl">Ações</th></tr></thead>
+                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr><th class="p-3 rounded-l-xl">Recebimento</th><th class="p-3">Repasse</th><th class="p-3">Via</th><th class="p-3">Parcela</th><th class="p-3">Valor</th><th class="p-3">Contas para repasse</th><th class="p-3">Conta origem</th><th class="p-3">Observação</th><th class="p-3 text-right rounded-r-xl">Ações</th></tr></thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-700">${list.map(l => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 align-top">
                     <td class="p-3 whitespace-nowrap font-medium">${dt(l.dateRec)}</td><td class="p-3 whitespace-nowrap">${dt(l.dateRep)}</td><td class="p-3">${chips(l)}</td><td class="p-3 whitespace-nowrap">${esc(l.parcela || '') || '—'}</td>
                     <td class="p-3 whitespace-nowrap font-bold text-emerald-600">${l.valor !== '' && l.valor != null ? 'R$ ' + money(l.valor) : '—'}</td>
-                    <td class="p-3 text-xs">${(l.accounts || []).map(a => esc(a)).join('<br>') || '—'}</td><td class="p-3 text-xs text-slate-500 max-w-[220px]">${esc(l.obs || '') || '—'}</td>
+                    <td class="p-3 text-xs">${(l.accounts || []).map((a, i) => libAccLine(l, i)).join('<br>') || '—'}</td><td class="p-3 text-xs">${esc(l.origem || '') || '—'}</td><td class="p-3 text-xs text-slate-500 max-w-[220px]">${esc(l.obs || '') || '—'}</td>
                     <td class="p-3 text-right whitespace-nowrap">${acts(l)}</td></tr>`).join('')}</tbody>
-                <tfoot><tr class="font-bold"><td class="p-3" colspan="4">Total (${list.length})</td><td class="p-3 text-emerald-600 whitespace-nowrap">R$ ${money(total)}</td><td colspan="3"></td></tr></tfoot></table></div>`;
+                <tfoot><tr class="font-bold"><td class="p-3" colspan="4">Total (${list.length})</td><td class="p-3 text-emerald-600 whitespace-nowrap">R$ ${money(total)}</td><td colspan="4"></td></tr></tfoot></table></div>`;
             container.innerHTML = `
                 <div class="space-y-6 max-w-7xl mx-auto">
                     <div class="bg-gradient-to-r from-amber-900 via-amber-800 to-teal-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -6286,13 +6408,31 @@
                     </div>
                 </div>`;
         }
-        function libAccRow(v) {
-            return `<div class="lib-acc flex items-center gap-2"><input type="text" class="lib-acc-in ${INP} flex-1" value="${esc(v || '')}" placeholder="Banco / agência / conta / chave PIX"><button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1"><i class="fa-solid fa-xmark"></i></button></div>`;
+        function libAccRow(v, amt) {
+            return `<div class="lib-acc flex items-center gap-2"><input type="text" class="lib-acc-in ${INP} flex-1 min-w-0" value="${esc(v || '')}" placeholder="Banco / agência / conta / chave PIX"><input type="number" step="0.01" min="0" inputmode="decimal" class="lib-acc-val ${INP} !w-28 shrink-0" value="${amt != null && amt !== '' ? amt : ''}" placeholder="Valor" oninput="libCheckSum()"><button type="button" onclick="this.parentElement.remove();libCheckSum()" class="text-slate-400 hover:text-rose-600 px-1"><i class="fa-solid fa-xmark"></i></button></div>`;
         }
-        function libAddAcc() { document.getElementById('lib-accs').insertAdjacentHTML('beforeend', libAccRow('')); const r = document.querySelectorAll('.lib-acc-in'); r[r.length - 1].focus(); }
+        function libAddAcc() { document.getElementById('lib-accs').insertAdjacentHTML('beforeend', libAccRow('', '')); const r = document.querySelectorAll('.lib-acc-in'); r[r.length - 1].focus(); }
+        const _cents = v => Math.round((Number(v) || 0) * 100);
+        // Soma dos valores por conta x valor geral
+        function libSumState() {
+            const vals = Array.from(document.querySelectorAll('.lib-acc-val')).map(i => i.value).filter(v => v !== '');
+            const sum = vals.reduce((t, v) => t + _cents(v), 0);
+            const geral = document.getElementById('lib-valor').value;
+            return { n: vals.length, sum, geral, hasGeral: geral !== '', ok: !vals.length || geral === '' || sum === _cents(geral) };
+        }
+        function libCheckSum() {
+            const el = document.getElementById('lib-sum-info'); if (!el) return;
+            const st = libSumState();
+            if (!st.n) { el.innerHTML = ''; return; }
+            const f = c => 'R$ ' + money(c / 100);
+            if (!st.hasGeral) el.innerHTML = `<span class="text-slate-500">Soma das contas: <b>${f(st.sum)}</b> (será usada como valor geral)</span>`;
+            else if (st.ok) el.innerHTML = `<span class="text-emerald-600"><i class="fa-solid fa-circle-check mr-1"></i>Soma das contas ${f(st.sum)} = valor geral</span>`;
+            else el.innerHTML = `<span class="text-rose-600"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Soma das contas ${f(st.sum)} ≠ valor geral ${f(_cents(st.geral))} (diferença ${f(Math.abs(st.sum - _cents(st.geral)))})</span>`;
+        }
         function openLibModal(id = null) {
             const l = id ? (libData().find(x => x.id === id) || {}) : {};
             const accs = (l.accounts && l.accounts.length) ? l.accounts : [''];
+            const accAmts = l.accAmounts || [];
             showModal(id ? 'Editar liberação' : 'Nova liberação', `
                 <form onsubmit="saveLib(event,'${id || ''}')" class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">
@@ -6302,21 +6442,31 @@
                     <div class="grid grid-cols-3 gap-3">
                         <div><label class="${LBL}">Via</label><input type="text" id="lib-via" list="lib-via-opts" value="${esc(l.via || '')}" placeholder="Ex.: PIX" class="${INP}"><datalist id="lib-via-opts"><option value="PIX"><option value="TED"><option value="DOC"><option value="Transferência"><option value="Boleto"><option value="Dinheiro"><option value="Cheque"></datalist></div>
                         <div><label class="${LBL}">Parcela</label><input type="text" id="lib-parcela" value="${esc(l.parcela || '')}" placeholder="Ex.: 1" class="${INP}"></div>
-                        <div><label class="${LBL}">Valor (opcional)</label><input type="number" step="0.01" min="0" id="lib-valor" value="${l.valor != null ? l.valor : ''}" class="${INP}"></div>
+                        <div><label class="${LBL}">Valor (opcional)</label><input type="number" step="0.01" min="0" id="lib-valor" value="${l.valor != null ? l.valor : ''}" oninput="libCheckSum()" class="${INP}"></div>
                     </div>
                     <div><label class="${LBL}">Conta para repasse</label>
-                        <div id="lib-accs" class="space-y-2">${accs.map(libAccRow).join('')}</div>
-                        <button type="button" onclick="libAddAcc()" class="mt-2 text-xs font-bold text-teal-600"><i class="fa-solid fa-plus mr-1"></i>Adicionar outra conta</button></div>
+                        <div id="lib-accs" class="space-y-2">${accs.map((a, i) => libAccRow(a, accAmts[i])).join('')}</div>
+                        <button type="button" onclick="libAddAcc()" class="mt-2 text-xs font-bold text-teal-600"><i class="fa-solid fa-plus mr-1"></i>Adicionar outra conta</button>
+                        <p id="lib-sum-info" class="text-xs mt-2"></p></div>
+                    <div><label class="${LBL}">Conta origem</label><input type="text" id="lib-origem" value="${esc(l.origem || '')}" placeholder="De qual conta saiu o pagamento" class="${INP}"></div>
                     <div><label class="${LBL}">Observação</label><textarea id="lib-obs" rows="3" class="${INP}">${esc(l.obs || '')}</textarea></div>
                     <p class="text-[11px] text-slate-400">Só registro de controle: nada aqui altera o Fundo de Obra ou o Financeiro.</p>
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>`);
+            libCheckSum();
         }
         function saveLib(e, id) {
             e.preventDefault();
             const g = k => document.getElementById(k).value;
-            const data = { dateRec: g('lib-rec'), dateRep: g('lib-rep'), via: g('lib-via').trim(), parcela: g('lib-parcela').trim(), valor: g('lib-valor'), obs: g('lib-obs').trim(),
-                accounts: Array.from(document.querySelectorAll('.lib-acc-in')).map(i => i.value.trim()).filter(Boolean) };
+            const rows = Array.from(document.querySelectorAll('.lib-acc')).map(r => ({ a: r.querySelector('.lib-acc-in').value.trim(), v: r.querySelector('.lib-acc-val').value }));
+            if (rows.some(r => !r.a && r.v !== '')) { showToast('Informe a conta para cada valor preenchido.', 'warning'); return; }
+            const st = libSumState();
+            if (!st.ok) { showToast('A soma dos valores das contas precisa ser igual ao valor geral.', 'error'); return; }
+            const kept = rows.filter(r => r.a);
+            let valor = g('lib-valor');
+            if (valor === '' && st.n) valor = (st.sum / 100).toFixed(2);
+            const data = { dateRec: g('lib-rec'), dateRep: g('lib-rep'), via: g('lib-via').trim(), parcela: g('lib-parcela').trim(), valor, obs: g('lib-obs').trim(), origem: g('lib-origem').trim(),
+                accounts: kept.map(r => r.a), accAmounts: kept.map(r => r.v) };
             if (id) Object.assign(libData().find(x => x.id === id), data); else libData().push(Object.assign({ id: uid() }, data));
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Liberação salva!', 'success');
         }
