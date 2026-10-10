@@ -5010,26 +5010,55 @@
             for (const k of Object.keys(row)) { if (aliases.includes(normKey(k))) return row[k]; }
             return '';
         }
+        const _fixed = v => (v === '' || v == null || isNaN(Number(v))) ? '' : Number(v);
+        const _accName = id => { const a = accById(id); return a ? (a.type === 'hab' ? a.name : a.name) : ''; };
+        function _accFind(name) {
+            const k = normKey(name); if (!k) return '';
+            const cs = contasData();
+            let a = cs.find(x => normKey(x.name) === k) || cs.find(x => normKey(accLabel(x)) === k);
+            if (a) return a.id;
+            const p = appData.habitacao.people.find(x => normKey('Habitacional ' + x.name) === k);
+            return p ? 'hab:' + p.id : '';
+        }
         const REPORT_DEFS = {
             financas: { label: 'Finanças', sheet: 'Finanças', alias: ['financas', 'financeiro'],
-                head: ['Tipo', 'Status', 'Descrição', 'Valor', 'Categoria', 'Data'],
-                example: ['despesa', 'pago', 'Mercado', 150.5, 'Alimentação', '10/10/2026'],
-                rows: () => appData.financeiro.transactions.filter(t => t.type !== 'transferencia').map(t => [t.type === 'receita' ? 'receita' : 'despesa', t.status || 'pago', t.desc, Number(t.amount), t.category, fmtBR(t.date)]) },
+                head: ['Tipo', 'Status', 'Descrição', 'Valor', 'Categoria', 'Data', 'Conta', 'Conta destino', 'Parcelas'],
+                example: ['despesa', 'pago', 'Mercado', 150.5, 'Alimentação', '10/10/2026', 'Nome do cartão/conta (opcional)', '', 1],
+                help: 'Tipo: receita, despesa ou transferência. Status: pago/recebido ou pendente. Conta = nome do cartão/conta cadastrado em "Cartão" (opcional). Conta destino só em transferência. Parcelas > 1 gera uma por mês (só na importação).',
+                rows: () => appData.financeiro.transactions.filter(t => !(isHabId(t.accId) || isHabId(t.toAccId))).map(t => [t.type === 'receita' ? 'receita' : t.type === 'transferencia' ? 'transferência' : 'despesa', finSt(t) === 'pendente' ? 'pendente' : (t.type === 'receita' ? 'recebido' : 'pago'), t.desc, Number(t.amount), t.category, fmtBR(t.date), _accName(t.accId), _accName(t.toAccId), '']) },
+            cartao: { label: 'Cartão de Crédito (lançamentos)', sheet: 'Cartão de Crédito', alias: ['cartao de credito', 'cartao credito', 'cartao', 'fatura', 'lancamentos cartao'],
+                head: ['Cartão', 'Descrição', 'Valor', 'Tipo', 'Data', 'Fatura (AAAA-MM)', 'Categoria', 'Parcelas', 'Observação'],
+                example: ['Nubank', 'Posto Ipiranga', 200, 'compra', '10/10/2026', '', 'Gasolina', 1, ''],
+                help: 'Cartão = nome de um cartão de crédito já cadastrado. Tipo: compra ou crédito (estorno/desconto, entra negativo na fatura). Fatura em branco = calculada pelo fechamento do cartão. Parcelas > 1 divide o valor total.',
+                rows: () => appData.cartao.entries.map(e => { const c = cardById(e.cardId); const v = Number(e.amount) || 0; return [c ? c.name : '', e.name, Math.abs(v), v < 0 ? 'crédito' : 'compra', fmtBR(e.date), e.invoice || '', e.category || '', e.installment ? `${e.installment.n}/${e.installment.total}` : '', e.obs || '']; }) },
             hobbies: { label: 'Hobbies', sheet: 'Hobbies', alias: ['hobbies', 'hobby'],
-                head: ['Título', 'Categoria', 'Status', 'Observações'],
-                example: ['Aprender violão', 'Música', 'Em Andamento', ''],
-                rows: () => appData.hobbies.map(h => [h.title, h.category, h.status, h.obs || '']) },
+                head: ['Título', 'Categoria', 'Status', 'Avaliação (0-5)', 'Observações'],
+                example: ['Aprender violão', 'Música', 'Em Andamento', 4, ''],
+                help: 'Status: Em Andamento ou Finalizado. Avaliação de 0 a 5.',
+                rows: () => appData.hobbies.map(h => [h.title, h.category, h.status, Number(h.rating) || 0, h.obs || '']) },
             orcamentos: { label: 'Orçamentos', sheet: 'Orçamentos', alias: ['orcamentos', 'orcamento'],
-                head: ['Título', 'Fornecedor', 'Valor', 'Data', 'Status'],
-                example: ['Piso da sala', 'Casa do Piso', 4200, '15/10/2026', 'Pendente'],
-                rows: () => appData.habitacao.budgets.map(b => [b.title, b.supplier, Number(b.amount), fmtBR(b.date), b.status]) },
+                head: ['Título', 'Fornecedor', 'Marca', 'Valor unitário', 'Quantidade', 'Valor total', 'Valor pago', 'Data', 'Status', 'Data pagamento', 'Observação'],
+                example: ['Piso da sala', 'Casa do Piso', 'Portobello', 70, 60, 4200, 0, '15/10/2026', 'Pendente', '', ''],
+                help: 'Fornecedor pode ser qualquer nome (não precisa estar cadastrado). Marca é opcional. Valor total em branco = unitário × quantidade. Status: Pendente, Aprovado, Rejeitado ou Pago.',
+                rows: () => appData.habitacao.budgets.map(b => [b.title, b.supplier === 'Geral' ? '' : b.supplier, b.brand || '', _fixed(b.unitPrice), _fixed(b.qty), Number(b.amount) || 0, Number(b.paidAmount) || 0, fmtBR(b.date), b.status, b.paidDate ? fmtBR(b.paidDate) : '', b.obs || '']) },
             habitacao: { label: 'Movimentações Habitação', sheet: 'Habitação', alias: ['habitacao', 'movimentacoes', 'movimentacoes habitacao'],
                 head: ['Pessoa', 'Tipo', 'Valor', 'Descrição', 'Data'],
                 example: ['Samuel', 'aporte', 1000, 'Entrada do mês', '05/10/2026'],
-                rows: () => appData.habitacao.contributions.map(c => {
+                help: 'Pessoa = nome cadastrado em Habitação. Tipo: aporte, retirada ou pendente.',
+                rows: () => appData.habitacao.contributions.filter(c => !c.linkKey).map(c => {
                     const pe = appData.habitacao.people.find(x => x.id === c.personId);
                     return [pe ? pe.name : '', c.type === 'retirada' ? 'retirada' : c.type === 'pendente' ? 'pendente' : 'aporte', Number(c.amount), c.desc || '', fmtBR(c.date)];
-                }) }
+                }) },
+            liberacoes: { label: 'Liberações', sheet: 'Liberações', alias: ['liberacoes', 'liberacao'],
+                head: ['Data recebimento', 'Data repasse', 'Via', 'Parcela', 'Valor', 'Conta 1', 'Valor conta 1', 'Conta 2', 'Valor conta 2', 'Conta 3', 'Valor conta 3', 'Conta origem', 'Observação'],
+                example: ['05/10/2026', '07/10/2026', 'Caixa', '1', 10000, 'Conta A', 6000, 'Conta B', 4000, '', '', 'Conta de onde saiu o pagamento', ''],
+                help: 'A soma dos valores das contas deve ser igual ao Valor. Se o Valor ficar em branco, usa a soma das contas. Para mais de 3 contas, adicione colunas "Conta 4", "Valor conta 4"…',
+                rows: () => libData().map(l => { const r = [fmtBR(l.dateRec), fmtBR(l.dateRep), l.via || '', l.parcela || '', _fixed(l.valor)]; for (let i = 0; i < 3; i++) r.push((l.accounts || [])[i] || '', _fixed((l.accAmounts || [])[i])); r.push(l.origem || '', l.obs || ''); return r; }) },
+            lembretes: { label: 'Lembretes', sheet: 'Lembretes', alias: ['lembretes', 'lembrete'],
+                head: ['Título', 'Data', 'Prioridade', 'Período', 'A cada (dias)', 'Dias da semana', 'Concluído'],
+                example: ['Pagar condomínio', '10/10/2026', 'Alta', 'mensal', '', '', 'não'],
+                help: 'Prioridade: Baixa, Média ou Alta. Período: único, diário, mensal, anual, a cada X dias ou dias da semana. Em "A cada" informe o nº de dias; em "Dias da semana" use ex.: Seg, Qua, Sex.',
+                rows: () => appData.lembretes.map(l => { const r = l.rec || {}; const t = r.type || 'unico'; return [l.title, fmtBR(l.date), l.priority || 'Média', ({ unico: 'único', diario: 'diário', mensal: 'mensal', anual: 'anual', cada: 'a cada X dias', dias: 'dias da semana' })[t] || 'único', t === 'cada' ? (r.every || '') : '', t === 'dias' ? (r.weekdays || []).map(i => LEM_WD[i]).join(', ') : '', l.completed ? 'sim' : 'não']; }) }
         };
         function buildWorkbook(keys, template) {
             const wb = XLSX.utils.book_new();
@@ -5040,6 +5069,11 @@
                 ws['!cols'] = d.head.map(() => ({ wch: 20 }));
                 XLSX.utils.book_append_sheet(wb, ws, d.sheet);
             });
+            if (template) {
+                const ins = [['Como importar'], ['Preencha uma linha por registro na aba da tela correspondente (a 2ª linha é só um exemplo: apague ou sobrescreva). Datas no formato dd/mm/aaaa. Valores com vírgula ou ponto. Na tela Configurações > Relatórios, use "Importar" ao lado da tela. A importação só ADICIONA registros e ignora linhas repetidas.'], ['']].concat(keys.map(k => [REPORT_DEFS[k].sheet + ': ' + REPORT_DEFS[k].help]));
+                const wi = XLSX.utils.aoa_to_sheet(ins); wi['!cols'] = [{ wch: 130 }];
+                XLSX.utils.book_append_sheet(wb, wi, 'Instruções');
+            }
             return wb;
         }
         function exportReports(keys, template) {
@@ -5063,6 +5097,7 @@
                     if (!name) throw new Error(`não achei a aba "${d.sheet}" na planilha`);
                     const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true });
                     const res = applyImport(kind, rows);
+                    if (kind === 'cartao' && res.added) syncCardInvoices();
                     if (res.added === 0 && res.skipped === 0) { showToast('Nenhuma linha válida encontrada.', 'warning'); return; }
                     saveAppData(); renderCurrentTabContent();
                     showToast(`${d.label}: ${res.added} importados${res.skipped ? `, ${res.skipped} ignorados (repetidos ou incompletos)` : ''}.`, res.added ? 'success' : 'warning');
@@ -5073,45 +5108,131 @@
         function applyImport(kind, rows) {
             let added = 0, skipped = 0;
             const today = localDateStr();
+            const S = v => String(v == null ? '' : v).trim();
+            const dateOrToday = v => parseDateAny(v) || today;
+            const hasVal = v => S(v) !== '';
             rows.forEach(r => {
                 if (kind === 'financas') {
-                    const desc = String(rowGet(r, 'descricao', 'desc')).trim();
-                    const amount = parseAmount(rowGet(r, 'valor'));
+                    const desc = S(rowGet(r, 'descricao', 'desc'));
+                    const amount = Math.abs(parseAmount(rowGet(r, 'valor')));
                     if (!desc || !(amount > 0)) { skipped++; return; }
-                    const type = normKey(rowGet(r, 'tipo')).startsWith('rec') ? 'receita' : 'despesa';
-                    const status = normKey(rowGet(r, 'status')).startsWith('pend') ? 'pendente' : 'pago';
-                    const category = String(rowGet(r, 'categoria')).trim() || 'Geral';
-                    const date = parseDateAny(rowGet(r, 'data')) || today;
-                    if (appData.financeiro.transactions.some(t => t.desc === desc && Number(t.amount) === amount && t.date === date && t.type === type)) { skipped++; return; }
-                    appData.financeiro.transactions.push({ id: uid(), type, status, desc, amount, category, date, attachments: [] }); added++;
+                    const tk = normKey(rowGet(r, 'tipo'));
+                    const type = tk.startsWith('rec') ? 'receita' : tk.startsWith('transf') ? 'transferencia' : 'despesa';
+                    const status = normKey(rowGet(r, 'status')).startsWith('pend') ? 'pendente' : (type === 'receita' ? 'recebido' : 'pago');
+                    const category = S(rowGet(r, 'categoria')) || 'Geral';
+                    const date = dateOrToday(rowGet(r, 'data'));
+                    const accId = _accFind(rowGet(r, 'conta', 'cartao', 'conta origem', 'cartao / conta'));
+                    const toAccId = type === 'transferencia' ? _accFind(rowGet(r, 'conta destino', 'destino')) : '';
+                    if (type === 'transferencia' && (!accId || !toAccId || accId === toAccId)) { skipped++; return; }
+                    const n = Math.max(1, Math.min(60, parseInt(rowGet(r, 'parcelas')) || 1));
+                    const T = appData.financeiro.transactions;
+                    if (T.some(t => t.desc === desc && Number(t.amount) === (n > 1 ? Math.floor(amount * 100 / n) / 100 : amount) && t.date === date && t.type === type && (t.accId || '') === accId)) { skipped++; return; }
+                    if (n === 1) { T.push({ id: uid(), type, status, desc, amount, category, date, accId, toAccId, attachments: [] }); added++; return; }
+                    const total = Math.round(amount * 100), base = Math.floor(total / n), group = uid();
+                    for (let i = 0; i < n; i++) {
+                        const c = i === n - 1 ? total - base * (n - 1) : base;
+                        T.push({ id: uid(), type, desc, category, accId, toAccId, amount: (c / 100).toFixed(2), date: addMonthsToDate(date, i), status: i === 0 ? status : 'pendente', installment: { group, n: i + 1, total: n }, attachments: [] });
+                    }
+                    added++;
+                } else if (kind === 'cartao') {
+                    const C = appData.cartao;
+                    const name = S(rowGet(r, 'descricao', 'nome', 'desc'));
+                    const raw = parseAmount(rowGet(r, 'valor'));
+                    const card = C.cards.find(c => normKey(c.name) === normKey(rowGet(r, 'cartao'))) || (C.cards.length === 1 ? C.cards[0] : null);
+                    if (!name || !raw || !card) { skipped++; return; }
+                    const tk = normKey(rowGet(r, 'tipo'));
+                    const sgn = (tk.startsWith('cred') || tk.startsWith('est') || tk.startsWith('desc') || raw < 0) ? -1 : 1;
+                    const amount = sgn * Math.abs(raw);
+                    const date = dateOrToday(rowGet(r, 'data'));
+                    const invRaw = S(rowGet(r, 'fatura (aaaa-mm)', 'fatura'));
+                    const invoice = /^\d{4}-\d{2}$/.test(invRaw) ? invRaw : cardInvoiceKey(card, date);
+                    const category = S(rowGet(r, 'categoria')) || 'Outros';
+                    if (!C.categories.some(c => normKey(c) === normKey(category))) C.categories.push(category);
+                    const obs = S(rowGet(r, 'observacao', 'obs'));
+                    const pr = S(rowGet(r, 'parcelas')); const n = /^\d+$/.test(pr) ? Math.max(1, Math.min(60, parseInt(pr))) : 1;
+                    const base = { cardId: card.id, name, date, invoice, category, obs };
+                    if (C.entries.some(e => e.cardId === card.id && e.name === name && Number(e.amount) === (n > 1 ? sgn * Math.floor(Math.abs(amount) * 100 / n) / 100 : amount) && e.date === date)) { skipped++; return; }
+                    if (n === 1) C.entries.push(Object.assign({ id: uid(), amount }, base));
+                    else {
+                        const total = Math.round(Math.abs(amount) * 100), per = Math.floor(total / n), group = uid();
+                        for (let i = 0; i < n; i++) C.entries.push(Object.assign({}, base, { id: uid(), amount: sgn * (i === n - 1 ? total - per * (n - 1) : per) / 100, date: addMonthsToDate(date, i), invoice: ymAdd(invoice, i), installment: { group, n: i + 1, total: n } }));
+                    }
+                    added++;
                 } else if (kind === 'hobbies') {
-                    const title = String(rowGet(r, 'titulo', 'hobby', 'nome')).trim();
+                    const title = S(rowGet(r, 'titulo', 'hobby', 'nome'));
                     if (!title) { skipped++; return; }
-                    const category = String(rowGet(r, 'categoria')).trim() || 'Geral';
+                    const category = S(rowGet(r, 'categoria')) || 'Geral';
                     const status = normKey(rowGet(r, 'status')).startsWith('fin') ? 'Finalizado' : 'Em Andamento';
-                    const obs = String(rowGet(r, 'observacoes', 'obs')).trim();
+                    const obs = S(rowGet(r, 'observacoes', 'obs'));
+                    const rating = Math.max(0, Math.min(5, Math.round(parseAmount(rowGet(r, 'avaliacao (0-5)', 'avaliacao', 'nota'))) || 0));
                     if (appData.hobbies.some(h => h.title === title && h.category === category)) { skipped++; return; }
-                    appData.hobbies.push({ id: uid(), title, category, status, obs }); added++;
+                    appData.hobbies.push({ id: uid(), title, category, status, obs, rating, attachments: [] }); added++;
                 } else if (kind === 'orcamentos') {
-                    const title = String(rowGet(r, 'titulo', 'descricao')).trim();
+                    const title = S(rowGet(r, 'titulo', 'descricao'));
                     if (!title) { skipped++; return; }
-                    const supplier = String(rowGet(r, 'fornecedor')).trim() || 'Geral';
-                    const amount = parseAmount(rowGet(r, 'valor'));
-                    const date = parseDateAny(rowGet(r, 'data')) || today;
-                    const status = normKey(rowGet(r, 'status')).startsWith('aprov') ? 'Aprovado' : 'Pendente';
+                    const supplier = S(rowGet(r, 'fornecedor')) || 'Geral';
+                    const brand = S(rowGet(r, 'marca'));
+                    const uRaw = rowGet(r, 'valor unitario'), qRaw = rowGet(r, 'quantidade');
+                    const unitPrice = hasVal(uRaw) ? parseAmount(uRaw) : '', qty = hasVal(qRaw) ? parseAmount(qRaw) : '';
+                    let amount = parseAmount(rowGet(r, 'valor total', 'valor'));
+                    if (!amount && unitPrice !== '') amount = Math.round(unitPrice * (qty === '' ? 1 : qty) * 100) / 100;
+                    const paidAmount = hasVal(rowGet(r, 'valor pago', 'pago')) ? parseAmount(rowGet(r, 'valor pago', 'pago')) : '';
+                    const date = dateOrToday(rowGet(r, 'data'));
+                    const sk = normKey(rowGet(r, 'status'));
+                    const status = sk.startsWith('aprov') ? 'Aprovado' : sk.startsWith('rej') ? 'Rejeitado' : sk.startsWith('pag') ? 'Pago' : 'Pendente';
+                    const paidDate = status === 'Pago' ? (parseDateAny(rowGet(r, 'data pagamento')) || today) : '';
+                    const obs = S(rowGet(r, 'observacao', 'obs'));
                     if (appData.habitacao.budgets.some(b => b.title === title && b.supplier === supplier && Number(b.amount) === amount && b.date === date)) { skipped++; return; }
-                    appData.habitacao.budgets.push({ id: uid(), title, supplier, amount, date, status, fileName: '', fileData: '' }); added++;
+                    appData.habitacao.budgets.push({ id: uid(), title, supplier, brand, unitPrice, qty, amount, paidAmount, date, status, paidDate, obs, groupId: '', fileName: '', fileData: '' }); added++;
                 } else if (kind === 'habitacao') {
                     const amount = parseAmount(rowGet(r, 'valor'));
                     if (!(amount > 0)) { skipped++; return; }
                     const pname = normKey(rowGet(r, 'pessoa', 'nome'));
                     const person = appData.habitacao.people.find(x => normKey(x.name) === pname) || appData.habitacao.people[0];
                     const tpk = normKey(rowGet(r, 'tipo')); const type = tpk.startsWith('ret') ? 'retirada' : tpk.startsWith('pen') ? 'pendente' : 'aporte';
-                    const desc = String(rowGet(r, 'descricao', 'desc')).trim();
-                    const date = parseDateAny(rowGet(r, 'data')) || today;
+                    const desc = S(rowGet(r, 'descricao', 'desc'));
+                    const date = dateOrToday(rowGet(r, 'data'));
                     if (!person) { skipped++; return; }
                     if (appData.habitacao.contributions.some(c => c.personId === person.id && c.type === type && Number(c.amount) === amount && c.date === date && (c.desc || '') === desc)) { skipped++; return; }
                     appData.habitacao.contributions.push({ id: uid(), personId: person.id, type, amount, desc, date }); added++;
+                } else if (kind === 'liberacoes') {
+                    const accounts = [], accAmounts = [];
+                    for (let i = 1; i <= 20; i++) {
+                        const a = S(rowGet(r, 'conta ' + i)); const v = rowGet(r, 'valor conta ' + i);
+                        if (a) { accounts.push(a); accAmounts.push(hasVal(v) ? parseAmount(v).toFixed(2) : ''); }
+                    }
+                    const vRaw = rowGet(r, 'valor');
+                    let valor = hasVal(vRaw) ? parseAmount(vRaw) : '';
+                    const filled = accAmounts.filter(x => x !== '');
+                    const sum = filled.reduce((t, x) => t + Math.round(Number(x) * 100), 0);
+                    if (valor === '' && filled.length) valor = sum / 100;
+                    if (valor === '' && !accounts.length) { skipped++; return; }
+                    if (filled.length && Math.round(Number(valor) * 100) !== sum) { skipped++; return; }
+                    const dateRec = parseDateAny(rowGet(r, 'data recebimento', 'recebimento')), dateRep = parseDateAny(rowGet(r, 'data repasse', 'repasse'));
+                    const via = S(rowGet(r, 'via')), parcela = S(rowGet(r, 'parcela')), origem = S(rowGet(r, 'conta origem', 'origem')), obs = S(rowGet(r, 'observacao', 'obs'));
+                    const vStr = valor === '' ? '' : Number(valor).toFixed(2);
+                    if (libData().some(l => l.dateRec === dateRec && l.dateRep === dateRep && (l.via || '') === via && (l.parcela || '') === parcela && String(l.valor) === vStr)) { skipped++; return; }
+                    libData().push({ id: uid(), dateRec, dateRep, via, parcela, valor: vStr, obs, origem, accounts, accAmounts }); added++;
+                } else if (kind === 'lembretes') {
+                    const title = S(rowGet(r, 'titulo', 'descricao'));
+                    if (!title) { skipped++; return; }
+                    const date = parseDateAny(rowGet(r, 'data'));
+                    const pk = normKey(rowGet(r, 'prioridade'));
+                    const priority = pk.startsWith('alt') ? 'Alta' : pk.startsWith('bai') ? 'Baixa' : 'Média';
+                    const rk = normKey(rowGet(r, 'periodo', 'recorrencia'));
+                    const type = rk.startsWith('diar') ? 'diario' : rk.startsWith('mens') ? 'mensal' : rk.startsWith('anu') ? 'anual' : rk.startsWith('a cada') || rk.startsWith('cada') ? 'cada' : rk.startsWith('dias') || rk.startsWith('seman') ? 'dias' : 'unico';
+                    const rec = { type };
+                    if (type === 'cada') rec.every = Math.max(1, parseInt(rowGet(r, 'a cada (dias)', 'a cada')) || 1);
+                    if (type === 'dias') {
+                        const txt = normKey(rowGet(r, 'dias da semana', 'dias'));
+                        rec.weekdays = LEM_WD.map((n, i) => txt.includes(normKey(n)) ? i : -1).filter(i => i >= 0);
+                        if (!rec.weekdays.length) { rec.type = 'unico'; delete rec.weekdays; }
+                    }
+                    const d2 = (type !== 'unico' && !date) ? today : date;
+                    if (d2) rec.day = Number(d2.split('-')[2]);
+                    const done = ['sim', 's', 'x', 'true', '1', 'concluido'].includes(normKey(rowGet(r, 'concluido')));
+                    if (appData.lembretes.some(l => l.title === title && (l.date || '') === d2)) { skipped++; return; }
+                    appData.lembretes.push({ id: uid(), title, date: d2, priority, completed: done, rec }); added++;
                 }
             });
             return { added, skipped };
@@ -5138,7 +5259,7 @@
                         <button onclick="exportReports(null, true)" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-table"></i><span>Baixar modelo de importação</span></button>
                     </div>
                     <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Importar relatórios</p>
-                    <div class="space-y-2">${['financas', 'hobbies', 'orcamentos', 'habitacao'].map(imp).join('')}</div>
+                    <div class="space-y-2">${['financas', 'cartao', 'orcamentos', 'habitacao', 'liberacoes', 'lembretes', 'hobbies'].map(imp).join('')}</div>
                 </div>`;
         }
 
