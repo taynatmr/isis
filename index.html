@@ -350,6 +350,10 @@
         let dashBase = 'geral', dashMonth = localDateStr().slice(0, 7); // início: geral do mês atual
         let hobbyCat = '', saudeDiagOpen = false, diagQuery = '';
         let saudeVacOpen = false, vacQuery = '';
+        let dashHide = localStorage.getItem('meusistema_hide') === '1';
+        let dashFund = localStorage.getItem('meusistema_dash_fund') || '';
+        let dashCardAcc = localStorage.getItem('meusistema_dash_card') || '';
+        let habLibOpen = false, libView = 'cards', libQ = '', libVia = '', libFrom = '', libTo = '', careMetaView = 'cards', saudeCareOpen = false, careTab = 'rotinas', careDate = localDateStr(), colorsOpen = false;
         let recOpen = false, recViewId = null, recQuery = '', recSel = new Set();
         let finSel = new Set();
         let dashCardMonth = 'auto'; // fatura do cartão na tela inicial: 'auto' = fatura em aberto mais próxima; 'AAAA-MM' = mês; '' = total
@@ -893,9 +897,9 @@
 
         function switchTab(tabId) {
             currentActiveTab = tabId;
-            if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; }
+            if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; }
             if (tabId === 'financeiro') financeFilterDate = localDateStr().slice(0, 7); // sempre abre no mês atual
-            if (tabId !== 'saude') { saudeDiagOpen = false; saudeVacOpen = false; }
+            if (tabId !== 'saude') { saudeDiagOpen = false; saudeVacOpen = false; saudeCareOpen = false; }
             if (tabId !== 'hobbies') { recOpen = false; recViewId = null; }
             if (tabId !== 'docs') { docFolderId = null; docUnlocked.clear(); } // pastas com senha voltam a ficar trancadas
             document.querySelectorAll('.nav-item').forEach(el => {
@@ -1003,11 +1007,12 @@
                                 <i class="fa-solid fa-plus"></i>
                                 <span>Novo Compromisso</span>
                             </button>
+                            <button onclick="toggleHide()" title="${dashHide ? 'Mostrar valores' : 'Ocultar valores'}" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 w-9 h-9 rounded-xl shadow-sm transition flex items-center justify-center"><i class="fa-solid ${dashHide ? 'fa-eye-slash' : 'fa-eye'}"></i></button>
                         </div>
                     </div>
 
                     <!-- Quick Metrics Grid -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
                                 <p class="text-xs font-medium text-slate-400 uppercase">Água Hoje</p>
@@ -1030,18 +1035,10 @@
                             </div>
                         </div>
 
-                        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <p class="text-xs font-medium text-slate-400 uppercase">Fundo de Obra</p>
-                                <h3 class="text-xl font-bold text-slate-800 dark:text-white mt-1">R$ ${totalHabitacaoFundos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
-                                <p class="text-[10px] text-amber-500 font-semibold mt-1">Habitação</p>
-                            </div>
-                            <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-500 flex items-center justify-center text-xl">
-                                <i class="fa-solid fa-house-chimney-user"></i>
-                            </div>
-                        </div>
+                        ${dashFundHtml()}
 
                         ${dashCreditHtml()}
+                        ${dashContasHtml()}
                         <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
                                 <p class="text-xs font-medium text-slate-400 uppercase">Lembretes</p>
@@ -1127,6 +1124,7 @@
         function renderSaude(container) {
             if (saudeDiagOpen) { renderDiagnostico(container); return; }
             if (saudeVacOpen) { renderVacinas(container); return; }
+            if (saudeCareOpen) { renderAutocuidado(container); return; }
             const waterToday = getWater(waterDate);
             const goal = appData.saude.waterGoal || 3000;
             const pct = Math.min(100, (waterToday / goal) * 100);
@@ -1168,6 +1166,10 @@
                                 <button onclick="openVac()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
                                     <i class="fa-solid fa-syringe"></i>
                                     <span>Vacinas</span>
+                                </button>
+<button onclick="openCare()" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
+                                    <i class="fa-solid fa-spa"></i>
+                                    <span>Autocuidado</span>
                                 </button>
 <button onclick="openMedModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
                                 <i class="fa-solid fa-plus"></i>
@@ -2868,25 +2870,8 @@
         // --- HABITAÇÃO / CONSTRUÇÃO COM ORÇAMENTOS E ARQUIVOS ---
         function renderHabitacao(container) {
             if (habDocsOpen) { renderHabDocs(container); return; }
-            let balances = {};
-            appData.habitacao.people.forEach(p => { balances[p.id] = Number(p.initialBalance); });
-            
-            let totalAportes = 0;
-            let totalRetiradas = 0;
-            const spent = {}; let totalPrev = 0;
-            appData.habitacao.contributions.forEach(c => {
-                if (c.type === 'pendente') { totalPrev += Number(c.amount) || 0; return; }
-                if (!balances[c.personId]) balances[c.personId] = 0;
-                if (c.type === 'aporte') {
-                    balances[c.personId] += Number(c.amount);
-                    totalAportes += Number(c.amount);
-                } else {
-                    balances[c.personId] -= Number(c.amount);
-                    totalRetiradas += Number(c.amount);
-                    spent[c.personId] = (spent[c.personId] || 0) + Number(c.amount);
-                }
-            });
-            const saldoCaixaObra = totalAportes - totalRetiradas;
+            if (habLibOpen) { renderHabLib(container); return; }
+            const { balances, spent, totalAportes, totalRetiradas, totalPrev, saldoCaixaObra } = habSummary();
 
             // Filtro e Ordenação de Movimentações
             let contributionsList = [...appData.habitacao.contributions];
@@ -2913,6 +2898,10 @@
                             <button onclick="openSupplierModal()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-address-book"></i>
                                 <span>Fornecedores</span>
+                            </button>
+                            <button onclick="openLibView()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
+                                <i class="fa-solid fa-hand-holding-dollar"></i>
+                                <span>Liberações</span>
                             </button>
                             <button onclick="openDocsView()" class="bg-white hover:bg-amber-50 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-folder-open"></i>
@@ -5494,14 +5483,20 @@
                 </div>`;
             return `
                 <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2">
-                        <i class="fa-solid fa-palette text-teal-500"></i><span>Cores do sistema</span>
-                    </h3>
-                    <p class="text-sm text-slate-500 mb-5">Escolha cada cor separadamente, entre as sugestões ou qualquer cor no seletor. A escolha fica salva e vale em qualquer computador.</p>
-                    ${section('sidebar', 'Menu lateral', 'Cor de fundo do menu à esquerda. Cores claras ou escuras ajustam o texto automaticamente.')}
-                    ${section('accent', 'Botões, abas e ícones', 'Cor dos botões, destaques e ícones. Cores muito claras deixam links e ícones sobre fundo branco menos legíveis.')}
-                    ${section('bg', 'Fundo das telas', 'Cor de fundo atrás dos cartões. Uma cor escura ativa o modo escuro automaticamente.')}
-                    <button onclick="resetColors()" class="text-xs font-bold text-teal-700 hover:underline"><i class="fa-solid fa-rotate-left mr-1"></i>Restaurar cores padrão</button>
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-palette text-teal-500"></i><span>Cores do sistema</span></h3>
+                        <div class="flex gap-2">
+                            <button onclick="toggleColors()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow"><i class="fa-solid fa-paintbrush mr-1.5"></i>${colorsOpen ? 'Fechar' : 'Alterar cores'}</button>
+                            <button onclick="if (confirm('Voltar às cores originais do sistema?')) resetColors()" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-rotate-left mr-1.5"></i>Resetar</button>
+                        </div>
+                    </div>
+                    ${colorsOpen ? `<div class="mt-5">
+                        <p class="text-sm text-slate-500 mb-5">Escolha cada cor separadamente, entre as sugestões ou qualquer cor no seletor. A escolha fica salva e vale em qualquer computador.</p>
+                        ${section('sidebar', 'Menu lateral', 'Cor de fundo do menu à esquerda. Cores claras ou escuras ajustam o texto automaticamente.')}
+                        ${section('accent', 'Botões, abas e ícones', 'Cor dos botões, destaques e ícones. Cores muito claras deixam links e ícones sobre fundo branco menos legíveis.')}
+                        ${section('bg', 'Fundo das telas', 'Cor de fundo atrás dos cartões. Uma cor escura ativa o modo escuro automaticamente.')}
+                        
+                    </div>` : ''}
                 </div>`;
         }
 
@@ -5978,7 +5973,7 @@
             const B = 'px-1.5 py-0.5 rounded-md text-[10px] font-semibold';
             const bOn = 'bg-teal-600 text-white', bOff = 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
             return `<p class="text-xs font-medium text-slate-400 uppercase">${lbl}</p>
-                <h3 class="text-xl font-bold ${col} mt-1">R$ ${money(f.value)}</h3>
+                <h3 class="text-xl font-bold ${col} mt-1">R$ ${mm(f.value)}</h3>
                 <p class="text-[10px] text-slate-400 mt-0.5">${baseTxt} · ${perTxt}</p>
                 <div class="mt-1.5 flex flex-wrap gap-1">
                     <select onchange="dashSet('base',this.value)" class="${S}"><option value="geral" ${dashBase === 'geral' ? 'selected' : ''}>Geral (com pendentes)</option><option value="atual" ${dashBase === 'atual' ? 'selected' : ''}>Atual (pagos/recebidos)</option></select>
@@ -6006,8 +6001,8 @@
             return `<div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
                 <div onclick="switchTab('cartao')" class="cursor-pointer flex items-center justify-between">
                     <div><p class="text-xs font-medium text-slate-400 uppercase">Fatura do Cartão de Crédito</p>
-                    <h3 class="text-xl font-bold text-rose-600 mt-1">R$ ${money(total)}</h3>
-                    <p class="text-[10px] text-slate-400 mt-1">${mon ? fmtYM(mon) : 'Total de todas as faturas'}${dashCardMonth === 'auto' ? ' (fatura em aberto)' : ''} · em aberto: R$ ${money(open)} · paga: R$ ${money(paid)}</p></div>
+                    <h3 class="text-xl font-bold text-rose-600 mt-1">R$ ${mm(total)}</h3>
+                    <p class="text-[10px] text-slate-400 mt-1">${mon ? fmtYM(mon) : 'Total de todas as faturas'}${dashCardMonth === 'auto' ? ' (fatura em aberto)' : ''} · em aberto: R$ ${mm(open)} · paga: R$ ${mm(paid)}</p></div>
                     <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center text-xl"><i class="fa-solid fa-credit-card"></i></div>
                 </div>
                 <div class="mt-2 flex flex-wrap gap-1">
@@ -6143,6 +6138,424 @@
             if (id) { const ag = appData.agenda.find(x => x.id === id); if (ag) Object.assign(ag, data); }
             else appData.agenda.push(Object.assign({ id: Date.now().toString(), status: 'Ativo' }, data));
             if (data.date) { agSel = data.date; agMonth = data.date.slice(0, 7); }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Salvo!', 'success');
+        }
+
+        // =====================================================
+        // AJUSTES V3: OLHO, FUNDO/CARTÃO NA TELA INICIAL, LIBERAÇÕES, AUTOCUIDADO, CORES
+        // =====================================================
+        function mm(v) { return dashHide ? '••••' : money(v); }
+        function toggleHide() { dashHide = !dashHide; localStorage.setItem('meusistema_hide', dashHide ? '1' : '0'); renderCurrentTabContent(); }
+        function toggleColors() { colorsOpen = !colorsOpen; renderCurrentTabContent(); }
+
+        // ---------- Tela inicial: Fundo de Obra por pessoa ----------
+        // Uma única conta para o Fundo de Obra: a tela Habitação e a tela inicial usam exatamente a mesma
+        function habSummary() {
+            const H = appData.habitacao, balances = {}, spent = {}, aportado = {};
+            (H.people || []).forEach(p => { balances[p.id] = Number(p.initialBalance) || 0; });
+            let totalAportes = 0, totalRetiradas = 0, totalPrev = 0;
+            H.contributions.forEach(c => {
+                const v = Number(c.amount) || 0;
+                if (c.type === 'pendente') { totalPrev += v; return; }
+                if (!balances[c.personId]) balances[c.personId] = 0;
+                if (c.type === 'aporte') { balances[c.personId] += v; totalAportes += v; aportado[c.personId] = (aportado[c.personId] || 0) + v; }
+                else { balances[c.personId] -= v; totalRetiradas += v; spent[c.personId] = (spent[c.personId] || 0) + v; }
+            });
+            return { balances, spent, aportado, totalAportes, totalRetiradas, totalPrev, saldoCaixaObra: totalAportes - totalRetiradas };
+        }
+        function dashFundSet(v) { dashFund = v; localStorage.setItem('meusistema_dash_fund', v); renderCurrentTabContent(); }
+        function dashFundHtml() {
+            const ppl = appData.habitacao.people || [];
+            if (dashFund && !ppl.some(p => p.id === dashFund)) dashFund = '';
+            const H = habSummary();
+            const v = dashFund ? (H.balances[dashFund] || 0) : H.saldoCaixaObra;
+            const ap = dashFund ? (H.aportado[dashFund] || 0) : H.totalAportes;
+            const gs = dashFund ? (H.spent[dashFund] || 0) : H.totalRetiradas;
+            const nm = dashFund ? ((ppl.find(p => p.id === dashFund) || {}).name || '') : 'Total';
+            const S = 'px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[10px]';
+            return `<div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase">Fundo de Obra</p>
+                    <h3 class="text-xl font-bold ${v >= 0 ? 'text-slate-800 dark:text-white' : 'text-rose-600'} mt-1">R$ ${mm(v)}</h3>
+                    <p class="text-[10px] text-amber-500 font-semibold mt-1">Valor guardado · ${esc(nm)}</p>
+                    <p class="text-[10px] text-slate-400">Aportado R$ ${mm(ap)} · Gasto R$ ${mm(gs)}</p>
+                    <select onchange="dashFundSet(this.value)" class="${S} mt-1.5"><option value="">Total</option>${ppl.map(p => `<option value="${p.id}" ${dashFund === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-500 flex items-center justify-center text-xl"><i class="fa-solid fa-house-chimney-user"></i></div>
+            </div>`;
+        }
+
+        // ---------- Tela inicial: saldo dos cartões (débito e poupança) ----------
+        function contaSaldoDash(id) {
+            let r = 0, d = 0;
+            appData.financeiro.transactions.forEach(t => { if (finSt(t) === 'pendente') return; const e = finEffect(t, id); r += e.r; d += e.d; });
+            return r - d;
+        }
+        function dashContaSet(v) { dashCardAcc = v; localStorage.setItem('meusistema_dash_card', v); renderCurrentTabContent(); }
+        function dashContasHtml() {
+            const cs = contasData();
+            if (dashCardAcc && !cs.some(c => c.id === dashCardAcc)) dashCardAcc = '';
+            const list = dashCardAcc ? cs.filter(c => c.id === dashCardAcc) : cs.filter(c => !c.noSum);
+            const total = list.reduce((s, c) => s + contaSaldoDash(c.id), 0);
+            const S = 'px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[10px] max-w-[150px]';
+            const rows = !dashCardAcc ? list.slice(0, 4).map(c => `<p class="text-[10px] text-slate-500 flex justify-between gap-3"><span class="truncate">${esc(c.name)}</span><span class="font-semibold">R$ ${mm(contaSaldoDash(c.id))}</span></p>`).join('') + (list.length > 4 ? `<p class="text-[10px] text-slate-400">+${list.length - 4} cartões</p>` : '') : '';
+            return `<div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+                <div onclick="switchTab('contas')" class="cursor-pointer flex items-center justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs font-medium text-slate-400 uppercase">Cartões (débito e poupança)</p>
+                        ${cs.length ? `<h3 class="text-xl font-bold ${total >= 0 ? 'text-emerald-600' : 'text-rose-600'} mt-1">R$ ${mm(total)}</h3>
+                        <div class="mt-1 space-y-0.5">${rows}</div>` : `<p class="text-xs text-slate-400 mt-2">Nenhum cartão cadastrado. Toque para cadastrar.</p>`}
+                    </div>
+                    <div class="w-12 h-12 shrink-0 rounded-2xl bg-sky-50 dark:bg-sky-950/60 text-sky-500 flex items-center justify-center text-xl"><i class="fa-solid fa-piggy-bank"></i></div>
+                </div>
+                ${cs.length ? `<div class="mt-2"><select onchange="dashContaSet(this.value)" class="${S}"><option value="">Todos os cartões</option>${cs.map(c => `<option value="${c.id}" ${dashCardAcc === c.id ? 'selected' : ''}>${esc(accLabel(c))}</option>`).join('')}</select></div>` : ''}
+            </div>`;
+        }
+
+        // ---------- Habitação: LIBERAÇÕES (só controle; não movimenta nada) ----------
+        function libData() { const H = appData.habitacao; if (!Array.isArray(H.liberacoes)) H.liberacoes = []; return H.liberacoes; }
+        function openLibView() { habLibOpen = true; renderCurrentTabContent(); window.scrollTo(0, 0); }
+        function closeLibView() { habLibOpen = false; renderCurrentTabContent(); }
+        function libSet(k, v) { if (k === 'view') libView = v; else if (k === 'q') libQ = v; else if (k === 'via') libVia = v; else if (k === 'from') libFrom = v; else if (k === 'to') libTo = v; renderCurrentTabContent(); }
+        function libClear() { libQ = ''; libVia = ''; libFrom = ''; libTo = ''; renderCurrentTabContent(); }
+        function libFiltered() {
+            const q = normKey(libQ);
+            return libData().filter(l => {
+                if (libVia && (l.via || '') !== libVia) return false;
+                if (libFrom && (!l.dateRec || l.dateRec < libFrom)) return false;
+                if (libTo && (!l.dateRec || l.dateRec > libTo)) return false;
+                if (q && !normKey([l.via, l.parcela, (l.accounts || []).join(' '), l.obs, l.valor, l.dateRec ? fmtBR(l.dateRec) : '', l.dateRep ? fmtBR(l.dateRep) : ''].join(' ')).includes(q)) return false;
+                return true;
+            }).sort((a, b) => (b.dateRec || '').localeCompare(a.dateRec || '') || (b.dateRep || '').localeCompare(a.dateRep || ''));
+        }
+        function renderHabLib(container) {
+            const all = libData(), list = libFiltered();
+            const total = list.reduce((s, l) => s + (Number(l.valor) || 0), 0);
+            const vias = [...new Set(all.map(l => l.via).filter(Boolean))].sort();
+            const dt = d => d ? fmtBR(d) : '—';
+            const nF = (libQ ? 1 : 0) + (libVia ? 1 : 0) + (libFrom ? 1 : 0) + (libTo ? 1 : 0);
+            const S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            const vb = (k, l, ic) => `<button onclick="libSet('view','${k}')" class="px-3 py-1.5 text-xs font-bold ${libView === k ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${ic} mr-1"></i>${l}</button>`;
+            const chips = l => `${l.via ? `<span class="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-900 text-teal-700 font-bold text-xs">${esc(l.via)}</span>` : ''}`;
+            const acts = l => `<button onclick="openLibModal('${l.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button> <button onclick="deleteLib('${l.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>`;
+            const cards = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">${list.map(l => `
+                <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="text-sm space-y-0.5">
+                            <p><span class="text-xs text-slate-400 uppercase">Recebimento</span> <b>${dt(l.dateRec)}</b></p>
+                            <p><span class="text-xs text-slate-400 uppercase">Repasse</span> <b>${dt(l.dateRep)}</b></p>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">${acts(l)}</div>
+                    </div>
+                    <div class="mt-2 flex flex-wrap gap-1.5 text-xs">${chips(l)}${l.parcela ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 font-bold">Parcela ${esc(l.parcela)}</span>` : ''}
+                        ${l.valor !== '' && l.valor != null ? `<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold">R$ ${money(l.valor)}</span>` : ''}</div>
+                    ${(l.accounts || []).length ? `<div class="mt-2 space-y-0.5">${l.accounts.map(a => `<p class="text-xs text-slate-600 dark:text-slate-300"><i class="fa-solid fa-building-columns mr-1.5 text-slate-400"></i>${esc(a)}</p>`).join('')}</div>` : ''}
+                    ${l.obs ? `<p class="mt-2 text-xs text-slate-500 whitespace-pre-line">${esc(l.obs)}</p>` : ''}
+                </div>`).join('')}</div>`;
+            const rows = `<div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr><th class="p-3 rounded-l-xl">Recebimento</th><th class="p-3">Repasse</th><th class="p-3">Via</th><th class="p-3">Parcela</th><th class="p-3">Valor</th><th class="p-3">Contas para repasse</th><th class="p-3">Observação</th><th class="p-3 text-right rounded-r-xl">Ações</th></tr></thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">${list.map(l => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 align-top">
+                    <td class="p-3 whitespace-nowrap font-medium">${dt(l.dateRec)}</td><td class="p-3 whitespace-nowrap">${dt(l.dateRep)}</td><td class="p-3">${chips(l)}</td><td class="p-3 whitespace-nowrap">${esc(l.parcela || '') || '—'}</td>
+                    <td class="p-3 whitespace-nowrap font-bold text-emerald-600">${l.valor !== '' && l.valor != null ? 'R$ ' + money(l.valor) : '—'}</td>
+                    <td class="p-3 text-xs">${(l.accounts || []).map(a => esc(a)).join('<br>') || '—'}</td><td class="p-3 text-xs text-slate-500 max-w-[220px]">${esc(l.obs || '') || '—'}</td>
+                    <td class="p-3 text-right whitespace-nowrap">${acts(l)}</td></tr>`).join('')}</tbody>
+                <tfoot><tr class="font-bold"><td class="p-3" colspan="4">Total (${list.length})</td><td class="p-3 text-emerald-600 whitespace-nowrap">R$ ${money(total)}</td><td colspan="3"></td></tr></tfoot></table></div>`;
+            container.innerHTML = `
+                <div class="space-y-6 max-w-7xl mx-auto">
+                    <div class="bg-gradient-to-r from-amber-900 via-amber-800 to-teal-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div>
+                            <button onclick="closeLibView()" class="text-amber-200 hover:text-white text-xs font-semibold mb-2 flex items-center space-x-1"><i class="fa-solid fa-arrow-left"></i><span>Voltar para Habitação</span></button>
+                            <h2 class="text-2xl sm:text-3xl font-bold"><i class="fa-solid fa-hand-holding-dollar mr-2"></i> Liberações</h2>
+                            <p class="text-amber-100 mt-1 text-sm">Registro de recebimentos e repasses. É só controle: não movimenta o Fundo de Obra nem o Financeiro.</p>
+                        </div>
+                        <button onclick="openLibModal()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm"><i class="fa-solid fa-plus"></i><span>NOVA LIBERAÇÃO</span></button>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700 space-y-4">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <input type="text" placeholder="Pesquisar (via, conta, observação, valor)..." value="${esc(libQ)}" onchange="libSet('q',this.value)" class="${S} w-full sm:w-72">
+                            <select onchange="libSet('via',this.value)" class="${S}"><option value="">Todas as vias</option>${vias.map(v => `<option value="${esc(v)}" ${libVia === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
+                            <label class="flex items-center gap-1.5 text-xs text-slate-500">Recebido de <input type="date" value="${libFrom}" onchange="libSet('from',this.value)" class="${S}"></label>
+                            <label class="flex items-center gap-1.5 text-xs text-slate-500">até <input type="date" value="${libTo}" onchange="libSet('to',this.value)" class="${S}"></label>
+                            ${nF ? `<button onclick="libClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Limpar filtros</button>` : ''}
+                        </div>
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${vb('cards', 'Cartões', 'fa-table-cells-large')}${vb('linhas', 'Linhas', 'fa-list')}</div>
+                            <span class="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700">Total ${nF ? 'do filtro' : 'geral'}: R$ ${money(total)} · ${list.length} ${list.length === 1 ? 'liberação' : 'liberações'}</span>
+                        </div>
+                        ${list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-hand-holding-dollar text-4xl mb-2"></i><p class="text-sm">${all.length ? 'Nenhuma liberação encontrada para este filtro.' : 'Nenhuma liberação registrada.'}</p></div>` : (libView === 'linhas' ? rows : cards)}
+                    </div>
+                </div>`;
+        }
+        function libAccRow(v) {
+            return `<div class="lib-acc flex items-center gap-2"><input type="text" class="lib-acc-in ${INP} flex-1" value="${esc(v || '')}" placeholder="Banco / agência / conta / chave PIX"><button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1"><i class="fa-solid fa-xmark"></i></button></div>`;
+        }
+        function libAddAcc() { document.getElementById('lib-accs').insertAdjacentHTML('beforeend', libAccRow('')); const r = document.querySelectorAll('.lib-acc-in'); r[r.length - 1].focus(); }
+        function openLibModal(id = null) {
+            const l = id ? (libData().find(x => x.id === id) || {}) : {};
+            const accs = (l.accounts && l.accounts.length) ? l.accounts : [''];
+            showModal(id ? 'Editar liberação' : 'Nova liberação', `
+                <form onsubmit="saveLib(event,'${id || ''}')" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="${LBL}">Data do recebimento</label><input type="date" id="lib-rec" value="${l.dateRec || ''}" class="${INP}"></div>
+                        <div><label class="${LBL}">Data do repasse</label><input type="date" id="lib-rep" value="${l.dateRep || ''}" class="${INP}"></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div><label class="${LBL}">Via</label><input type="text" id="lib-via" list="lib-via-opts" value="${esc(l.via || '')}" placeholder="Ex.: PIX" class="${INP}"><datalist id="lib-via-opts"><option value="PIX"><option value="TED"><option value="DOC"><option value="Transferência"><option value="Boleto"><option value="Dinheiro"><option value="Cheque"></datalist></div>
+                        <div><label class="${LBL}">Parcela</label><input type="text" id="lib-parcela" value="${esc(l.parcela || '')}" placeholder="Ex.: 1" class="${INP}"></div>
+                        <div><label class="${LBL}">Valor (opcional)</label><input type="number" step="0.01" min="0" id="lib-valor" value="${l.valor != null ? l.valor : ''}" class="${INP}"></div>
+                    </div>
+                    <div><label class="${LBL}">Conta para repasse</label>
+                        <div id="lib-accs" class="space-y-2">${accs.map(libAccRow).join('')}</div>
+                        <button type="button" onclick="libAddAcc()" class="mt-2 text-xs font-bold text-teal-600"><i class="fa-solid fa-plus mr-1"></i>Adicionar outra conta</button></div>
+                    <div><label class="${LBL}">Observação</label><textarea id="lib-obs" rows="3" class="${INP}">${esc(l.obs || '')}</textarea></div>
+                    <p class="text-[11px] text-slate-400">Só registro de controle: nada aqui altera o Fundo de Obra ou o Financeiro.</p>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                </form>`);
+        }
+        function saveLib(e, id) {
+            e.preventDefault();
+            const g = k => document.getElementById(k).value;
+            const data = { dateRec: g('lib-rec'), dateRep: g('lib-rep'), via: g('lib-via').trim(), parcela: g('lib-parcela').trim(), valor: g('lib-valor'), obs: g('lib-obs').trim(),
+                accounts: Array.from(document.querySelectorAll('.lib-acc-in')).map(i => i.value.trim()).filter(Boolean) };
+            if (id) Object.assign(libData().find(x => x.id === id), data); else libData().push(Object.assign({ id: uid() }, data));
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Liberação salva!', 'success');
+        }
+        function deleteLib(id) {
+            if (!confirm('Excluir esta liberação?')) return;
+            appData.habitacao.liberacoes = libData().filter(x => x.id !== id);
+            saveAppData(); renderCurrentTabContent();
+        }
+
+        // ---------- Saúde: AUTOCUIDADO (rotinas, metas, dicas) ----------
+        const CARE_TURNOS = { manha: 'Manhã', tarde: 'Tarde', noite: 'Noite', qualquer: 'Qualquer hora' };
+        const CARE_DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const CARE_TIPS = {
+            dicas: ['Beba um copo de água ao acordar, antes de olhar o celular.', 'Reserve 10 minutos do dia só para você, sem telas.', 'Durma e acorde em horários parecidos, inclusive no fim de semana.', 'Use protetor solar todos os dias, mesmo quando estiver nublado.', 'Faça pausas curtas para alongar o corpo ao longo do dia.', 'Diga "não" sem culpa quando estiver sem energia.', 'Coma devagar e perceba o que o seu corpo pede.', 'Crie um pequeno ritual para a noite: luz baixa, chá e respiração calma.'],
+            afirmacoes: ['Eu mereço cuidar de mim com carinho.', 'Estou fazendo o meu melhor, e isso é suficiente.', 'O meu ritmo é válido: posso ir um passo de cada vez.', 'Eu me permito descansar sem culpa.', 'Eu sou capaz de lidar com o que o dia trouxer.', 'Eu escolho pensamentos que me fortalecem.', 'O meu corpo merece respeito e gratidão.', 'Eu cresço a cada dia, mesmo nos dias difíceis.'],
+            autoestima: ['Anote três coisas de que você gosta em você hoje.', 'Pare de se comparar: o seu caminho tem outro mapa.', 'Fale consigo como falaria com alguém que você ama.', 'Comemore as pequenas conquistas: elas contam.', 'Vista algo em que você se sinta bem, mesmo em casa.', 'Aproxime-se de quem te faz bem.', 'Errar é aprender, não prova de que você não é suficiente.', 'Elogie-se por algo que você fez hoje.']
+        };
+        const CARE_CATS = { dicas: 'Dicas de autocuidado', afirmacoes: 'Palavras de afirmação', autoestima: 'Autoestima' };
+        function careData() {
+            const S = appData.saude;
+            if (!S.care || typeof S.care !== 'object') S.care = {};
+            if (!Array.isArray(S.care.items)) S.care.items = [];
+            if (!S.care.checks || typeof S.care.checks !== 'object') S.care.checks = {};
+            if (!Array.isArray(S.care.frases)) S.care.frases = [];
+            return S.care;
+        }
+        function openCare() { saudeCareOpen = true; saudeDiagOpen = false; saudeVacOpen = false; careDate = localDateStr(); renderCurrentTabContent(); window.scrollTo(0, 0); }
+        function closeCare() { saudeCareOpen = false; renderCurrentTabContent(); }
+        function careSetTab(t) { careTab = t; renderCurrentTabContent(); }
+        function careShift(d) { const dt = new Date(careDate + 'T00:00:00'); dt.setDate(dt.getDate() + d); careDate = localDateStr(dt); renderCurrentTabContent(); }
+        function careDue(it, ds) {
+            if (it.modo === 'desejo') return false;
+            if (it.freq === 'dias') return (it.days || []).includes(new Date(ds + 'T00:00:00').getDay());
+            if (it.freq === 'mensal') {
+                const last = new Date(Number(ds.slice(0, 4)), Number(ds.slice(5, 7)), 0).getDate();
+                return Number(ds.slice(8)) === Math.min(Number(it.monthDay) || 1, last);
+            }
+            return true;
+        }
+        function careFreqLabel(it) {
+            let f = 'Todos os dias';
+            if (it.freq === 'dias') f = (it.days || []).length ? (it.days || []).slice().sort().map(d => CARE_DIAS[d]).join(', ') : 'Dias da semana';
+            if (it.freq === 'mensal') f = 'Todo dia ' + (Number(it.monthDay) || 1) + ' do mês';
+            return f + ' · ' + (CARE_TURNOS[it.turno] || CARE_TURNOS.qualquer);
+        }
+        function careChecked(id, ds) { const c = careData().checks[ds]; return !!(c && c[id]); }
+        function careToggle(id, ds) {
+            const C = careData();
+            if (!C.checks[ds]) C.checks[ds] = {};
+            if (C.checks[ds][id]) delete C.checks[ds][id]; else C.checks[ds][id] = true;
+            if (!Object.keys(C.checks[ds]).length) delete C.checks[ds];
+            saveAppData(); renderCurrentTabContent();
+        }
+        function careToggleDone(id) { const it = careData().items.find(x => x.id === id); if (!it) return; it.done = !it.done; saveAppData(); renderCurrentTabContent(); }
+        function careActivate(id) { const it = careData().items.find(x => x.id === id); if (!it) return; it.modo = 'ativo'; it.done = false; saveAppData(); renderCurrentTabContent(); showToast('Agora é uma rotina ativa. Ajuste o período se quiser.', 'success'); }
+        function careDelete(id) {
+            if (!confirm('Excluir este item de autocuidado?')) return;
+            const C = careData();
+            C.items = C.items.filter(x => x.id !== id);
+            Object.keys(C.checks).forEach(d => { delete C.checks[d][id]; if (!Object.keys(C.checks[d]).length) delete C.checks[d]; });
+            saveAppData(); renderCurrentTabContent();
+        }
+        let careTipIdx = null;
+        function careNewTip() { careTipIdx = Math.floor(Math.random() * 1000); renderCurrentTabContent(); }
+        function careAllTips() {
+            const out = [];
+            Object.keys(CARE_TIPS).forEach(k => CARE_TIPS[k].forEach(t => out.push({ cat: k, text: t })));
+            careData().frases.forEach(f => out.push({ cat: f.cat, text: f.text }));
+            return out;
+        }
+        function careAddPhrase() {
+            const t = document.getElementById('care-phrase').value.trim(); if (!t) return;
+            careData().frases.push({ id: uid(), cat: document.getElementById('care-phrase-cat').value, text: t });
+            saveAppData(); renderCurrentTabContent();
+        }
+        function careDelPhrase(id) {
+            if (!confirm('Excluir esta frase?')) return;
+            const C = careData(); C.frases = C.frases.filter(f => f.id !== id); saveAppData(); renderCurrentTabContent();
+        }
+        function renderAutocuidado(container) {
+            const C = careData();
+            const tabBtn = (k, l, i) => `<button onclick="careSetTab('${k}')" class="px-4 py-2 rounded-xl text-xs font-bold ${careTab === k ? 'bg-teal-600 text-white shadow' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200'}"><i class="fa-solid ${i} mr-1.5"></i>${l}</button>`;
+            let body = '';
+            if (careTab === 'rotinas') {
+                const rot = C.items.filter(i => i.modo !== 'desejo');
+                const due = rot.filter(i => careDue(i, careDate));
+                const done = due.filter(i => careChecked(i.id, careDate)).length;
+                const pct = due.length ? Math.round(done / due.length * 100) : 0;
+                const isToday = careDate === localDateStr();
+                body = `<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-list text-teal-500"></i><span>Minhas rotinas</span></h3>
+                        ${rot.length === 0 ? '<p class="text-sm text-slate-400 text-center py-8">Nenhuma rotina ainda. Toque em "Nova rotina".</p>' : `<div class="space-y-3">${rot.map(i => `
+                            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0"><h4 class="font-bold text-sm text-slate-800 dark:text-white break-words">${esc(i.desc)}</h4>
+                                        <div class="mt-1 flex flex-wrap gap-1.5 text-[11px]">${i.tipo ? `<span class="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-900 text-teal-700 font-bold">${esc(i.tipo)}</span>` : ''}<span class="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-200">${careFreqLabel(i)}</span></div>
+                                        ${i.obs ? `<p class="text-xs text-slate-500 mt-1.5 whitespace-pre-line">${esc(i.obs)}</p>` : ''}</div>
+                                    <div class="flex items-center gap-1 shrink-0"><button onclick="openCareModal('${i.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button><button onclick="careDelete('${i.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button></div>
+                                </div></div>`).join('')}</div>`}
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-circle-check text-teal-500"></i><span>Checklist do dia</span></h3>
+                            <div class="flex items-center gap-1.5"><button onclick="careShift(-1)" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-left"></i></button><span class="text-xs font-bold min-w-[84px] text-center">${isToday ? 'Hoje' : fmtBR(careDate)}</span><button onclick="careShift(1)" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-right"></i></button>${isToday ? '' : `<button onclick="careDate=localDateStr();renderCurrentTabContent()" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-[11px] font-bold">Hoje</button>`}</div>
+                        </div>
+                        ${due.length ? `<div class="mb-4"><div class="flex justify-between text-[11px] text-slate-500 mb-1"><span>${done} de ${due.length} feitos</span><span>${pct}%</span></div><div class="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"><div class="h-2 bg-teal-500 rounded-full" style="width:${pct}%"></div></div></div>` : ''}
+                        ${due.length === 0 ? '<p class="text-sm text-slate-400 text-center py-8">Nada previsto para este dia.</p>' : Object.keys(CARE_TURNOS).map(tk => {
+                            const its = due.filter(i => (i.turno || 'qualquer') === tk); if (!its.length) return '';
+                            return `<div class="mb-4"><p class="text-[11px] font-bold text-slate-400 uppercase mb-1.5">${CARE_TURNOS[tk]}</p><div class="space-y-1.5">${its.map(i => {
+                                const ck = careChecked(i.id, careDate);
+                                return `<label class="flex items-center gap-3 p-3 rounded-xl cursor-pointer ${ck ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-slate-50 dark:bg-slate-700/40'}"><input type="checkbox" ${ck ? 'checked' : ''} onchange="careToggle('${i.id}','${careDate}')" class="w-4 h-4"><span class="text-sm flex-1 ${ck ? 'line-through opacity-60' : 'text-slate-800 dark:text-white'}">${esc(i.desc)}</span>${i.tipo ? `<span class="text-[10px] text-slate-400">${esc(i.tipo)}</span>` : ''}</label>`;
+                            }).join('')}</div></div>`;
+                        }).join('')}
+                    </div></div>`;
+            } else if (careTab === 'metas') {
+                const today = localDateStr();
+                const pz = i => carePrazoDate(i.prazo);
+                const dj = C.items.filter(i => i.modo === 'desejo').sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (pz(a) || '9999').localeCompare(pz(b) || '9999'));
+                const tot = dj.filter(i => !i.done).reduce((s, i) => s + (Number(i.orc) || 0), 0);
+                const late = i => !i.done && pz(i) && pz(i) < today;
+                const vb = (k, l, ic) => `<button onclick="careSetMetaView('${k}')" class="px-3 py-1.5 text-xs font-bold ${careMetaView === k ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${ic} mr-1"></i>${l}</button>`;
+                const acts = i => `<button onclick="openCareModal('${i.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button> <button onclick="careDelete('${i.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>`;
+                const cards = `<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">${dj.map(i => `
+                    <div class="p-4 rounded-2xl border ${i.done ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900' : 'bg-slate-50 dark:bg-slate-700/40 border-slate-100 dark:border-slate-700'}">
+                        <div class="flex items-start justify-between gap-2"><h4 class="font-bold text-sm break-words ${i.done ? 'line-through opacity-60' : 'text-slate-800 dark:text-white'}">${esc(i.desc)}</h4><div class="flex items-center gap-1 shrink-0">${acts(i)}</div></div>
+                        <div class="mt-2 flex flex-wrap gap-1.5 text-[11px]">${i.tipo ? `<span class="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-900 text-teal-700 font-bold">${esc(i.tipo)}</span>` : ''}
+                            ${i.mper ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 font-bold">${CARE_MPER[i.mper] || ''}</span>` : ''}
+                            ${i.orc !== '' && i.orc != null ? `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 font-bold">R$ ${money(i.orc)}</span>` : ''}
+                            ${i.prazo ? `<span class="px-2 py-0.5 rounded-md ${late(i) ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-200'} font-bold"><i class="fa-regular fa-calendar mr-1"></i>${carePrazoLabel(i.prazo)}</span>` : ''}</div>
+                        ${i.obs ? `<p class="text-xs text-slate-500 mt-2 whitespace-pre-line">${esc(i.obs)}</p>` : ''}
+                        <div class="mt-3 flex flex-wrap gap-2"><button onclick="careToggleDone('${i.id}')" class="px-3 py-1.5 rounded-lg text-xs font-bold ${i.done ? 'bg-slate-200 dark:bg-slate-600' : 'bg-emerald-600 text-white'}">${i.done ? 'Reabrir' : '<i class="fa-solid fa-check mr-1"></i>Realizada'}</button>
+                            ${i.done ? '' : `<button onclick="careActivate('${i.id}')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600">Virar rotina</button>`}</div>
+                    </div>`).join('')}</div>`;
+                const table = `<div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr><th class="p-3 rounded-l-xl">Meta</th><th class="p-3">Tipo</th><th class="p-3">Período</th><th class="p-3">Orçamento</th><th class="p-3">Prazo</th><th class="p-3">Situação</th><th class="p-3 text-right rounded-r-xl">Ações</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">${dj.map(i => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 align-top">
+                        <td class="p-3 font-medium ${i.done ? 'line-through opacity-60' : 'text-slate-800 dark:text-white'}">${esc(i.desc)}${i.obs ? `<p class="text-[11px] font-normal text-slate-400 whitespace-pre-line">${esc(i.obs)}</p>` : ''}</td>
+                        <td class="p-3 text-xs">${esc(i.tipo || '') || '—'}</td><td class="p-3 text-xs">${CARE_MPER[i.mper] || '—'}</td>
+                        <td class="p-3 whitespace-nowrap">${i.orc !== '' && i.orc != null ? 'R$ ' + money(i.orc) : '—'}</td><td class="p-3 text-xs ${late(i) ? 'text-rose-600 font-bold' : ''}">${i.prazo ? carePrazoLabel(i.prazo) : '—'}</td>
+                        <td class="p-3"><button onclick="careToggleDone('${i.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${i.done ? 'bg-emerald-100 text-emerald-700' : late(i) ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}">${i.done ? 'Realizada' : late(i) ? 'Atrasada' : 'Em aberto'}</button></td>
+                        <td class="p-3 text-right whitespace-nowrap">${i.done ? '' : `<button onclick="careActivate('${i.id}')" title="Virar rotina" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-repeat"></i></button> `}${acts(i)}</td></tr>`).join('')}</tbody>
+                    <tfoot><tr class="font-bold"><td class="p-3" colspan="3">Orçamento em aberto</td><td class="p-3 whitespace-nowrap">R$ ${money(tot)}</td><td colspan="3"></td></tr></tfoot></table></div>`;
+                body = `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700 space-y-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-bullseye text-teal-500"></i><span>Metas e desejos</span></h3>
+                        <div class="flex flex-wrap items-center gap-2">${tot > 0 ? `<span class="text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700">Orçamento em aberto: R$ ${money(tot)}</span>` : ''}
+                        <div class="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${vb('cards', 'Cartões', 'fa-table-cells-large')}${vb('lista', 'Lista', 'fa-list')}</div></div></div>
+                    ${dj.length === 0 ? '<p class="text-sm text-slate-400 text-center py-10">Nenhuma meta ainda. Toque em "Nova meta".</p>' : (careMetaView === 'lista' ? table : cards)}
+                </div>`;
+            } else {
+                const all = careAllTips();
+                const seed = careTipIdx != null ? careTipIdx : Math.floor(new Date(localDateStr() + 'T00:00:00').getTime() / 864e5);
+                const tip = all[seed % all.length];
+                body = `<div class="space-y-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700 text-center">
+                        <p class="text-xs font-bold text-slate-400 uppercase mb-2">${careTipIdx != null ? 'Frase sorteada' : 'Frase do dia'} · ${CARE_CATS[tip.cat] || 'Minhas frases'}</p>
+                        <p class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white leading-snug">${esc(tip.text)}</p>
+                        <button onclick="careNewTip()" class="mt-4 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow"><i class="fa-solid fa-shuffle mr-1.5"></i>Outra frase</button>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">${Object.keys(CARE_TIPS).map(k => `
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                            <h3 class="font-bold text-slate-800 dark:text-white mb-3">${CARE_CATS[k]}</h3>
+                            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-300">${CARE_TIPS[k].concat(C.frases.filter(f => f.cat === k).map(f => f.text)).map(t => `<li class="flex gap-2"><i class="fa-solid fa-heart text-[10px] text-teal-500 mt-1.5"></i><span>${esc(t)}</span></li>`).join('')}</ul>
+                        </div>`).join('')}</div>
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <h3 class="font-bold text-slate-800 dark:text-white mb-3">Minhas frases</h3>
+                        <div class="flex flex-wrap gap-2 mb-4"><input type="text" id="care-phrase" placeholder="Escreva uma frase só sua..." class="${INP} flex-1 min-w-[200px]"><select id="care-phrase-cat" class="${INP} w-auto">${Object.keys(CARE_CATS).map(k => `<option value="${k}">${CARE_CATS[k]}</option>`).join('')}</select><button onclick="careAddPhrase()" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold">Adicionar</button></div>
+                        ${C.frases.length ? `<ul class="space-y-2">${C.frases.map(f => `<li class="flex items-center justify-between gap-2 text-sm p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40"><span><b class="text-[10px] uppercase text-slate-400 mr-2">${CARE_CATS[f.cat] || ''}</b>${esc(f.text)}</span><button onclick="careDelPhrase('${f.id}')" class="text-slate-400 hover:text-rose-600 px-1"><i class="fa-solid fa-trash"></i></button></li>`).join('')}</ul>` : '<p class="text-xs text-slate-400">Você ainda não adicionou frases.</p>'}
+                    </div></div>`;
+            }
+            container.innerHTML = `<div class="space-y-6 max-w-7xl mx-auto">
+                <div class="bg-gradient-to-r from-teal-800 to-teal-600 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
+                    <div><button onclick="closeCare()" class="text-teal-100 hover:text-white text-xs font-semibold mb-2 flex items-center space-x-1"><i class="fa-solid fa-arrow-left"></i><span>Voltar para Saúde</span></button>
+                        <h2 class="text-2xl sm:text-3xl font-bold"><i class="fa-solid fa-spa mr-2"></i> Autocuidado</h2>
+                        <p class="text-teal-100 mt-1 text-sm">Rotinas, metas e palavras que fazem bem.</p></div>
+                    ${careTab === 'dicas' ? '' : `<button onclick="openCareModal(null,'${careTab === 'metas' ? 'desejo' : 'ativo'}')" class="bg-white text-teal-900 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm"><i class="fa-solid fa-plus"></i><span>${careTab === 'metas' ? 'NOVA META' : 'NOVA ROTINA'}</span></button>`}
+                </div>
+                <div class="flex flex-wrap gap-2">${tabBtn('rotinas', 'Rotinas', 'fa-list-check')}${tabBtn('metas', 'Metas', 'fa-bullseye')}${tabBtn('dicas', 'Dicas e afirmações', 'fa-heart')}</div>
+                ${body}</div>`;
+        }
+        const CARE_MPER = { semestral: 'Semestral', anual: 'Anual', unico: 'Único' };
+        function careSetMetaView(v) { careMetaView = v; renderCurrentTabContent(); }
+        // Prazo livre (ex.: "3 meses"). Se for uma data (AAAA-MM-DD ou DD/MM/AAAA), também dá para marcar atraso.
+        function carePrazoDate(p) {
+            p = String(p || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(p)) return p;
+            const m = p.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
+        }
+        function carePrazoLabel(p) { const d = /^\d{4}-\d{2}-\d{2}$/.test(String(p || '').trim()) ? fmtBR(p) : p; return esc(d); }
+        function openCareModal(id = null, modoDef = 'ativo') {
+            const it = id ? (careData().items.find(x => x.id === id) || {}) : {};
+            const modo = it.modo || modoDef, freq = it.freq || 'diario', turno = it.turno || 'qualquer';
+            const o = (v, l, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`;
+            const prazoTxt = /^\d{4}-\d{2}-\d{2}$/.test(String(it.prazo || '')) ? fmtBR(it.prazo) : (it.prazo || '');
+            showModal(id ? 'Editar' : (modo === 'desejo' ? 'Nova meta' : 'Nova rotina'), `
+                <form onsubmit="saveCare(event,'${id || ''}')" class="space-y-4">
+                    <div><label class="${LBL}">Descrição *</label><input type="text" id="care-desc" required value="${esc(it.desc || '')}" placeholder="Ex.: Passar creme" class="${INP}"></div>
+                    <div><label class="${LBL}">Tipo</label><input type="text" id="care-tipo" list="care-tipos" value="${esc(it.tipo || '')}" placeholder="Ex.: Cuidados com a pele" class="${INP}"><datalist id="care-tipos"><option value="Cuidados com a pele"><option value="Cabelo"><option value="Corpo"><option value="Unhas"><option value="Mente e emoções"><option value="Descanso"><option value="Exercício"><option value="Alimentação"><option value="Beleza"><option value="Lazer"></datalist></div>
+                    <div id="care-routine-wrap" class="${modo === 'desejo' ? 'hidden' : ''} space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="${LBL}">Período</label><select id="care-freq" onchange="careFreqChange()" class="${INP}">${o('diario', 'Todos os dias', freq)}${o('dias', 'Dias da semana', freq)}${o('mensal', 'Uma vez por mês', freq)}</select></div>
+                            <div><label class="${LBL}">Horário</label><select id="care-turno" class="${INP}">${Object.keys(CARE_TURNOS).map(k => o(k, CARE_TURNOS[k], turno)).join('')}</select></div>
+                        </div>
+                        <div id="care-days-wrap" class="${freq === 'dias' ? '' : 'hidden'} flex flex-wrap gap-3">${CARE_DIAS.map((d, i) => `<label class="flex flex-col items-center text-[11px] text-slate-500 gap-0.5"><input type="checkbox" class="care-day" value="${i}" ${(it.days || []).includes(i) ? 'checked' : ''}>${d}</label>`).join('')}</div>
+                        <div id="care-month-wrap" class="${freq === 'mensal' ? '' : 'hidden'}"><label class="${LBL}">Dia do mês</label><input type="number" min="1" max="31" id="care-mday" value="${it.monthDay || ''}" class="${INP}"></div>
+                    </div>
+                    <div><label class="${LBL}">Observação</label><input type="text" id="care-obs" value="${esc(it.obs || '')}" placeholder="Ex.: Natura" class="${INP}"></div>
+                    <div><label class="${LBL}">Modo</label><select id="care-modo" onchange="careModoChange()" class="${INP}">${o('ativo', 'Ativo: já posso realizar', modo)}${o('desejo', 'Desejo: quero realizar um dia', modo)}</select></div>
+                    <div id="care-desejo-wrap" class="${modo === 'desejo' ? '' : 'hidden'} space-y-4">
+                        <div><label class="${LBL}">Período (opcional)</label><select id="care-mper" class="${INP}">${o('', 'Sem período', it.mper || '')}${o('semestral', 'Semestral', it.mper || '')}${o('anual', 'Anual', it.mper || '')}${o('unico', 'Único', it.mper || '')}</select></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="${LBL}">Orçamento (opcional)</label><input type="number" step="0.01" min="0" id="care-orc" value="${it.orc != null ? it.orc : ''}" class="${INP}"></div>
+                            <div><label class="${LBL}">Prazo (opcional)</label><input type="text" id="care-prazo" value="${esc(prazoTxt)}" placeholder="Ex.: 3 meses" class="${INP}"></div>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                </form>`);
+        }
+        function careFreqChange() {
+            const f = document.getElementById('care-freq').value;
+            document.getElementById('care-days-wrap').classList.toggle('hidden', f !== 'dias');
+            document.getElementById('care-month-wrap').classList.toggle('hidden', f !== 'mensal');
+        }
+        function careModoChange() {
+            const d = document.getElementById('care-modo').value === 'desejo';
+            document.getElementById('care-desejo-wrap').classList.toggle('hidden', !d);
+            document.getElementById('care-routine-wrap').classList.toggle('hidden', d);
+        }
+        function saveCare(e, id) {
+            e.preventDefault();
+            const g = k => document.getElementById(k).value;
+            const modo = g('care-modo');
+            const data = { desc: g('care-desc').trim(), tipo: g('care-tipo').trim(), freq: g('care-freq'), turno: g('care-turno'), obs: g('care-obs').trim(), modo,
+                days: Array.from(document.querySelectorAll('.care-day:checked')).map(c => Number(c.value)), monthDay: g('care-mday'),
+                mper: modo === 'desejo' ? g('care-mper') : '', orc: modo === 'desejo' ? g('care-orc') : '', prazo: modo === 'desejo' ? g('care-prazo').trim() : '' };
+            const C = careData();
+            if (id) Object.assign(C.items.find(x => x.id === id), data); else C.items.push(Object.assign({ id: uid(), done: false }, data));
+            careTab = modo === 'desejo' ? 'metas' : 'rotinas';
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Salvo!', 'success');
         }
 
