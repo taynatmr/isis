@@ -333,6 +333,9 @@
         let obraSortOrder = 'date-desc';
         let budgetFilterStatus = 'todos';
         let finFilterOpen = false, finSort = { k: 'date', dir: 1 };
+        const _perNow = () => { const t = localDateStr(); return { day: t, month: t.slice(0, 7), year: t.slice(0, 4) }; };
+        const PER = { fin: Object.assign({ mode: 'mes' }, _perNow()), ct: Object.assign({ mode: 'todos' }, _perNow()) };
+        let ctSel = new Set(), cardSort = { k: 'date', dir: 1 }, budSort = { k: 'pag', dir: 1 };
         let financeFilterStatus = 'todos'; // 'todos', 'pago', 'pendente'
         let waterDate = localDateStr();
         let medSelectedDate = localDateStr();
@@ -555,6 +558,7 @@
                 if (b.brand === undefined) b.brand = '';
                 if (b.unitPrice === undefined) b.unitPrice = '';
                 if (b.qty === undefined) b.qty = '';
+                if (!Array.isArray(b.attachments)) b.attachments = [];
                 if (b.obs === undefined) b.obs = '';
                 if (b.paidDate === undefined) b.paidDate = '';
             });
@@ -904,7 +908,7 @@
         function switchTab(tabId) {
             currentActiveTab = tabId;
             if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; }
-            if (tabId === 'financeiro') financeFilterDate = localDateStr().slice(0, 7); // sempre abre no mês atual
+            if (tabId === 'financeiro') { financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); } // sempre abre no mês atual cheio
             if (tabId !== 'saude') { saudeDiagOpen = false; saudeVacOpen = false; saudeCareOpen = false; }
             if (tabId !== 'hobbies') { recOpen = false; recViewId = null; }
             if (tabId !== 'docs') { docFolderId = null; docUnlocked.clear(); } // pastas com senha voltam a ficar trancadas
@@ -3203,6 +3207,11 @@
                 <button onclick="deleteBudget('${b.id}')" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
             </div>`;
         }
+        function budgetAttList(b) {
+            const L = (b.attachments || []).map(a => ({ name: a.name, open: `openStoredFile('${a.id}')` }));
+            if (b.fileName && b.fileData) L.push({ name: b.fileName, open: `downloadBudgetFile('${b.id}')` });
+            return L;
+        }
         function budgetCardHtml(b) {
             const amt = Number(b.amount) || 0, paid = Number(b.paidAmount) || 0;
             return `
@@ -3223,11 +3232,7 @@
                     </div>
                     ${paid > 0 && paid < amt ? `<p class="text-[11px] text-rose-500 font-semibold mb-2">Falta pagar R$ ${money(amt - paid)}</p>` : ''}
                     ${b.obs ? `<p class="text-xs text-slate-500 italic mb-2 whitespace-pre-line"><i class="fa-regular fa-note-sticky mr-1"></i>${esc(b.obs)}</p>` : ''}
-                    ${b.fileName ? `
-                        <div class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex items-center justify-between text-xs">
-                            <span class="truncate max-w-[160px] text-teal-600 dark:text-teal-400 font-medium"><i class="fa-solid fa-paperclip mr-1"></i> ${esc(b.fileName)}</span>
-                            ${b.fileData ? `<button onclick="downloadBudgetFile('${b.id}')" class="px-2 py-1 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 rounded font-bold text-[10px]">Baixar Arquivo</button>` : ''}
-                        </div>` : '<p class="text-[11px] text-slate-400 italic">Nenhum arquivo anexado</p>'}
+                    ${(() => { const L = budgetAttList(b); return L.length ? `<div class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 space-y-1">${L.map(f => `<div class="flex items-center justify-between text-xs gap-2"><span class="truncate max-w-[160px] text-teal-600 dark:text-teal-400 font-medium"><i class="fa-solid fa-paperclip mr-1"></i> ${esc(f.name)}</span><button onclick="${f.open}" class="px-2 py-1 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 rounded font-bold text-[10px] flex-shrink-0">Abrir</button></div>`).join('')}</div>` : '<p class="text-[11px] text-slate-400 italic">Nenhum arquivo anexado</p>'; })()}
                 </div>
             </div>`;
         }
@@ -3244,13 +3249,14 @@
                 <td class="p-3">${budgetBadge(b)}${b.status === 'Pago' && b.paidDate ? `<p class="text-[10px] text-sky-600 mt-0.5">${fmtBR(b.paidDate)}</p>` : ''}</td>
                 <td class="p-3 font-bold text-amber-600 whitespace-nowrap">R$ ${money(amt)}</td>
                 <td class="p-3 font-bold whitespace-nowrap ${paid > 0 ? 'text-emerald-600' : 'text-slate-400'}">R$ ${money(paid)}</td>
-                <td class="p-3 whitespace-nowrap">${b.fileName && b.fileData ? `<button onclick="downloadBudgetFile('${b.id}')" title="${esc(b.fileName)}" class="px-2 py-1 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 rounded text-[11px] font-bold"><i class="fa-solid fa-paperclip mr-1"></i>Baixar</button>` : '<span class="text-slate-300">—</span>'}</td>
+                <td class="p-3"><div class="flex flex-col gap-1 items-start">${budgetAttList(b).map(f => `<button onclick="${f.open}" title="${esc(f.name)}" class="px-2 py-1 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 rounded text-[11px] font-bold max-w-[140px] truncate"><i class="fa-solid fa-paperclip mr-1"></i>${esc(f.name)}</button>`).join('') || '<span class="text-slate-300">—</span>'}</div></td>
                 <td class="p-3 text-right">${budgetActions(b)}</td>
             </tr>`;
         }
         function groupHeaderInner(g, all) {
             const open = budgetGroupOpen[g.id] === true;
             return `
+                <span onpointerdown="budGrpDragStart(event,'${g.id}')" title="Arraste para reordenar o grupo" class="w-6 h-7 flex items-center justify-center text-slate-400 hover:text-amber-600 cursor-grab flex-shrink-0 select-none" style="touch-action:none"><i class="fa-solid fa-grip-vertical"></i></span>
                 <button onclick="toggleBudgetGroup('${g.id}')" class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs flex-shrink-0"><i class="fa-solid ${open ? 'fa-chevron-down' : 'fa-chevron-right'}"></i></button>
                 <div class="min-w-0 flex-1">
                     <p class="font-bold text-slate-800 dark:text-white text-sm truncate"><i class="fa-solid fa-layer-group text-amber-500 mr-1.5"></i>${esc(g.name)} <span class="text-[11px] font-semibold text-slate-400">· ${all.length} orçamento(s)</span></p>
@@ -3266,6 +3272,60 @@
                     <button onclick="dissolveGroup('${g.id}')" title="Desfazer grupo (os orçamentos são mantidos)" class="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-xs hover:text-rose-600"><i class="fa-solid fa-link-slash"></i></button>
                 </div>`;
         }
+        // ---------- Reordenar grupos arrastando (mouse e toque) ----------
+        let budDrag = null;
+        function budGrpDragStart(ev, id) {
+            ev.preventDefault();
+            budDrag = { id, over: null, after: false };
+            const src = document.querySelector(`[data-gid="${id}"]`); if (src) src.style.opacity = '0.5';
+            document.addEventListener('pointermove', budGrpDragMove);
+            document.addEventListener('pointerup', budGrpDragEnd);
+            document.addEventListener('pointercancel', budGrpDragEnd);
+        }
+        function budGrpDragMove(ev) {
+            if (!budDrag) return;
+            document.querySelectorAll('[data-gid]').forEach(e => { e.style.boxShadow = ''; });
+            const y = ev.clientY;
+            if (y < 70) window.scrollBy(0, -12); else if (y > window.innerHeight - 70) window.scrollBy(0, 12);
+            const el = document.elementFromPoint(ev.clientX, y), t = el && el.closest ? el.closest('[data-gid]') : null;
+            budDrag.over = null;
+            if (t && t.dataset.gid !== budDrag.id) {
+                const r = t.getBoundingClientRect();
+                budDrag.over = t.dataset.gid; budDrag.after = y > r.top + r.height / 2;
+                t.style.boxShadow = budDrag.after ? '0 4px 0 0 #f59e0b' : '0 -4px 0 0 #f59e0b';
+            }
+        }
+        function budGrpDragEnd() {
+            document.removeEventListener('pointermove', budGrpDragMove);
+            document.removeEventListener('pointerup', budGrpDragEnd);
+            document.removeEventListener('pointercancel', budGrpDragEnd);
+            const d = budDrag; budDrag = null;
+            document.querySelectorAll('[data-gid]').forEach(e => { e.style.boxShadow = ''; e.style.opacity = ''; });
+            if (!d || !d.over) return;
+            const arr = appData.habitacao.budgetGroups || [];
+            const from = arr.findIndex(g => g.id === d.id); if (from < 0) return;
+            const [item] = arr.splice(from, 1);
+            let to = arr.findIndex(g => g.id === d.over); if (to < 0) { arr.splice(from, 0, item); return; }
+            arr.splice(d.after ? to + 1 : to, 0, item);
+            saveAppData(); renderCurrentTabContent();
+        }
+        function budSortBy(k) { if (budSort.k === k) budSort.dir *= -1; else budSort = { k, dir: k === 'amount' ? -1 : 1 }; renderCurrentTabContent(); }
+        function budCmp(a, b) {
+            const k = budSort.k; let r;
+            if (k === 'pag') {
+                // ordem de pagamento: pagos primeiro (pela data do pagamento), depois os em aberto (pela data do orçamento)
+                const pa = a.status === 'Pago' || (Number(a.paidAmount) > 0 && Number(a.paidAmount) >= Number(a.amount));
+                const pb = b.status === 'Pago' || (Number(b.paidAmount) > 0 && Number(b.paidAmount) >= Number(b.amount));
+                if (pa !== pb) r = pa ? -1 : 1;
+                else r = pa ? (a.paidDate || a.date || '').localeCompare(b.paidDate || b.date || '') : (a.date || '').localeCompare(b.date || '');
+            }
+            else if (k === 'amount') r = (Number(a.amount) || 0) - (Number(b.amount) || 0);
+            else if (k === 'date') r = (a.date || '').localeCompare(b.date || '');
+            else r = normKey(a.title).localeCompare(normKey(b.title));
+            if (r === 0) r = (a.date || '').localeCompare(b.date || '') || normKey(a.title).localeCompare(normKey(b.title));
+            return r * budSort.dir;
+        }
+        function budTh(l, k, cls) { return `<th class="p-3 ${cls || ''} cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-200 whitespace-nowrap" onclick="budSortBy('${k}')" title="Clique para ordenar">${l}${budSort.k === k ? ` <i class="fa-solid fa-arrow-${budSort.dir > 0 ? 'up' : 'down'} text-[9px]"></i>` : ''}</th>`; }
         function budgetsSectionHtml(list) {
             const H = appData.habitacao;
             const shownIds = new Set(list.map(b => b.id));
@@ -3274,11 +3334,12 @@
             (H.budgetGroups || []).forEach(g => {
                 const all = H.budgets.filter(b => b.groupId === g.id);
                 all.forEach(b => groupedIds.add(b.id));
-                const shown = all.filter(b => shownIds.has(b.id));
+                const shown = all.filter(b => shownIds.has(b.id)).sort(budCmp);
                 if (budgetFilterStatus !== 'todos' && shown.length === 0) return;
                 blocks.push({ g, all, shown });
             });
             const loose = list.filter(b => !groupedIds.has(b.id));
+            if (budSort.k !== 'pag' || budSort.dir !== 1) loose.sort(budCmp);
             const totalAmt = sumBudgets(list, 'amount'), totalPaid = sumBudgets(list, 'paidAmount');
             const segBtn = (v, icon, label) => `<button onclick="setBudgetView('${v}')" class="px-3 py-1.5 text-xs font-bold flex items-center space-x-1 ${budgetView === v ? 'bg-amber-500 text-teal-950' : 'bg-slate-50 dark:bg-slate-900 text-slate-500'}"><i class="fa-solid ${icon}"></i><span>${label}</span></button>`;
             const statusOpt = s => `<option value="${s}" ${budgetFilterStatus === s ? 'selected' : ''}>${s}</option>`;
@@ -3290,7 +3351,7 @@
                 body = `<div class="space-y-4">
                     ${blocks.map(({ g, all, shown }) => {
                         const open = budgetGroupOpen[g.id] === true;
-                        return `<div class="rounded-2xl border-2 border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/10 p-4">
+                        return `<div data-gid="${g.id}" class="rounded-2xl border-2 border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/10 p-4">
                             <div class="flex items-center gap-3">${groupHeaderInner(g, all)}</div>
                             ${open ? `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">${shown.length ? shown.map(budgetCardHtml).join('') : '<p class="text-xs text-slate-400 italic">Grupo sem orçamentos neste filtro.</p>'}</div>` : ''}
                         </div>`;
@@ -3300,12 +3361,12 @@
             } else {
                 body = `<div class="overflow-x-auto"><table class="w-full text-left text-sm">
                     <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                        <th class="p-3 rounded-l-xl">Orçamento</th><th class="p-3">Fornecedor / Marca</th><th class="p-3">Data</th><th class="p-3">Status</th><th class="p-3">Valor total</th><th class="p-3">Pago</th><th class="p-3">Anexo</th><th class="p-3 text-right rounded-r-xl">Ações</th>
+                        ${budTh('Orçamento', 'title', 'rounded-l-xl')}<th class="p-3">Fornecedor / Marca</th>${budTh('Data', 'date')}${budTh('Status', 'pag')}${budTh('Valor total', 'amount')}<th class="p-3">Pago</th><th class="p-3">Anexo</th><th class="p-3 text-right rounded-r-xl">Ações</th>
                     </tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         ${blocks.map(({ g, all, shown }) => {
                             const open = budgetGroupOpen[g.id] === true;
-                            return `<tr class="bg-amber-50 dark:bg-amber-950/20"><td colspan="8" class="p-3"><div class="flex items-center gap-3">${groupHeaderInner(g, all)}</div></td></tr>
+                            return `<tr data-gid="${g.id}" class="bg-amber-50 dark:bg-amber-950/20"><td colspan="8" class="p-3"><div class="flex items-center gap-3">${groupHeaderInner(g, all)}</div></td></tr>
                                 ${open ? shown.map(b => budgetRowHtml(b, true)).join('') : ''}`;
                         }).join('')}
                         ${loose.map(b => budgetRowHtml(b, false)).join('')}
@@ -3337,6 +3398,7 @@
                     <span class="text-teal-800 dark:text-teal-200"><i class="fa-solid fa-circle-info mr-1"></i>Marque os orçamentos que fazem parte do mesmo fornecedor/documento (mínimo 2). <b id="bud-sel-count">${budgetSelected.length}</b> selecionado(s).</span>
                     <button id="bud-group-btn" onclick="openGroupModal()" ${budgetSelected.length < 2 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg bg-teal-600 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed">Agrupar selecionados</button>
                 </div>` : ''}
+                <div class="flex flex-wrap items-center gap-1.5 text-[11px] mb-3"><span class="text-slate-400 uppercase font-semibold mr-1">Ordenar:</span>${[['pag', 'Ordem de pagamento'], ['date', 'Data'], ['title', 'Nome'], ['amount', 'Valor']].map(([k, l]) => `<button onclick="budSortBy('${k}')" class="px-2.5 py-1 rounded-lg font-bold ${budSort.k === k ? 'bg-amber-500 text-teal-950' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">${l}${budSort.k === k ? ` <i class="fa-solid fa-arrow-${budSort.dir > 0 ? 'up' : 'down'} text-[9px]"></i>` : ''}</button>`).join('')}</div>
                 <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 mb-4">
                     <span>Total orçado: <b class="text-amber-600">R$ ${money(totalAmt)}</b></span>
                     <span>Total pago: <b class="text-emerald-600">R$ ${money(totalPaid)}</b></span>
@@ -3358,6 +3420,7 @@
         function openBudgetModal(id = null) {
             let b = { title: '', supplier: '', brand: '', unitPrice: '', qty: '', amount: '', paidAmount: '', date: localDateStr(), status: 'Pendente', paidDate: '', obs: '', groupId: '', fileName: '', fileData: '' };
             if (id && appData.habitacao.budgets) b = appData.habitacao.budgets.find(x => x.id === id) || b;
+            draftInit(b.attachments);
             const sup = (appData.habitacao.suppliers || []).map(s => s.name);
             if (b.supplier && b.supplier !== 'Geral' && !sup.includes(b.supplier)) sup.push(b.supplier);
             const supplierOptions = sup.map(n => `<option value="${esc(n)}" ${b.supplier === n ? 'selected' : ''}>${esc(n)}</option>`).join('');
@@ -3426,9 +3489,11 @@
                         <textarea id="budget-obs" rows="2" class="${INP}" placeholder="Ex: preço válido até..., forma de pagamento...">${esc(b.obs || '')}</textarea>
                     </div>
                     <div>
-                        <label class="${LBL}">Anexar Arquivo (Recibo / PDF / Imagem)</label>
-                        <input type="file" id="budget-file" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
-                        ${b.fileName ? `<p class="text-xs text-teal-600 mt-1">Atual: ${esc(b.fileName)}</p>` : ''}
+                        <label class="${LBL}">Anexos (recibos / PDF / imagens — pode escolher vários)</label>
+                        <div id="draft-att-list">${draftListHtml()}</div>
+                        ${b.fileName && b.fileData ? `<label class="flex items-center gap-2 text-xs text-teal-600 mb-2"><i class="fa-solid fa-paperclip"></i> Arquivo anterior: ${esc(b.fileName)} <span class="ml-auto flex items-center gap-1 text-slate-500"><input type="checkbox" id="budget-rm-old"> remover</span></label>` : ''}
+                        <input type="file" id="budget-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
+                        <p class="text-[11px] text-slate-400 mt-1">Para adicionar mais, abra o orçamento de novo e escolha outros arquivos.</p>
                     </div>
                     <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-teal-950 py-3 rounded-xl font-bold text-sm shadow">Salvar Orçamento</button>
                 </form>
@@ -3452,8 +3517,9 @@
                 d.focus();
             }
         }
-        function saveBudget(e, id) {
+        async function saveBudget(e, id) {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type=submit]'); if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
             const status = document.getElementById('budget-status').value;
             const data = {
                 title: document.getElementById('budget-title').value,
@@ -3471,16 +3537,12 @@
             const gSel = document.getElementById('budget-group');
             const existing = id ? appData.habitacao.budgets.find(x => x.id === id) : null;
             data.groupId = gSel ? gSel.value : (existing ? existing.groupId || '' : '');
-            data.fileName = existing ? existing.fileName : '';
-            data.fileData = existing ? existing.fileData : '';
-            const fi = document.getElementById('budget-file');
-            if (fi.files && fi.files[0]) {
-                const file = fi.files[0];
-                data.fileName = file.name;
-                const reader = new FileReader();
-                reader.onload = ev => { data.fileData = ev.target.result; finishSaveBudget(id, data); };
-                reader.readAsDataURL(file);
-            } else finishSaveBudget(id, data);
+            const rmOld = document.getElementById('budget-rm-old');
+            const keepOld = existing && !(rmOld && rmOld.checked);
+            data.fileName = keepOld ? existing.fileName || '' : '';
+            data.fileData = keepOld ? existing.fileData || '' : '';
+            data.attachments = await draftCommit('budget-files');
+            finishSaveBudget(id, data);
         }
         function finishSaveBudget(id, data) {
             if (!appData.habitacao.budgets) appData.habitacao.budgets = [];
@@ -3495,6 +3557,8 @@
         function editBudget(id) { openBudgetModal(id); }
         function deleteBudget(id) {
             if (!confirm('Excluir este orçamento?')) return;
+            const _b = appData.habitacao.budgets.find(x => x.id === id);
+            if (_b) (_b.attachments || []).forEach(a => deleteStoredFile(a.id));
             appData.habitacao.budgets = appData.habitacao.budgets.filter(b => b.id !== id);
             budgetSelected = budgetSelected.filter(x => x !== id);
             pruneBudgetGroups();
@@ -4371,7 +4435,7 @@
             const card = cardById(cardSelectedId);
             if (!cardInvMonth) cardInvMonth = cardInvoiceKey(card, localDateStr());
             const key = cardInvMonth;
-            const entries = cardEntriesFor(card.id, key).sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.name.localeCompare(b.name));
+            const entries = cardEntriesFor(card.id, key).sort(cardCmp);
             const total = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
             const tx = cardInvoiceTx(card.id, key);
             const paid = tx && tx.status === 'pago';
@@ -4441,7 +4505,7 @@
                     ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhum lançamento nesta fatura.</p></div>` : `
                     <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                            <th class="p-3 rounded-l-xl">Data</th><th class="p-3">Nome</th><th class="p-3">Categoria</th><th class="p-3">Parcela</th><th class="p-3">Observação</th><th class="p-3">Valor</th><th class="p-3 text-right rounded-r-xl">Ações</th>
+                            ${cardTh('Data', 'date', 'rounded-l-xl')}${cardTh('Nome', 'name')}${cardTh('Categoria', 'category')}${cardTh('Parcela', 'inst')}${cardTh('Observação', 'obs')}${cardTh('Valor', 'amount')}<th class="p-3 text-right rounded-r-xl">Ações</th>
                         </tr></thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         ${entries.map(e => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
@@ -4460,6 +4524,18 @@
                     </table></div>`}
                 </div>
             </div>`;
+        }
+        function cardSortBy(k) { if (cardSort.k === k) cardSort.dir *= -1; else cardSort = { k, dir: k === 'amount' ? -1 : 1 }; renderCurrentTabContent(); }
+        function cardTh(l, k, cls) { return `<th class="p-3 ${cls || ''} cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-200 whitespace-nowrap" onclick="cardSortBy('${k}')" title="Clique para ordenar">${l}${cardSort.k === k ? ` <i class="fa-solid fa-arrow-${cardSort.dir > 0 ? 'up' : 'down'} text-[9px]"></i>` : ''}</th>`; }
+        function cardCmp(a, b) {
+            const k = cardSort.k; let r;
+            const t = x => normKey(x == null ? '' : x);
+            if (k === 'amount') r = (Number(a.amount) || 0) - (Number(b.amount) || 0);
+            else if (k === 'inst') r = (a.installment ? a.installment.n : 0) - (b.installment ? b.installment.n : 0);
+            else if (k === 'date') r = (a.date || '').localeCompare(b.date || '');
+            else r = t(a[k]).localeCompare(t(b[k]));
+            if (r === 0) r = (a.date || '').localeCompare(b.date || '') || t(a.name).localeCompare(t(b.name));
+            return r * cardSort.dir;
         }
         function cardSelect(id) { cardSelectedId = id; cardInvMonth = ''; renderCurrentTabContent(); }
         function cardNavMonth(d) { cardInvMonth = ymAdd(cardInvMonth, d); renderCurrentTabContent(); }
@@ -5183,7 +5259,7 @@
                     const paidDate = status === 'Pago' ? (parseDateAny(rowGet(r, 'data pagamento')) || today) : '';
                     const obs = S(rowGet(r, 'observacao', 'obs'));
                     if (appData.habitacao.budgets.some(b => b.title === title && b.supplier === supplier && Number(b.amount) === amount && b.date === date)) { skipped++; return; }
-                    appData.habitacao.budgets.push({ id: uid(), title, supplier, brand, unitPrice, qty, amount, paidAmount, date, status, paidDate, obs, groupId: '', fileName: '', fileData: '' }); added++;
+                    appData.habitacao.budgets.push({ id: uid(), title, supplier, brand, unitPrice, qty, amount, paidAmount, date, status, paidDate, obs, groupId: '', fileName: '', fileData: '', attachments: [] }); added++;
                 } else if (kind === 'habitacao') {
                     const amount = parseAmount(rowGet(r, 'valor'));
                     if (!(amount > 0)) { skipped++; return; }
@@ -5994,8 +6070,47 @@
         }
 
         // ---------- Tela Financeiro (filtro geral) ----------
+        // ---------- Filtro de período (dia / mês / ano / todos) ----------
+        function perPrefix(ns) { const p = PER[ns]; return p.mode === 'dia' ? p.day : p.mode === 'mes' ? p.month : p.mode === 'ano' ? p.year : ''; }
+        function perLabel(ns) {
+            const p = PER[ns];
+            if (p.mode === 'dia') return p.day ? fmtBR(p.day) : 'Dia';
+            if (p.mode === 'mes') return p.month ? fmtYM(p.month) : 'Mês';
+            if (p.mode === 'ano') return p.year || 'Ano';
+            return 'Todo o período';
+        }
+        function perSetMode(ns, m) { const p = PER[ns]; p.mode = m; const n = _perNow(); if (m === 'dia' && !p.day) p.day = n.day; if (m === 'mes' && !p.month) p.month = n.month; if (m === 'ano' && !p.year) p.year = n.year; renderCurrentTabContent(); }
+        function perSetVal(ns, v) { const p = PER[ns]; if (!v) return; if (p.mode === 'dia') p.day = v; else if (p.mode === 'mes') p.month = v; else if (p.mode === 'ano') p.year = String(v).replace(/\D/g, '').slice(0, 4) || p.year; renderCurrentTabContent(); }
+        function perNav(ns, d) {
+            const p = PER[ns];
+            if (p.mode === 'dia') { const dt = new Date((p.day || localDateStr()) + 'T12:00:00'); dt.setDate(dt.getDate() + d); p.day = localDateStr(dt); }
+            else if (p.mode === 'mes') p.month = ymAdd(p.month || localDateStr().slice(0, 7), d);
+            else if (p.mode === 'ano') p.year = String((Number(p.year) || new Date().getFullYear()) + d);
+            renderCurrentTabContent();
+        }
+        function perToday(ns) { PER[ns] = Object.assign({ mode: PER[ns].mode === 'todos' ? 'mes' : PER[ns].mode }, _perNow()); renderCurrentTabContent(); }
+        function perBarHtml(ns) {
+            const p = PER[ns], S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            const on = 'bg-teal-600 text-white', off = 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
+            const mb = (m, l) => `<button onclick="perSetMode('${ns}','${m}')" class="px-3 py-1.5 text-xs font-bold ${p.mode === m ? on : off}">${l}</button>`;
+            const nav = p.mode !== 'todos';
+            const inp = p.mode === 'dia' ? `<input type="date" value="${p.day}" onchange="perSetVal('${ns}',this.value)" class="${S}">`
+                : p.mode === 'mes' ? `<input type="month" value="${p.month}" onchange="perSetVal('${ns}',this.value)" class="${S}">`
+                : p.mode === 'ano' ? `<input type="number" min="1990" max="2100" value="${p.year}" onchange="perSetVal('${ns}',this.value)" class="${S} w-24">` : '';
+            const nowLbl = p.mode === 'dia' ? 'Hoje' : p.mode === 'ano' ? 'Ano atual' : 'Mês atual';
+            const isNow = p.mode === 'dia' ? p.day === localDateStr() : p.mode === 'ano' ? p.year === localDateStr().slice(0, 4) : p.month === localDateStr().slice(0, 7);
+            return `<div class="flex flex-wrap items-center gap-2">
+                <div class="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${mb('dia', 'Dia')}${mb('mes', 'Mês')}${mb('ano', 'Ano')}${mb('todos', 'Todos')}</div>
+                ${nav ? `<div class="flex items-center gap-1">
+                    <button onclick="perNav('${ns}',-1)" title="Anterior" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-left"></i></button>
+                    ${inp}
+                    <button onclick="perNav('${ns}',1)" title="Próximo" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-right"></i></button>
+                    <button onclick="perToday('${ns}')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${isNow ? on : off}">${nowLbl}</button>
+                </div>` : ''}
+            </div>`;
+        }
         function finSet(k, v) { finF[k] = v; renderCurrentTabContent(); }
-        function finClear() { finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' }; financeFilterDate = localDateStr().slice(0, 7); financeFilterStatus = 'todos'; renderCurrentTabContent(); }
+        function finClear() { finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' }; financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); financeFilterStatus = 'todos'; renderCurrentTabContent(); }
         function finToggleFilter() { finFilterOpen = !finFilterOpen; renderCurrentTabContent(); }
         function finSortBy(k) {
             if (finSort.k === k) finSort.dir *= -1; else finSort = { k, dir: (k === 'amount' || k === 'date') ? -1 : 1 };
@@ -6013,9 +6128,9 @@
         }
         function finNavMonth(d) { financeFilterDate = ymAdd(financeFilterDate || localDateStr().slice(0, 7), d); renderCurrentTabContent(); }
         function finFiltered() {
-            const f = finF;
+            const f = finF, pf = perPrefix('fin');
             return appData.financeiro.transactions.filter(t => {
-                if (financeFilterDate && !(t.date && t.date.startsWith(financeFilterDate))) return false;
+                if (pf && !(t.date && t.date.startsWith(pf))) return false;
                 if (financeFilterStatus !== 'todos' && finSt(t) !== financeFilterStatus) return false;
                 if (f.acc && t.accId !== f.acc && t.toAccId !== f.acc) return false;
                 if (f.cat && (t.category || '') !== f.cat) return false;
@@ -6046,13 +6161,7 @@
                 <div class="space-y-6 max-w-7xl mx-auto">
                     <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
                         <div class="flex flex-wrap items-center justify-between gap-3">
-                            <div class="flex items-center gap-1">
-                                <button onclick="finNavMonth(-1)" title="Mês anterior" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-left"></i></button>
-                                <input type="month" value="${financeFilterDate}" onchange="changeFinanceFilter(this.value)" title="Mês" class="${S}">
-                                <button onclick="finNavMonth(1)" title="Próximo mês" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs"><i class="fa-solid fa-chevron-right"></i></button>
-                                <button onclick="changeFinanceFilter(localDateStr().slice(0, 7))" class="px-3 py-1.5 rounded-xl text-xs font-bold ${financeFilterDate === localDateStr().slice(0, 7) ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Mês atual</button>
-                                <button onclick="changeFinanceFilter('')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${financeFilterDate === '' ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">Todos os meses</button>
-                            </div>
+                            ${perBarHtml('fin')}
                             <div class="flex flex-wrap items-center gap-2">
                                 <button onclick="finToggleFilter()" class="px-3 py-2 rounded-xl text-xs font-bold ${finFilterOpen || nAct ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid fa-filter mr-1"></i>Filtro${nAct ? ' (' + nAct + ')' : ''}<i class="fa-solid fa-chevron-${finFilterOpen ? 'up' : 'down'} ml-1.5 text-[9px]"></i></button>
                                 <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
@@ -6073,7 +6182,7 @@
                         ${card('Receitas', tr, 'text-emerald-600')}${card('Despesas', td, 'text-rose-600')}${card('Saldo do Período', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${card('Pendente', tp, 'text-amber-600')}
                     </div>
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-wallet text-teal-500"></i><span>Lançamentos Financeiros</span><span class="text-xs font-normal text-slate-400">(${list.length}) · ${financeFilterDate ? fmtYM(financeFilterDate) : 'Todos os meses'}</span></h3>
+                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-wallet text-teal-500"></i><span>Lançamentos Financeiros</span><span class="text-xs font-normal text-slate-400">(${list.length}) · ${perLabel('fin')}</span></h3>
                         ${list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhuma transação encontrada para este filtro.</p></div>` : `
                         <div id="fin-sel-bar">${finSelBar()}</div>
                         <div class="overflow-x-auto"><table class="w-full text-left text-sm">
@@ -6148,12 +6257,12 @@
             if (!cs.length) {
                 body = `<div class="text-center py-16 text-slate-400"><i class="fa-regular fa-credit-card text-5xl mb-3"></i><p class="text-sm">Nenhum cartão cadastrado. Cadastre um cartão de débito ou poupança para ligá-lo ao Financeiro.</p></div>`;
             } else {
-                const txs = appData.financeiro.transactions.filter(t => t.accId === a.id || t.toAccId === a.id).sort((x, y) => (y.date || '').localeCompare(x.date || ''));
+                const allTx = appData.financeiro.transactions.filter(t => t.accId === a.id || t.toAccId === a.id);
+                const pfx = perPrefix('ct');
+                const txs = allTx.filter(t => !pfx || (t.date && t.date.startsWith(pfx))).sort((x, y) => (y.date || '').localeCompare(x.date || ''));
                 let rec = 0, des = 0, saldo = 0, prev = 0;
-                txs.forEach(t => {
-                    const e = finEffect(t, a.id); rec += e.r; des += e.d;
-                    if (finSt(t) === 'pendente') prev += e.r - e.d; else saldo += e.r - e.d;
-                });
+                allTx.forEach(t => { const e = finEffect(t, a.id); if (finSt(t) === 'pendente') prev += e.r - e.d; else saldo += e.r - e.d; });
+                txs.forEach(t => { const e = finEffect(t, a.id); rec += e.r; des += e.d; });
                 const k = (l, v, c) => `<div class="bg-slate-50 dark:bg-slate-700/40 rounded-2xl p-4"><p class="text-[11px] font-semibold text-slate-400 uppercase">${l}</p><p class="text-xl font-bold ${c} mt-1">R$ ${money(v)}</p></div>`;
                 body = `
                 <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700 space-y-5">
@@ -6169,11 +6278,13 @@
                             <button onclick="deleteConta('${a.id}')" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">${k('Saldo atual', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${k('Previsto (pendentes)', prev, 'text-amber-600')}${k('Entradas', rec, 'text-emerald-600')}${k('Saídas', des, 'text-rose-600')}</div>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">${k('Saldo atual', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${k('Previsto (pendentes)', prev, 'text-amber-600')}${k('Entradas (' + perLabel('ct') + ')', rec, 'text-emerald-600')}${k('Saídas (' + perLabel('ct') + ')', des, 'text-rose-600')}</div>
+                    <div class="flex flex-wrap items-center justify-between gap-2"><p class="text-xs font-semibold text-slate-500 uppercase">Período dos lançamentos</p>${perBarHtml('ct')}</div>
                     <p class="text-[11px] text-slate-400">Os lançamentos abaixo vêm da tela Financeiro (campo "Cartão / Conta"). Para alterar, edite lá.</p>
-                    ${txs.length === 0 ? '<p class="text-sm text-slate-400 text-center py-6">Nenhum lançamento ligado a este cartão.</p>' : `
-                    <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-slate-400 uppercase text-[11px]"><tr><th class="p-2">Data</th><th class="p-2">Descrição</th><th class="p-2">Categoria</th><th class="p-2">Valor</th><th class="p-2">Status</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                    ${txs.map(t => { const e = finEffect(t, a.id), v = e.r - e.d; return `<tr><td class="p-2 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td><td class="p-2 font-medium text-slate-800 dark:text-white">${esc(t.desc)}${t.type === 'transferencia' ? ' <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 font-bold">transf.</span>' : ''}</td><td class="p-2">${esc(t.category)}</td><td class="p-2 font-bold whitespace-nowrap ${v >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${v >= 0 ? '+' : '-'} R$ ${money(Math.abs(v))}</td><td class="p-2"><span class="px-2 py-0.5 rounded-md text-xs font-bold ${finStCls(t)}">${finStLabel(t)}</span></td></tr>`; }).join('')}
+                    ${txs.length === 0 ? '<p class="text-sm text-slate-400 text-center py-6">Nenhum lançamento neste período.</p>' : `
+                    <div id="ct-sel-bar">${ctSelBar(a.id)}</div>
+                    <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-slate-400 uppercase text-[11px]"><tr><th class="p-2 w-8"><input type="checkbox" title="Selecionar todos" onchange="ctSelAll('${a.id}', this.checked)" ${txs.length && txs.every(t => ctSel.has(t.id)) ? 'checked' : ''}></th><th class="p-2">Data</th><th class="p-2">Descrição</th><th class="p-2">Categoria</th><th class="p-2">Valor</th><th class="p-2">Status</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    ${txs.map(t => { const e = finEffect(t, a.id), v = e.r - e.d; return `<tr><td class="p-2"><input type="checkbox" ${ctSel.has(t.id) ? 'checked' : ''} onchange="ctSelToggle('${a.id}','${t.id}',this.checked)"></td><td class="p-2 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td><td class="p-2 font-medium text-slate-800 dark:text-white">${esc(t.desc)}${t.type === 'transferencia' ? ' <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 font-bold">transf.</span>' : ''}</td><td class="p-2">${esc(t.category)}</td><td class="p-2 font-bold whitespace-nowrap ${v >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${v >= 0 ? '+' : '-'} R$ ${money(Math.abs(v))}</td><td class="p-2"><span class="px-2 py-0.5 rounded-md text-xs font-bold ${finStCls(t)}">${finStLabel(t)}</span></td></tr>`; }).join('')}
                     </tbody></table></div>`}
                 </div>`;
             }
@@ -6183,6 +6294,25 @@
                     <button onclick="openContaModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Novo cartão</span></button>
                 </div>${body}</div>`;
         }
+        function ctPeriodTx(accId) {
+            const pfx = perPrefix('ct');
+            return appData.financeiro.transactions.filter(t => (t.accId === accId || t.toAccId === accId) && (!pfx || (t.date && t.date.startsWith(pfx))));
+        }
+        function ctSelBar(accId) {
+            let n = 0, r = 0, d = 0;
+            ctPeriodTx(accId).forEach(t => { if (!ctSel.has(t.id)) return; const e = finEffect(t, accId); r += e.r; d += e.d; n++; });
+            if (!n) return `<p class="text-[11px] text-slate-400 mb-3"><i class="fa-regular fa-square-check mr-1"></i>Marque as movimentações na lista para ver a soma.</p>`;
+            const net = r - d;
+            return `<div class="flex flex-wrap items-center gap-x-6 gap-y-1 p-3.5 mb-3 rounded-2xl bg-teal-50 dark:bg-teal-950/40 text-sm text-slate-700 dark:text-slate-200">
+                <b>${n} selecionada${n > 1 ? 's' : ''}</b>
+                <span>Entradas: <b class="text-emerald-600">R$ ${money(r)}</b></span>
+                <span>Saídas: <b class="text-rose-600">R$ ${money(d)}</b></span>
+                <span>Soma (entradas − saídas): <b class="${net >= 0 ? 'text-teal-600' : 'text-rose-600'}">R$ ${money(net)}</b></span>
+                <button onclick="ctSel.clear();renderCurrentTabContent()" class="ml-auto text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button>
+            </div>`;
+        }
+        function ctSelToggle(accId, id, on) { if (on) ctSel.add(id); else ctSel.delete(id); const b = document.getElementById('ct-sel-bar'); if (b) b.innerHTML = ctSelBar(accId); }
+        function ctSelAll(accId, on) { ctPeriodTx(accId).forEach(t => { if (on) ctSel.add(t.id); else ctSel.delete(t.id); }); renderCurrentTabContent(); }
         function openContaModal(id = null) {
             const c = id ? accById(id) : { name: '', number: '', agency: '', account: '', type: 'debito', noSum: false };
             showModal(id ? 'Editar cartão' : 'Novo cartão (débito / poupança)', `
