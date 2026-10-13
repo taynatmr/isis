@@ -10,7 +10,18 @@
     <meta name="apple-mobile-web-app-title" content="ISIS">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="icon-180.png">
-    <style>body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);-webkit-tap-highlight-color:transparent}input,select,textarea{font-size:16px}</style>
+    <style>body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);-webkit-tap-highlight-color:transparent}input,select,textarea{font-size:16px}
+        /* Tela inicial no celular: resumos compactos (2 por linha; os que têm filtros ocupam a linha toda) */
+        @media (max-width: 639px) {
+            .dash-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; grid-auto-flow: dense; }
+            .dash-metrics > div { padding: .625rem !important; border-radius: .75rem !important; min-width: 0; gap: .5rem; }
+            .dash-metrics > div:nth-child(n+2):nth-child(-n+5) { grid-column: span 2; }
+            .dash-metrics h3 { font-size: 1rem !important; line-height: 1.3rem !important; margin-top: .125rem !important; }
+            .dash-metrics p.text-xs { font-size: 10px !important; line-height: 1.2 !important; }
+            .dash-metrics .w-12.h-12 { width: 1.75rem !important; height: 1.75rem !important; font-size: .8rem !important; border-radius: .6rem !important; }
+            .dash-metrics h3 span { font-size: 10px !important; }
+        }
+</style>
     <title>Sistema ISIS</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23FFD54A'/%3E%3Cstop offset='.55' stop-color='%23FFB800'/%3E%3Cstop offset='1' stop-color='%23E89B00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='16' r='4.2' fill='%23fff'/%3E%3Crect x='28.8' y='25' width='6.4' height='24' rx='3.2' fill='%23fff'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round'%3E%3Cpath d='M29 31C21 31 14.500 28 10 21'/%3E%3Cpath d='M29 38C22.500 38 17 35.500 12.500 30'/%3E%3Cpath d='M29 45C24 45 19.500 43 15.500 39'/%3E%3Cpath d='M35 31C43 31 49.500 28 54 21'/%3E%3Cpath d='M35 38C41.500 38 47 35.500 51.500 30'/%3E%3Cpath d='M35 45C40 45 44.500 43 48.500 39'/%3E%3C/g%3E%3C/svg%3E">
     <!-- Tailwind CSS -->
@@ -1015,6 +1026,7 @@
                             <p class="text-xs text-slate-500 mt-0.5">Painel de controle integrado e rápido.</p>
                         </div>
                         <div class="flex items-center gap-2">
+                            <button onclick="openAvisos(true)" title="Avisos: atrasos e lembretes" class="relative bg-amber-100 hover:bg-amber-200 text-amber-800 w-9 h-9 rounded-xl shadow-sm transition flex items-center justify-center"><i class="fa-solid fa-bell"></i>${avisosCount() ? `<span class="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">${avisosCount()}</span>` : ''}</button>
                             <button onclick="openIsis()" title="Dicas da ISIS" class="bg-teal-100 hover:bg-teal-200 text-teal-800 font-bold px-3 py-2 rounded-xl text-xs shadow-sm transition flex items-center space-x-1.5">
                                 <i class="fa-solid fa-wand-magic-sparkles"></i><span>ISIS</span>
                             </button>
@@ -1027,7 +1039,7 @@
                     </div>
 
                     <!-- Quick Metrics Grid -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <div class="dash-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
                                 <p class="text-xs font-medium text-slate-400 uppercase">Água Hoje</p>
@@ -3824,7 +3836,7 @@
                     </div>
                 </div>
             `;
-            container.firstElementChild.insertAdjacentHTML('beforeend', cloudCardHtml() + colorsCardHtml() + reportsCardHtml());
+            container.firstElementChild.insertAdjacentHTML('beforeend', avisosCardHtml() + cloudCardHtml() + colorsCardHtml() + reportsCardHtml());
         }
 
         function renderBackup(container) {
@@ -4549,26 +4561,26 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <p class="text-xs font-semibold text-slate-400 uppercase">Valor da fatura</p>
-                        <h3 class="text-2xl font-bold text-rose-600 mt-1">R$ ${money(total)}</h3>
-                        <button onclick="toggleInvoicePaid('${card.id}','${key}')" ${tx ? '' : 'disabled'} class="mt-2 px-2.5 py-1 rounded-lg text-xs font-bold disabled:opacity-40 ${paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}"><i class="fa-solid ${paid ? 'fa-circle-check' : 'fa-clock'} mr-1"></i>${paid ? 'Fatura paga' : 'Em aberto'}${tx ? ' (alternar)' : ''}</button>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-5">
+                    <div class="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm min-w-0 border border-slate-100 dark:border-slate-700">
+                        <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase truncate">Valor da fatura</p>
+                        <h3 class="text-base sm:text-2xl font-bold truncate text-rose-600 mt-0.5 sm:mt-1">R$ ${money(total)}</h3>
+                        <button onclick="toggleInvoicePaid('${card.id}','${key}')" ${tx ? '' : 'disabled'} class="mt-1 sm:mt-2 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-bold disabled:opacity-40 ${paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}"><i class="fa-solid ${paid ? 'fa-circle-check' : 'fa-clock'} mr-1"></i>${paid ? 'Fatura paga' : 'Em aberto'}${tx ? ' (alternar)' : ''}</button>
                     </div>
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <p class="text-xs font-semibold text-slate-400 uppercase">Vencimento</p>
-                        <h3 class="text-2xl font-bold text-slate-800 dark:text-white mt-1">${fmtBR(cardDueDate(card, key))}</h3>
-                        <p class="text-[11px] text-slate-400 mt-1">Fechamento dia ${card.closingDay || '—'}</p>
+                    <div class="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm min-w-0 border border-slate-100 dark:border-slate-700">
+                        <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase truncate">Vencimento</p>
+                        <h3 class="text-base sm:text-2xl font-bold truncate text-slate-800 dark:text-white mt-0.5 sm:mt-1">${fmtBR(cardDueDate(card, key))}</h3>
+                        <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 truncate">Fechamento dia ${card.closingDay || '—'}</p>
                     </div>
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <p class="text-xs font-semibold text-slate-400 uppercase">Limite usado</p>
-                        <h3 class="text-2xl font-bold text-amber-600 mt-1">R$ ${money(used)}</h3>
-                        <p class="text-[11px] text-slate-400 mt-1">${limit ? `Disponível R$ ${money(limit - used)} de R$ ${money(limit)}` : 'Limite não informado'}</p>
+                    <div class="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm min-w-0 border border-slate-100 dark:border-slate-700">
+                        <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase truncate">Limite usado</p>
+                        <h3 class="text-base sm:text-2xl font-bold truncate text-amber-600 mt-0.5 sm:mt-1">R$ ${money(used)}</h3>
+                        <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 truncate">${limit ? `Disponível R$ ${money(limit - used)} de R$ ${money(limit)}` : 'Limite não informado'}</p>
                     </div>
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <p class="text-xs font-semibold text-slate-400 uppercase">Dados</p>
-                        <p class="text-sm font-semibold text-slate-800 dark:text-white mt-1">${esc(card.name)} · ${masked}</p>
-                        <p class="text-[11px] text-slate-400 mt-1">Ag. ${esc(card.agency || '—')} · Conta ${esc(card.account || '—')}</p>
+                    <div class="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm min-w-0 border border-slate-100 dark:border-slate-700">
+                        <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase truncate">Dados</p>
+                        <p class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white mt-0.5 sm:mt-1 truncate">${esc(card.name)} · ${masked}</p>
+                        <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 truncate">Ag. ${esc(card.agency || '—')} · Conta ${esc(card.account || '—')}</p>
                     </div>
                 </div>
 
@@ -5723,11 +5735,85 @@
                 cloudBanner();
             } finally { _starting = false; }
         }
+
+        // ========== AVISOS AO ABRIR (faturas em atraso, contas e lembretes) ==========
+        function avisosCalc() {
+            const hoje = localDateStr(), A = { faturasAtr: [], faturasProx: [], contasAtr: [], contasHoje: [], lemAtr: [], lemHoje: [] };
+            const diff = ds => Math.round((new Date(ds + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000);
+            (appData.financeiro.transactions || []).forEach(t => {
+                if ((t.status || 'pago') !== 'pendente' || t.type === 'receita' || t.type === 'transferencia') return;
+                if (t.cardInvoice) {
+                    const c = cardById(t.cardInvoice.cardId), due = c ? cardDueDate(c, t.cardInvoice.inv) : t.date;
+                    if (!due) return;
+                    const it = { id: t.id, nome: (c ? c.name : 'Cartão') + ' · fatura ' + fmtYM(t.cardInvoice.inv), valor: Number(t.amount) || 0, data: due, dias: diff(due) };
+                    if (it.dias < 0) A.faturasAtr.push(it); else if (it.dias <= 3) A.faturasProx.push(it);
+                } else if (t.date) {
+                    const it = { id: t.id, nome: t.desc || t.category || 'Conta', valor: Number(t.amount) || 0, data: t.date, dias: diff(t.date) };
+                    if (it.dias < 0) A.contasAtr.push(it); else if (it.dias === 0) A.contasHoje.push(it);
+                }
+            });
+            (appData.lembretes || []).forEach(l => {
+                if (l.completed || !l.date) return;
+                const it = { id: l.id, nome: l.title || 'Lembrete', data: l.date, dias: diff(l.date) };
+                if (it.dias < 0) A.lemAtr.push(it); else if (it.dias === 0) A.lemHoje.push(it);
+            });
+            Object.values(A).forEach(a => a.sort((x, y) => x.data < y.data ? -1 : 1));
+            return A;
+        }
+        function avisosCount() { try { const A = avisosCalc(); return A.faturasAtr.length + A.faturasProx.length + A.contasAtr.length + A.contasHoje.length + A.lemAtr.length + A.lemHoje.length; } catch (e) { return 0; } }
+        function avisosOff() { try { return localStorage.getItem('isis_avisos_off') === '1'; } catch (e) { return false; } }
+        function avisosSetOff(v) { try { localStorage.setItem('isis_avisos_off', v ? '1' : '0'); } catch (e) {} }
+        function openAvisos(manual) {
+            const A = avisosCalc(), n = avisosCount();
+            if (!n && !manual) return;
+            const sec = (titulo, icone, cor, itens, mostrarValor, fn) => !itens.length ? '' : `
+                <div class="mb-3"><p class="text-[11px] font-bold uppercase ${cor} mb-1"><i class="fa-solid ${icone} mr-1"></i>${titulo} (${itens.length})</p>
+                ${itens.slice(0, 6).map(i => `<button onclick="${fn}" class="w-full text-left flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-3 text-sm py-1.5 border-b border-slate-100 dark:border-slate-700"><span class="sm:truncate text-slate-700 dark:text-slate-200">${esc(i.nome)}</span><span class="sm:shrink-0 text-xs text-slate-400">${mostrarValor ? 'R$ ' + money(i.valor) + ' · ' : ''}${fmtBR(i.data)}${i.dias < 0 ? ' · ' + Math.abs(i.dias) + 'd atraso' : i.dias > 0 ? ' · em ' + i.dias + 'd' : ' · hoje'}</span></button>`).join('')}
+                ${itens.length > 6 ? `<p class="text-[11px] text-slate-400 mt-1">+${itens.length - 6} outros</p>` : ''}</div>`;
+            const totFat = A.faturasAtr.reduce((s, i) => s + i.valor, 0), totCon = A.contasAtr.reduce((s, i) => s + i.valor, 0);
+            const body = !n ? '<p class="text-sm text-slate-500 text-center py-6"><i class="fa-solid fa-circle-check text-emerald-500 text-3xl block mb-2"></i>Tudo em dia! Nenhuma fatura, conta ou lembrete atrasado.</p>' :
+                sec('Faturas em atraso', 'fa-credit-card', 'text-rose-600', A.faturasAtr, true, "closeModal();switchTab('cartao')") +
+                sec('Faturas a vencer (3 dias)', 'fa-credit-card', 'text-amber-600', A.faturasProx, true, "closeModal();switchTab('cartao')") +
+                sec('Contas em atraso', 'fa-file-invoice-dollar', 'text-rose-600', A.contasAtr, true, "closeModal();switchTab('financeiro')") +
+                sec('Contas que vencem hoje', 'fa-file-invoice-dollar', 'text-amber-600', A.contasHoje, true, "closeModal();switchTab('financeiro')") +
+                sec('Lembretes atrasados', 'fa-bell', 'text-rose-600', A.lemAtr, false, "closeModal();switchTab('lembretes')") +
+                sec('Lembretes de hoje', 'fa-bell', 'text-teal-600', A.lemHoje, false, "closeModal();switchTab('lembretes')") +
+                ((totFat || totCon) ? `<p class="text-xs text-slate-500 mt-1">Em atraso: <b class="text-rose-600">R$ ${money(totFat + totCon)}</b></p>` : '');
+            showModal('<i class="fa-solid fa-bell text-amber-500 mr-2"></i>Avisos', `${body}
+                <label class="flex items-center gap-2 text-xs text-slate-500 mt-4 cursor-pointer"><input type="checkbox" ${avisosOff() ? 'checked' : ''} onchange="avisosSetOff(this.checked)" class="rounded"> Não mostrar ao abrir o app (reative em Configurações → Notificações; o sino na tela inicial continua)</label>
+                <button onclick="closeModal()" class="w-full mt-3 bg-teal-600 hover:bg-teal-700 text-white py-2.5 rounded-xl text-sm font-bold">Fechar</button>`);
+        }
+        function avisosCardHtml() {
+            const on = !avisosOff(), n = avisosCount();
+            return `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 flex items-center space-x-2"><i class="fa-solid fa-bell text-amber-500"></i><span>Notificações</span></h3>
+                <p class="text-xs text-slate-500 mb-4">Ao abrir o app, avisa sobre faturas e contas em atraso, faturas que vencem em até 3 dias e lembretes de hoje ou atrasados. Vale para este aparelho.</p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="avisosToggle()" class="px-5 py-2.5 rounded-xl text-xs font-bold shadow flex items-center gap-2 ${on ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-teal-600 hover:bg-teal-700 text-white'}"><i class="fa-solid ${on ? 'fa-bell' : 'fa-bell-slash'}"></i>${on ? 'Notificações ativadas · Desativar' : 'ACEITAR NOTIFICAÇÕES'}</button>
+                    <button onclick="openAvisos(true)" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Ver avisos agora${n ? ' (' + n + ')' : ''}</button>
+                </div>
+            </div>`;
+        }
+        function avisosToggle() {
+            const wasOff = avisosOff(); avisosSetOff(!wasOff);
+            if (currentActiveTab === 'configuracoes') renderCurrentTabContent();
+            showToast(wasOff ? 'Notificações ativadas neste aparelho.' : 'Notificações desativadas neste aparelho.', wasOff ? 'success' : 'info');
+            if (wasOff) { _avisosAt = 0; setTimeout(() => openAvisos(true), 400); }
+        }
+        let _avisosAt = 0;
+        function avisosAuto() {
+            if (avisosOff() || Date.now() - _avisosAt < 3 * 3600 * 1000) return;
+            const modalOpen = !document.getElementById('global-modal').classList.contains('hidden');
+            if (modalOpen || !avisosCount()) return;
+            _avisosAt = Date.now(); openAvisos(false);
+        }
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && cloudReady) setTimeout(avisosAuto, 1500); });
+
         function afterLoad() {
             applyTheme(); updateFolderLabel();
             switchTab(currentActiveTab || 'dashboard');
             if (!_folderStarted) { _folderStarted = true; initBackupFolder(); }
-            if (_newAccount) { _newAccount = false; setTimeout(offerDriveImport, 400); }
+            if (_newAccount) { _newAccount = false; setTimeout(offerDriveImport, 400); } else setTimeout(avisosAuto, 900);
         }
         function resetToGate() {
             cloudReady = false; CUR_UID = null; CUR_EMAIL = ''; cloudRev = 0; cloudBase = null;
