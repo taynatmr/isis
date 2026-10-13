@@ -5887,7 +5887,7 @@
             for (const id of pendingUploads().slice()) {
                 try {
                     const blob = await getFileLocal(id);
-                    if (blob) {
+                    if (blob && blob.size !== 0) {   // arquivo vazio (0 bytes) não pode ser enviado: é ignorado
                         const { error } = await sb.storage.from(BUCKET).upload(upPath(id), blob, { upsert: true, contentType: blob.type || 'application/octet-stream' });
                         if (error) throw error;
                     }
@@ -5907,7 +5907,7 @@
                     (data || []).forEach(x => remote.add(x.name));
                     if (!data || data.length < 1000) break;
                 }
-                for (const id of attachmentIds()) if (!remote.has(id) && await getFileLocal(id)) queueUpload(id);
+                for (const id of attachmentIds()) { if (remote.has(id)) continue; const b = await getFileLocal(id); if (b && b.size !== 0) queueUpload(id); }
                 await cloudUploadPending();
             } catch (e) { console.warn('Anexos:', e); }
         }
