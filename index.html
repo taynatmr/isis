@@ -5573,7 +5573,10 @@
             if (/Failed to fetch|NetworkError|Load failed|network/i.test(m)) return 'Sem conexão com a internet.';
             if (/invalid.*email|Unable to validate email/i.test(m)) return 'E-mail inválido.';
             if (/same password|different from the old/i.test(m)) return 'A nova senha precisa ser diferente da anterior.';
-            return m || 'Erro inesperado.';
+            if (/Could not find the function|schema cache|relation .* does not exist|PGRST20[2-5]|42P01|42883/i.test(m + ' ' + ((e && e.code) || ''))) return 'O banco ainda não tem as tabelas deste app. Rode o arquivo supabase_setup_isis.sql no SQL Editor do Supabase (projeto correto).';
+            if (/JWT|not authenticated/i.test(m)) return 'Sessão expirada. Saia e entre de novo.';
+            const extra = e && typeof e === 'object' ? [e.code, e.details, e.hint].filter(Boolean).join(' · ') : '';
+            return (m || 'Erro inesperado.') + (extra ? ' [' + extra + ']' : '');
         }
 
         // ---- tela de entrada ----
