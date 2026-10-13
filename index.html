@@ -18,6 +18,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Inter Font -->
@@ -184,10 +186,6 @@
                     <i class="fa-solid fa-note-sticky w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Notas</span>
                 </a>
-                <a href="#" onclick="switchTab('lembretes')" id="nav-lembretes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
-                    <i class="fa-solid fa-bell w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
-                    <span>Lembretes</span>
-                </a>
                 <a href="#" onclick="switchTab('hobbies')" id="nav-hobbies" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-puzzle-piece w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Hobbies</span>
@@ -199,6 +197,10 @@
                 <a href="#" onclick="switchTab('docs')" id="nav-docs" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-id-card w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Documentos Pessoais</span>
+                </a>
+                <a href="#" onclick="openCalc(); return false;" id="nav-calculadora" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-calculator w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
+                    <span>Calculadora</span>
                 </a>
                 <a href="#" onclick="switchTab('configuracoes')" id="nav-configuracoes" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-gear w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
@@ -237,7 +239,7 @@
                     <span id="current-date-badge" class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
                         <i class="fa-regular fa-calendar mr-2"></i> <span id="header-date-text">--/--/----</span>
                     </span>
-                    <button id="header-sync-btn" onclick="syncNow()" title="Sincronizar com o Drive" aria-label="Sincronizar" class="w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-teal-600 transition-colors">
+                    <button id="header-sync-btn" onclick="syncNow()" title="Sincronizar agora" aria-label="Sincronizar" class="w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-teal-600 transition-colors">
                         <i id="header-sync-icon" class="fa-solid fa-rotate text-sm"></i>
                     </button>
                     <button onclick="toggleDarkMode()" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
@@ -254,21 +256,28 @@
         </div>
     </div>
 
-    <!-- LOGIN GOOGLE DRIVE -->
+    <!-- AVISO DE SINCRONIZAÇÃO + ENTRADA (LOGIN) -->
     <button id="drive-banner" onclick="driveBannerClick()" class="hidden fixed left-3 right-3 z-[55] bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-2xl shadow-lg px-4 py-3 items-center gap-2 text-left" style="bottom:calc(env(safe-area-inset-bottom,0px) + 12px)"><i class="fa-solid fa-cloud-arrow-up text-base"></i><span></span></button>
-    <div id="login-gate" class="hidden fixed inset-0 z-[60] bg-slate-900/95 items-center justify-center p-4">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center">
-            <div class="w-16 h-16 mx-auto mb-4 drop-shadow"><svg viewBox="0 0 64 64" class="w-full h-full" role="img" aria-label="Logo ISIS"><rect width="64" height="64" rx="16" fill="url(#isisGold)"/><circle cx="32" cy="16" r="4.2" fill="#fff"/><rect x="28.8" y="25" width="6.4" height="24" rx="3.2" fill="#fff"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"><path d="M29 31C21 31 14.500 28 10 21"/><path d="M29 38C22.500 38 17 35.500 12.500 30"/><path d="M29 45C24 45 19.500 43 15.500 39"/><path d="M35 31C43 31 49.500 28 54 21"/><path d="M35 38C41.500 38 47 35.500 51.500 30"/><path d="M35 45C40 45 44.500 43 48.500 39"/></g></svg></div>
-            <h2 class="text-lg font-bold text-slate-800 mb-1">Sistema ISIS</h2>
-            <p class="text-sm text-slate-500 mb-5">Entre com a conta Google do Drive para carregar suas informações.</p>
-            <button onclick="driveSignIn()" class="w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-xl font-bold text-sm shadow flex items-center justify-center space-x-2"><i class="fa-brands fa-google"></i><span>Entrar com Google</span></button>
-            <button id="login-gate-mode" onclick="driveToggleMode()" class="text-[11px] text-teal-700 hover:text-teal-900 underline mt-3 leading-snug"></button>
-            <p id="login-gate-msg" class="text-xs text-rose-500 mt-3 min-h-[1rem]"></p>
-            <button onclick="showLoginGate(false)" class="text-[11px] text-slate-400 hover:text-slate-600 underline mt-2">Continuar sem entrar (dados só deste navegador)</button>
-        </div>
+    <div id="login-gate" class="fixed inset-0 z-[60] bg-slate-900/95 items-center justify-center p-4 overflow-y-auto flex">
+        <div id="login-gate-box" class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-7 text-center my-auto"></div>
     </div>
 
     <!-- GLOBAL MODAL CONTAINER -->
+    <div id="calc-overlay" class="fixed z-[70] hidden w-72 max-w-[calc(100vw-16px)] bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4" style="left:8px;top:80px">
+        <div>
+            <div id="calc-handle" class="flex justify-between items-center mb-2 cursor-move select-none -mt-1 pb-1" style="touch-action:none" title="Arraste para mover">
+                <span class="font-bold text-sm text-slate-700 dark:text-slate-200"><i class="fa-solid fa-grip-lines text-slate-300 mr-2"></i><i class="fa-solid fa-calculator text-teal-500 mr-1.5"></i>Calculadora</span>
+                <button onpointerdown="event.stopPropagation()" onclick="closeCalc()" class="text-slate-400 hover:text-slate-600 px-2 py-1" title="Fechar"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="bg-slate-100 dark:bg-slate-900 rounded-2xl px-4 py-3 text-right mb-3 overflow-hidden">
+                <div id="calc-expr" class="text-xs text-slate-400 h-4 truncate"></div>
+                <div id="calc-disp" class="text-3xl font-bold text-slate-800 dark:text-white truncate">0</div>
+            </div>
+            <div id="calc-keys" class="grid grid-cols-4 gap-2"></div>
+            <button onclick="calcCopy()" class="w-full mt-3 text-xs font-semibold text-slate-500 hover:text-teal-600"><i class="fa-regular fa-copy mr-1"></i>Copiar resultado</button>
+        </div>
+    </div>
+
     <div id="global-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
         <div id="modal-content" class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-100 dark:border-slate-700 transform transition-all max-h-[90vh] overflow-y-auto">
             <!-- Modal header & form injected dynamically -->
@@ -298,6 +307,7 @@
             },
             agenda: [], // { id, date, time, address, title, desc, status }
             lembretes: [], // { id, title, date, priority, completed }
+            contatos: [], // { id, nome, numero, obs }
             hobbies: [], // { id, title, category, status, obs, rating, attachments }
             habitacao: {
                 people: [
@@ -313,13 +323,6 @@
             metas: []
         };
         const APP_DEFAULTS = JSON.stringify(appData); // estado "zerado" (usado ao trocar de conta)
-        // Modo do Drive: 'shared' = conta compartilhada (Tayná e Samuel, acesso à pasta deles); 'own' = uso pessoal (cada e-mail tem a sua pasta, começa zerado)
-        function driveMode() {
-            const m = localStorage.getItem('meusistema_drive_mode');
-            if (m === 'shared' || m === 'own') return m;
-            return localStorage.getItem('meusistema_drive_linked') === '1' ? 'shared' : 'own';
-        }
-        function neutralizeNames() { appData.profile.name = 'Meu Sistema'; (appData.habitacao.people || []).forEach((pp, i) => { pp.name = 'Pessoa ' + (i + 1); }); }
 
         let currentActiveTab = 'dashboard';
         let directoryHandle = null;
@@ -363,7 +366,7 @@
         let recOpen = false, recViewId = null, recQuery = '', recSel = new Set();
         let finSel = new Set();
         let dashCardMonth = 'auto'; // fatura do cartão na tela inicial: 'auto' = fatura em aberto mais próxima; 'AAAA-MM' = mês; '' = total
-        let agView = 'calendario', agMonth = localDateStr().slice(0, 7), agSel = localDateStr();
+        let agTab = 'compromissos', agView = 'calendario', agMonth = localDateStr().slice(0, 7), agSel = localDateStr();
         let catRankQuery = '', catRankPeriod = 'all';
         let muralView = 'bloco', muralScope = 'mes', muralMonth = localDateStr().slice(0, 7), muralPhotos = true;
         function uiLoad() {
@@ -431,23 +434,33 @@
             const db = await filesDB();
             return new Promise((resolve, reject) => {
                 const req = db.transaction('files').objectStore('files').get(id);
-                req.onsuccess = () => { if (req.result) resolve(req.result); else driveFetchAttachment(id).then(resolve); };
+                req.onsuccess = () => { if (req.result) resolve(req.result); else cloudFetchAttachment(id).then(resolve); };
                 req.onerror = () => reject(req.error);
+            });
+        }
+        async function getFileLocal(id) {
+            const db = await filesDB();
+            return new Promise(resolve => {
+                const req = db.transaction('files').objectStore('files').get(id);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
             });
         }
         async function deleteStoredFile(id) {
             try {
                 const db = await filesDB();
                 db.transaction('files', 'readwrite').objectStore('files').delete(id);
+                cloudRemoveAttachment(id);
             } catch (e) { console.error(e); }
         }
         async function storeFiles(fileList) {
             const metas = [];
             for (const file of Array.from(fileList || [])) {
                 const id = uid();
+                if (file.size > MAX_FILE) { showToast(`"${file.name}" tem mais de 10 MB e não foi anexado.`, 'error'); continue; }
                 try {
                     await putFile(id, file);
-                    driveUploadAttachment(id, file).catch(console.error);
+                    queueUpload(id); cloudUploadPending();
                     metas.push({ id, name: file.name, size: file.size, type: file.type || '', date: localDateStr() });
                 } catch (e) {
                     console.error(e);
@@ -504,8 +517,7 @@
         }
 
         function loadAppData() {
-            const saved = localStorage.getItem('meusistema_pessoal_data');
-            if (!saved && driveMode() === 'own') neutralizeNames();
+            const saved = localStorage.getItem(dataKey());
             if (saved) {
                 try {
                     appData = JSON.parse(saved);
@@ -534,6 +546,7 @@
             if (!Array.isArray(appData.saude.exams)) appData.saude.exams = [];
             if (!Array.isArray(appData.saude.vacinas)) appData.saude.vacinas = [];
             if (!Array.isArray(appData.receitas)) appData.receitas = [];
+            if (!Array.isArray(appData.contatos)) appData.contatos = [];
             if (!appData.docsPessoais || typeof appData.docsPessoais !== 'object') appData.docsPessoais = { folders: [], files: [] };
             if (!Array.isArray(appData.docsPessoais.folders)) appData.docsPessoais.folders = [];
             if (!Array.isArray(appData.docsPessoais.files)) appData.docsPessoais.files = [];
@@ -579,7 +592,7 @@
             try { syncHabTransfers(); } catch (e) { console.error(e); }
             try {
                 appData._savedAt = new Date().toISOString();
-                localStorage.setItem('meusistema_pessoal_data', JSON.stringify(appData));
+                localStorage.setItem(dataKey(), JSON.stringify(appData));
                 updateSyncStatus("Salvo localmente", "emerald");
             } catch (e) {
                 console.error(e);
@@ -589,7 +602,7 @@
             if (directoryHandle) {
                 scheduleFolderSave();
             }
-            scheduleDriveSave();
+            scheduleCloudSave();
         }
 
         function updateSyncStatus(text, color) {
@@ -604,7 +617,6 @@
         // =====================================================
         // BACKUP EM PASTA (vínculo persistente) + RESTAURAÇÃO
         // =====================================================
-        const STORAGE_KEY = 'meusistema_pessoal_data';
         const BACKUP_FILE = 'meusistema_backup.json';
         const BACKUP_PREV = 'meusistema_backup_anterior.json';
         let folderNeedsPermission = false;
@@ -649,7 +661,7 @@
         function dataCount(d) {
             if (!d || typeof d !== 'object') return 0;
             const h = d.habitacao || {};
-            const lists = [d.financeiro && d.financeiro.transactions, d.agenda, d.lembretes, d.hobbies, d.atalhos, d.metas,
+            const lists = [d.financeiro && d.financeiro.transactions, d.agenda, d.lembretes, d.contatos, d.hobbies, d.atalhos, d.metas,
                            h.contributions, h.budgets, h.suppliers, h.docFolders, d.saude && d.saude.meds,
                            d.saude && d.saude.exams, d.saude && d.saude.vacinas, d.receitas, d.docsPessoais && d.docsPessoais.folders, d.docsPessoais && d.docsPessoais.files,
                            d.aniversarios, d.notas, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups];
@@ -678,20 +690,10 @@
             return false;
         }
         function updateFolderLabel() {
-            const el = document.getElementById('current-folder-label');
-            if (!el) return;
-            if (driveToken) {
-                el.innerText = 'Google Drive conectado'; el.onclick = null; el.style.cursor = '';
-            } else if (!directoryHandle) {
-                el.innerText = driveAvailable() ? 'Drive desconectado' : 'Armazenamento Local Ativo';
-                el.onclick = null; el.style.cursor = '';
-            } else if (folderNeedsPermission) {
-                el.innerText = `Pasta: ${directoryHandle.name} — clique para reconectar`;
-                el.onclick = reconnectFolder; el.style.cursor = 'pointer';
-            } else {
-                el.innerText = `Pasta: ${directoryHandle.name}`;
-                el.onclick = null; el.style.cursor = '';
-            }
+            const el = document.getElementById('current-folder-label'); if (!el) return;
+            if (directoryHandle && folderNeedsPermission) { el.innerText = `Pasta: ${directoryHandle.name} — clique para reconectar`; el.onclick = reconnectFolder; el.style.cursor = 'pointer'; return; }
+            el.onclick = null; el.style.cursor = '';
+            el.innerText = CUR_EMAIL ? CUR_EMAIL + (directoryHandle ? ' · pasta: ' + directoryHandle.name : '') : (CLOUD_ON ? 'Sem conta conectada' : 'Dados só neste aparelho');
         }
         function refreshBackupTab() { if (currentActiveTab === 'backup') renderCurrentTabContent(); }
 
@@ -746,8 +748,9 @@
             if (!looksLikeBackup(obj)) throw new Error('Arquivo de backup inválido');
             const clean = JSON.parse(JSON.stringify(obj));
             if (!clean.profile) clean.profile = { name: 'Samuel & Tayná', theme: 'light' };
-            ['agenda', 'lembretes', 'hobbies', 'atalhos', 'metas', 'aniversarios'].forEach(k => { if (!Array.isArray(clean[k])) clean[k] = []; });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+            ['agenda', 'lembretes', 'contatos', 'hobbies', 'atalhos', 'metas', 'aniversarios'].forEach(k => { if (!Array.isArray(clean[k])) clean[k] = []; });
+            cloudForce = true;   // o backup escolhido vence a versão da nuvem
+            localStorage.setItem(dataKey(), JSON.stringify(clean));
             loadAppData();
             saveAppData();
             applyTheme();
@@ -901,11 +904,15 @@
         async function triggerManualSave() {
             if (directoryHandle && folderNeedsPermission) { await reconnectFolder(); return; }
             saveAppData();
-            showToast('Dados salvos com sucesso!', 'success');
+            if (CUR_UID && cloudSession) { clearTimeout(cloudPushTimer); await cloudPush(); }
+            showToast(cloudErr ? 'Salvo neste aparelho. Nuvem: ' + cloudErr : 'Dados salvos com sucesso!', cloudErr ? 'warning' : 'success');
         }
 
 
         function switchTab(tabId) {
+            const prevTab = currentActiveTab;
+            if (tabId === 'lembretes') { agTab = 'lembretes'; tabId = 'agenda'; }
+            else if (tabId === 'agenda' && prevTab !== 'agenda') agTab = 'compromissos';
             currentActiveTab = tabId;
             if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; }
             if (tabId === 'financeiro') { financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); } // sempre abre no mês atual cheio
@@ -930,8 +937,7 @@
                 contas: 'Cartão (Débito e Poupança)',
                 notas: 'Notas',
                 docs: 'Documentos Pessoais',
-                agenda: 'Agenda Pessoal',
-                lembretes: 'Lembretes & Tarefas',
+                agenda: 'Agenda',
                 hobbies: 'Hobbies & Projetos',
                 habitacao: 'Habitação & Construção',
                 configuracoes: 'Configurações',
@@ -978,7 +984,6 @@
                 case 'notas': renderNotas(container); break;
                 case 'docs': renderDocs(container); break;
                 case 'agenda': renderAgenda(container); break;
-                case 'lembretes': renderLembretes(container); break;
                 case 'hobbies': renderHobbies(container); break;
                 case 'habitacao': renderHabitacao(container); break;
                 case 'configuracoes': renderConfiguracoes(container); break;
@@ -2227,7 +2232,79 @@
         }
 
         // --- AGENDA COM SUBPASTA CINZA DE FINALIZADOS E FILTROS ---
+        function agTabsHtml() {
+            const b = (k, i, l, n) => `<button onclick="agSetTab('${k}')" class="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${agTab === k ? 'bg-teal-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-600'}"><i class="fa-solid ${i} hidden sm:inline"></i><span class="truncate">${l}</span>${n ? `<span class="text-[10px] px-1.5 rounded-full ${agTab === k ? 'bg-white/25' : 'bg-slate-200 dark:bg-slate-600'}">${n}</span>` : ''}</button>`;
+            const pend = appData.lembretes.filter(l => !l.completed).length;
+            return `<div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-700/60 rounded-2xl max-w-xl">${b('compromissos', 'fa-calendar-days', 'Compromissos')}${b('lembretes', 'fa-bell', 'Lembretes', pend)}${b('contatos', 'fa-address-book', 'Contatos')}</div>`;
+        }
+        function agSetTab(t) { agTab = t; renderCurrentTabContent(); }
         function renderAgenda(container) {
+            if (agTab === 'lembretes') renderLembretes(container);
+            else if (agTab === 'contatos') renderContatos(container);
+            else renderAgendaMain(container);
+            const first = container.firstElementChild;
+            if (first) first.insertAdjacentHTML('afterbegin', agTabsHtml());
+        }
+
+        // ---------- Contatos (nenhum campo é obrigatório) ----------
+        let ctQuery = '';
+        function contatosData() { if (!Array.isArray(appData.contatos)) appData.contatos = []; return appData.contatos; }
+        function phoneDigits(s) { return String(s || '').replace(/\D/g, ''); }
+        function waLink(s) { let n = phoneDigits(s); if (!n) return ''; if (n.length <= 11) n = '55' + n; return 'https://wa.me/' + n; }
+        function setCtQuery(v) { ctQuery = v; const pos = v.length; renderCurrentTabContent(); const i = document.getElementById('ct-q'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }
+        function renderContatos(container) {
+            const q = normKey(ctQuery);
+            const all = contatosData().slice().sort((a, b) => { const x = (a.nome || '').trim(), y = (b.nome || '').trim(); if (!x !== !y) return x ? -1 : 1; return x.localeCompare(y, 'pt-BR'); });
+            const list = all.filter(c => !q || normKey(c.nome).includes(q) || normKey(c.obs).includes(q) || phoneDigits(c.numero).includes(phoneDigits(ctQuery) || '\u0000') || normKey(c.numero).includes(q));
+            container.innerHTML = `<div class="space-y-5 max-w-7xl mx-auto">
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
+                    <input id="ct-q" type="search" value="${esc(ctQuery)}" oninput="setCtQuery(this.value)" placeholder="Buscar contato..." class="${INP} flex-1 min-w-[10rem]" style="width:auto">
+                    <button onclick="openContatoModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-user-plus"></i><span>Cadastrar contato</span></button>
+                </div>
+                ${list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-address-book text-4xl mb-2"></i><p class="text-sm">${all.length ? 'Nenhum contato encontrado.' : 'Nenhum contato cadastrado ainda.'}</p></div>` : `
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(c => {
+                    const tel = phoneDigits(c.numero) ? '+' === String(c.numero).trim()[0] ? '+' + phoneDigits(c.numero) : phoneDigits(c.numero) : '';
+                    return `<div class="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm min-w-0">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 shrink-0 rounded-full bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold">${esc(((c.nome || '').trim()[0] || '?').toUpperCase())}</div>
+                                <div class="min-w-0"><h4 class="font-bold text-slate-800 dark:text-white text-sm truncate">${esc(c.nome) || '<span class="text-slate-400 font-normal">(sem nome)</span>'}</h4>
+                                ${c.numero ? `<p class="text-xs text-slate-500 truncate"><i class="fa-solid fa-phone mr-1"></i>${esc(c.numero)}</p>` : ''}</div>
+                            </div>
+                            <div class="flex gap-1 shrink-0">
+                                <button onclick="openContatoModal('${c.id}')" class="p-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-xs" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                                <button onclick="deleteContato('${c.id}')" class="p-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                        ${c.obs ? `<p class="text-xs text-slate-600 dark:text-slate-300 mt-3 whitespace-pre-line break-words">${esc(c.obs)}</p>` : ''}
+                        ${tel ? `<div class="flex gap-2 mt-3"><a href="tel:${tel}" class="flex-1 text-center px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold"><i class="fa-solid fa-phone mr-1"></i>Ligar</a><a href="${waLink(c.numero)}" target="_blank" rel="noopener" class="flex-1 text-center px-3 py-2 rounded-xl bg-emerald-100 text-emerald-700 text-xs font-bold"><i class="fa-brands fa-whatsapp mr-1"></i>WhatsApp</a></div>` : ''}
+                    </div>`; }).join('')}</div>`}
+            </div>`;
+        }
+        function openContatoModal(id) {
+            const c = id ? (contatosData().find(x => x.id === id) || {}) : {};
+            showModal(id ? 'Editar contato' : 'Cadastrar contato', `
+                <form onsubmit="saveContato(event, '${id || ''}')" class="space-y-4">
+                    <div><label class="${LBL}">Nome</label><input id="ct-nome" type="text" maxlength="80" value="${esc(c.nome || '')}" class="${INP}"></div>
+                    <div><label class="${LBL}">Número</label><input id="ct-num" type="tel" inputmode="tel" maxlength="30" value="${esc(c.numero || '')}" placeholder="(00) 00000-0000" class="${INP}"></div>
+                    <div><label class="${LBL}">Observação</label><textarea id="ct-obs" rows="3" maxlength="500" class="${INP}">${esc(c.obs || '')}</textarea></div>
+                    <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                </form>`);
+        }
+        function saveContato(e, id) {
+            e.preventDefault();
+            const data = { nome: document.getElementById('ct-nome').value.trim(), numero: document.getElementById('ct-num').value.trim(), obs: document.getElementById('ct-obs').value.trim() };
+            if (id) { const c = contatosData().find(x => x.id === id); if (c) Object.assign(c, data); }
+            else contatosData().push(Object.assign({ id: uid() }, data));
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Contato salvo!', 'success');
+        }
+        function deleteContato(id) {
+            if (!confirm('Excluir este contato?')) return;
+            appData.contatos = contatosData().filter(c => c.id !== id);
+            saveAppData(); renderCurrentTabContent();
+        }
+
+        function renderAgendaMain(container) {
             if (agView === 'calendario') { renderAgendaCal(container); return; }
             let filteredAgenda = appData.agenda;
             if (agendaFilter === 'ativos') {
@@ -2918,14 +2995,6 @@
                                 <i class="fa-solid fa-folder-open"></i>
                                 <span>DOCUMENTOS</span>
                             </button>
-                            <button onclick="openBudgetModal()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm">
-                                <i class="fa-solid fa-file-invoice-dollar"></i>
-                                <span>ORÇAMENTOS</span>
-                            </button>
-                            <button onclick="openHabitacaoContribModal()" class="bg-amber-500 hover:bg-amber-600 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm">
-                                <i class="fa-solid fa-money-bill-transfer"></i>
-                                <span>Inserir Valor</span>
-                            </button>
                         </div>
                     </div>
 
@@ -2973,6 +3042,10 @@
                                 <span>Movimentações do Fundo de Obra <span class="text-[11px] font-normal text-slate-400 ml-1">(clique nos títulos para ordenar)</span></span>
                             </h3>
                             <div class="flex flex-wrap items-center gap-2">
+                                <button onclick="openHabitacaoContribModal()" class="bg-amber-500 hover:bg-amber-600 text-teal-950 font-bold px-3 py-1.5 rounded-xl shadow flex items-center space-x-1.5 text-xs">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>Inserir Valor</span>
+                                </button>
                                 <select onchange="setObraFilter(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
                                     <option value="todos" ${obraFilterStatus === 'todos' ? 'selected' : ''}>Todos os Tipos</option>
                                     <option value="aporte" ${obraFilterStatus === 'aporte' ? 'selected' : ''}>Aportes</option>
@@ -3751,7 +3824,7 @@
                     </div>
                 </div>
             `;
-            container.firstElementChild.insertAdjacentHTML('beforeend', colorsCardHtml() + reportsCardHtml());
+            container.firstElementChild.insertAdjacentHTML('beforeend', cloudCardHtml() + colorsCardHtml() + reportsCardHtml());
         }
 
         function renderBackup(container) {
@@ -3803,11 +3876,11 @@
                             </button>
                             <input type="file" id="restore-file-input" accept=".json,application/json" class="hidden" onchange="importBackupFile(this)">
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-4">Os anexos (orçamentos, documentos) ficam guardados no navegador e não vão dentro do arquivo .json, apenas o nome deles.</p>
+                        <p class="text-[11px] text-slate-400 mt-4">Os anexos ficam guardados na nuvem (e neste aparelho) e não vão dentro do arquivo .json, apenas o nome deles.</p>
                     </div>
                 </div>
             `;
-            container.firstElementChild.insertAdjacentHTML('afterbegin', driveCardHtml());
+            container.firstElementChild.insertAdjacentHTML('afterbegin', cloudCardHtml() + driveImportCardHtml());
         }
 
         function saveProfileSettings() {
@@ -3823,7 +3896,7 @@
         function showModal(title, htmlContent) {
             const modal = document.getElementById('global-modal');
             const content = document.getElementById('modal-content');
-            content.classList.remove('max-w-3xl'); content.classList.add('max-w-lg');
+            content.classList.remove('max-w-3xl', 'max-w-2xl'); content.classList.add('max-w-lg');
             content.innerHTML = `
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-bold text-lg text-slate-800 dark:text-white">${title}</h3>
@@ -3836,6 +3909,7 @@
         }
 
         function closeModal() {
+            if (cloudRenderPending) { cloudRenderPending = false; setTimeout(renderCurrentTabContent, 0); }
             const modal = document.getElementById('global-modal');
             modal.classList.remove('flex');
             modal.classList.add('hidden');
@@ -4810,14 +4884,20 @@
         }
         function buildImportRows(raw) {
             // Descobre qual sinal representa compra (a maioria dos lançamentos)
-            const neg = raw.filter(r => r.signed < 0).length, purchaseNeg = neg > raw.length / 2;
+            // o sinal de "compra" é o da maioria dos lançamentos que NÃO são estorno/desconto/pagamento
+            const CRED_RX = /estorno|desconto|devolu[cç]|cr[eé]dito em|cashback|reembolso|cancelamento/i, PAY_RX = /pagamento|pagto|pgto|saldo (anterior|restante)|total (da )?fatura|valor da fatura|fatura anterior/i;
+            const vote = raw.filter(r => !CRED_RX.test(r.name) && !PAY_RX.test(r.name)), vn = vote.length ? vote : raw;
+            const neg = vn.filter(r => r.signed < 0).length, purchaseNeg = neg > vn.length / 2;
             const card = cardById(cardSelectedId) || appData.cartao.cards[0];
             cardImportRows = raw.map(r => {
                 const isPurchase = purchaseNeg ? r.signed < 0 : r.signed > 0;
                 const amount = Math.abs(r.signed);
-                const skip = !isPurchase || /pagamento (recebido|efetuado|de fatura|fatura)|saldo (anterior|restante)|total (da )?fatura|estorno/i.test(r.name);
-                const dup = appData.cartao.entries.some(e => e.cardId === card.id && e.date === r.date && Math.abs(e.amount - amount) < 0.005 && normKey(e.name) === normKey(r.name));
-                return { on: !skip && !dup, note: dup ? 'já lançado' : (skip ? 'crédito/pagamento' : ''), date: r.date, name: r.name, amount, category: guessCardCategory(r.name) };
+                // pagamento da fatura / saldos / totais não são lançamentos; estorno, desconto e devolução entram como CRÉDITO (positivo para você: abate a fatura)
+                const isPay = /pagamento|pagto|pgto|saldo (anterior|restante)|total (da )?fatura|valor da fatura|fatura anterior/i.test(r.name) && !/estorno|desconto|devolu/i.test(r.name);
+                const credit = !isPay && (!isPurchase || /estorno|desconto|devolu[cç]|cr[eé]dito em|cashback|reembolso|cancelamento/i.test(r.name));
+                const skip = isPay;
+                const dup = appData.cartao.entries.some(e => e.cardId === card.id && e.date === r.date && Math.abs(Math.abs(e.amount) - amount) < 0.005 && (Number(e.amount) < 0) === credit && normKey(e.name) === normKey(r.name));
+                return { on: !skip && !dup, credit, note: dup ? 'já lançado' : (skip ? 'pagamento/saldo' : ''), date: r.date, name: r.name, amount, category: guessCardCategory(r.name) };
             });
             renderCardImportPreview();
         }
@@ -4828,13 +4908,14 @@
                     ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ci-card" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ci-card" value="${card.id}">`}
                     <div><label class="${LBL}">Forçar fatura (opcional)</label><input type="month" id="ci-inv" class="${INP}"></div>
                 </div>
-                <p class="text-[11px] text-slate-400 mb-2">Sem "forçar fatura", cada compra vai para a fatura conforme o dia de fechamento. Ajuste data, nome, valor e categoria se precisar.</p>
+                <p class="text-[11px] text-slate-400 mb-2">Sem "forçar fatura", cada compra vai para a fatura conforme o dia de fechamento. Estornos e descontos entram como <b class="text-emerald-600">crédito</b> (abatem a fatura). Pagamentos e saldos ficam desmarcados. Ajuste tipo, data, nome, valor e categoria se precisar.</p>
                 <div class="max-h-[50vh] overflow-auto border border-slate-100 dark:border-slate-700 rounded-xl">
-                <table class="w-full text-xs"><thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[10px] sticky top-0"><tr><th class="p-2"></th><th class="p-2 text-left">Data</th><th class="p-2 text-left">Nome</th><th class="p-2 text-left">Valor</th><th class="p-2 text-left">Categoria</th></tr></thead><tbody>
+                <table class="w-full text-xs"><thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[10px] sticky top-0"><tr><th class="p-2"></th><th class="p-2 text-left">Data</th><th class="p-2 text-left">Nome</th><th class="p-2 text-left">Tipo</th><th class="p-2 text-left">Valor</th><th class="p-2 text-left">Categoria</th></tr></thead><tbody>
                 ${cardImportRows.map((r, i) => `<tr class="border-t border-slate-100 dark:border-slate-700 ${r.note ? 'opacity-70' : ''}">
                     <td class="p-2"><input type="checkbox" ${r.on ? 'checked' : ''} onchange="cardImportRows[${i}].on=this.checked;updateImportCount()"></td>
                     <td class="p-1"><input type="date" value="${r.date}" onchange="cardImportRows[${i}].date=this.value" class="w-32 px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"></td>
                     <td class="p-1"><input value="${esc(r.name)}" onchange="cardImportRows[${i}].name=this.value" class="w-full min-w-[140px] px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${r.note ? `<span class="text-[10px] text-amber-600">${r.note}</span>` : ''}</td>
+                    <td class="p-1"><select onchange="cardImportRows[${i}].credit=this.value==='c';this.className=this.className.replace(/text-(emerald|rose)-600/,this.value==='c'?'text-emerald-600':'text-rose-600')" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-bold ${r.credit ? 'text-emerald-600' : 'text-rose-600'}"><option value="p" ${r.credit ? '' : 'selected'}>Compra</option><option value="c" ${r.credit ? 'selected' : ''}>Crédito (estorno/desconto)</option></select></td>
                     <td class="p-1"><input type="number" step="0.01" value="${r.amount.toFixed(2)}" onchange="cardImportRows[${i}].amount=Number(this.value)||0" class="w-24 px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"></td>
                     <td class="p-1"><select onchange="cardImportRows[${i}].category=this.value" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${C.categories.map(c => `<option ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
                 </tr>`).join('')}
@@ -4848,7 +4929,7 @@
             const card = cardById(document.getElementById('ci-card').value), force = document.getElementById('ci-inv').value;
             const rows = cardImportRows.filter(r => r.on && r.date && r.amount > 0);
             if (!rows.length) { showToast('Nenhum lançamento selecionado.', 'warning'); return; }
-            rows.forEach(r => appData.cartao.entries.push({ id: uid(), cardId: card.id, name: r.name, amount: r.amount, date: r.date, invoice: force || cardInvoiceKey(card, r.date), category: r.category, obs: 'Importado da fatura' }));
+            rows.forEach(r => appData.cartao.entries.push({ id: uid(), cardId: card.id, name: r.name, amount: (r.credit ? -1 : 1) * r.amount, date: r.date, invoice: force || cardInvoiceKey(card, r.date), category: r.category, obs: 'Importado da fatura' }));
             cardSelectedId = card.id; cardInvMonth = force || cardInvoiceKey(card, rows[0].date);
             cardImportRows = [];
             cardCommit(`${rows.length} lançamento(s) importado(s)!`);
@@ -5130,6 +5211,11 @@
                 example: ['05/10/2026', '07/10/2026', 'Caixa', '1', 10000, 'Conta A', 6000, 'Conta B', 4000, '', '', 'Conta de onde saiu o pagamento', ''],
                 help: 'A soma dos valores das contas deve ser igual ao Valor. Se o Valor ficar em branco, usa a soma das contas. Para mais de 3 contas, adicione colunas "Conta 4", "Valor conta 4"…',
                 rows: () => libData().map(l => { const r = [fmtBR(l.dateRec), fmtBR(l.dateRep), l.via || '', l.parcela || '', _fixed(l.valor)]; for (let i = 0; i < 3; i++) r.push((l.accounts || [])[i] || '', _fixed((l.accAmounts || [])[i])); r.push(l.origem || '', l.obs || ''); return r; }) },
+            contatos: { label: 'Contatos', sheet: 'Contatos', alias: ['contatos', 'contato'],
+                head: ['Nome', 'Número', 'Observação'],
+                example: ['Maria Silva', '(11) 99999-0000', 'Vizinha'],
+                help: 'Nenhuma coluna é obrigatória.',
+                rows: () => appData.contatos.map(c => [c.nome || '', c.numero || '', c.obs || '']) },
             lembretes: { label: 'Lembretes', sheet: 'Lembretes', alias: ['lembretes', 'lembrete'],
                 head: ['Título', 'Data', 'Prioridade', 'Período', 'A cada (dias)', 'Dias da semana', 'Concluído'],
                 example: ['Pagar condomínio', '10/10/2026', 'Alta', 'mensal', '', '', 'não'],
@@ -5289,6 +5375,11 @@
                     const vStr = valor === '' ? '' : Number(valor).toFixed(2);
                     if (libData().some(l => l.dateRec === dateRec && l.dateRep === dateRep && (l.via || '') === via && (l.parcela || '') === parcela && String(l.valor) === vStr)) { skipped++; return; }
                     libData().push({ id: uid(), dateRec, dateRep, via, parcela, valor: vStr, obs, origem, accounts, accAmounts }); added++;
+                } else if (kind === 'contatos') {
+                    const nome = S(rowGet(r, 'nome')), numero = S(rowGet(r, 'numero', 'telefone', 'celular')), obs = S(rowGet(r, 'observacao', 'obs'));
+                    if (!nome && !numero && !obs) { skipped++; return; }
+                    if (appData.contatos.some(c => (c.nome || '') === nome && (c.numero || '') === numero)) { skipped++; return; }
+                    appData.contatos.push({ id: uid(), nome, numero, obs }); added++;
                 } else if (kind === 'lembretes') {
                     const title = S(rowGet(r, 'titulo', 'descricao'));
                     if (!title) { skipped++; return; }
@@ -5335,7 +5426,7 @@
                         <button onclick="exportReports(null, true)" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-table"></i><span>Baixar modelo de importação</span></button>
                     </div>
                     <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Importar relatórios</p>
-                    <div class="space-y-2">${['financas', 'cartao', 'orcamentos', 'habitacao', 'liberacoes', 'lembretes', 'hobbies'].map(imp).join('')}</div>
+                    <div class="space-y-2">${['financas', 'cartao', 'orcamentos', 'habitacao', 'liberacoes', 'lembretes', 'hobbies', 'contatos'].map(imp).join('')}</div>
                 </div>`;
         }
 
@@ -5411,51 +5502,491 @@
         }
 
         // =====================================================
-        // GOOGLE DRIVE — login + sincronização automática
+        // NUVEM (SUPABASE) — login por e-mail e salvamento automático
+        // Cada e-mail tem a sua linha no banco (protegida por RLS) e a sua pasta de anexos.
+        // O app é "local primeiro": grava no aparelho na hora e envia à nuvem em seguida.
         // =====================================================
-        const GOOGLE_CLIENT_ID = '737517508578-oh51pl1lmnav4c14cjqt3ptfikltjnm7.apps.googleusercontent.com';
-        const DRIVE_SCOPE_FULL = 'https://www.googleapis.com/auth/drive';      // conta compartilhada: precisa enxergar a pasta que a outra pessoa compartilhou
-        const DRIVE_SCOPE_OWN = 'https://www.googleapis.com/auth/drive.file';   // uso pessoal: o app só enxerga os arquivos que ele mesmo criou
-        const GOOGLE_CLIENT_ID_OWN = '';  // opcional: outro Client ID (só com drive.file) para uso pessoal; vazio = usa o mesmo
-        const DRIVE_MODE_KEY = 'meusistema_drive_mode';
-        const DRIVE_EMAIL_KEY = 'meusistema_drive_email';
-        const DRIVE_DIRTY_KEY = 'meusistema_drive_dirty'; // há alterações ainda não enviadas ao Drive
-        let driveNeedsLogin = false, driveCloudMod = '', driveRetryN = 0, driveRetryTimer = null, driveGuardDone = false;
-        function driveLinked() { return localStorage.getItem('meusistema_drive_linked') === '1'; }
-        function driveDirty() { return localStorage.getItem(DRIVE_DIRTY_KEY) === '1'; }
-        function driveBannerUpdate() {
+        const LOGO_SVG = `<svg viewBox="0 0 64 64" class="w-full h-full" role="img" aria-label="Logo ISIS"><rect width="64" height="64" rx="16" fill="url(#isisGold)"/><circle cx="32" cy="16" r="4.2" fill="#fff"/><rect x="28.8" y="25" width="6.4" height="24" rx="3.2" fill="#fff"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"><path d="M29 31C21 31 14.500 28 10 21"/><path d="M29 38C22.500 38 17 35.500 12.500 30"/><path d="M29 45C24 45 19.500 43 15.500 39"/><path d="M35 31C43 31 49.500 28 54 21"/><path d="M35 38C41.500 38 47 35.500 51.500 30"/><path d="M35 45C40 45 44.500 43 48.500 39"/></g></svg>`;
+        const CFG = window.ISIS_CONFIG || {};
+        const CLOUD_ON = !!(CFG.url && CFG.anonKey && !/COLE_/.test(CFG.url + CFG.anonKey) && window.supabase);
+        const BUCKET = 'isis_anexos', TBL = 'isis_data', RPC_SAVE = 'save_isis_data', MAX_FILE = 10 * 1024 * 1024;
+        let sb = null, cloudSession = null, CUR_UID = null, CUR_EMAIL = '';
+        let cloudRev = 0, cloudBase = null, cloudErr = '', cloudLast = null, cloudBusy = false, cloudAgain = false;
+        let cloudPushTimer = null, cloudRetryN = 0, cloudRetryTimer = null, cloudForce = false, cloudReady = false, cloudOffline = false, cloudRenderPending = false;
+        let _gateMode = '', _gateEmail = '', _starting = false, _newAccount = false, _legacyAdopted = false, _folderStarted = false;
+        const kRev = () => 'isis_rev_' + CUR_UID, kDirty = () => 'isis_dirty_' + CUR_UID, kUp = () => 'isis_up_' + CUR_UID;
+        function dataKey() { return 'isis_data_' + (CUR_UID || 'local'); }
+        function isDirty() { try { return localStorage.getItem(kDirty()) === '1'; } catch (e) { return false; } }
+        function setDirty(v) { try { if (v) localStorage.setItem(kDirty(), '1'); else localStorage.removeItem(kDirty()); } catch (e) {} cloudBanner(); }
+        function pendingUploads() { try { return JSON.parse(localStorage.getItem(kUp()) || '[]'); } catch (e) { return []; } }
+        function setPendingUploads(a) { try { localStorage.setItem(kUp(), JSON.stringify(a)); } catch (e) {} cloudBanner(); }
+
+        // ---- pequeno cofre (IndexedDB) para a "última versão sincronizada" ----
+        function kvDB() { return new Promise((res, rej) => { const r = indexedDB.open('isis_kv', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+        async function kvGet(k) { try { const db = await kvDB(); return await new Promise(res => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch (e) { return null; } }
+        async function kvSet(k, v) { try { const db = await kvDB(); await new Promise(res => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = res; }); } catch (e) {} }
+        async function kvDel(k) { try { const db = await kvDB(); await new Promise(res => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete = res; tx.onerror = res; }); } catch (e) {} }
+
+        // ---- mescla de 3 vias: base (última sincronizada) × local × nuvem ----
+        // Itens com "id" são mesclados um a um; quem apagou ou editou em um aparelho vale; se os dois editaram o mesmo campo, vale o local.
+        function _eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+        function _isObj(x) { return x && typeof x === 'object' && !Array.isArray(x); }
+        function _idArr(a) { return Array.isArray(a) && a.every(x => _isObj(x) && x.id !== undefined); }
+        function merge3(B, L, R) {
+            if (_eq(L, R)) return L;
+            if (_eq(L, B)) return R;
+            if (_eq(R, B)) return L;
+            if (_isObj(L) && _isObj(R)) {
+                const b = _isObj(B) ? B : {}, out = {};
+                new Set([...Object.keys(R), ...Object.keys(L)]).forEach(k => {
+                    if (k === '_savedAt') return;
+                    const inL = k in L, inR = k in R;
+                    if (inL && inR) out[k] = merge3(b[k], L[k], R[k]);
+                    else if (inL) { if (!(k in b) || !_eq(L[k], b[k])) out[k] = L[k]; }      // só no local: novo (ou editado)
+                    else { if (!(k in b) || !_eq(R[k], b[k])) out[k] = R[k]; }                // só na nuvem: novo (ou editado)
+                });
+                return out;
+            }
+            if (_idArr(L) && _idArr(R)) {
+                const b = _idArr(B) ? B : [], bm = new Map(b.map(x => [x.id, x]));
+                const lm = new Map(L.map(x => [x.id, x])), rm = new Map(R.map(x => [x.id, x]));
+                const out = [];
+                R.forEach(r => {
+                    const l = lm.get(r.id), bb = bm.get(r.id);
+                    if (l) out.push(merge3(bb, l, r));
+                    else if (!bb || !_eq(r, bb)) out.push(r);          // apagado no local, mas a nuvem editou: mantém
+                });
+                L.forEach(l => { if (!rm.has(l.id)) { const bb = bm.get(l.id); if (!bb || !_eq(l, bb)) out.push(l); } });
+                return out;
+            }
+            return L;
+        }
+
+        // ---- textos de erro em português ----
+        function cloudMsg(e) {
+            const m = String((e && (e.message || e.error_description || e)) || '');
+            if (/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
+            if (/already registered|already been registered/i.test(m)) return 'Este e-mail já tem conta. Use "Entrar" (ou "Esqueci a senha").';
+            if (/Email not confirmed/i.test(m)) return 'Confirme seu e-mail pelo link que enviamos antes de entrar.';
+            if (/at least \d+ characters|weak/i.test(m)) return 'A senha é fraca. Use pelo menos 8 caracteres.';
+            if (/rate limit|too many|security purposes/i.test(m)) return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
+            if (/Failed to fetch|NetworkError|Load failed|network/i.test(m)) return 'Sem conexão com a internet.';
+            if (/invalid.*email|Unable to validate email/i.test(m)) return 'E-mail inválido.';
+            if (/same password|different from the old/i.test(m)) return 'A nova senha precisa ser diferente da anterior.';
+            return m || 'Erro inesperado.';
+        }
+
+        // ---- tela de entrada ----
+        function gateShow(show) { const g = document.getElementById('login-gate'); if (!g) return; g.classList.toggle('hidden', !show); g.classList.toggle('flex', !!show); }
+        function gateEl(id) { return document.getElementById(id); }
+        function renderGate(mode, msg, tone) {
+            _gateMode = mode; gateShow(true);
+            const box = gateEl('login-gate-box'); if (!box) return;
+            const IN = 'w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800';
+            const BT = 'w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-xl font-bold text-sm shadow';
+            const LK = 'text-xs text-teal-700 hover:text-teal-900 underline';
+            const logo = `<div class="w-16 h-16 mx-auto mb-3 drop-shadow">${LOGO_SVG}</div><h2 class="text-lg font-bold text-slate-800">Sistema ISIS</h2>`;
+            const note = `<p id="gate-msg" class="text-xs ${tone === 'ok' ? 'text-emerald-600' : 'text-rose-500'} mt-3 min-h-[1rem] leading-snug">${esc(msg || '')}</p>`;
+            const em = esc(_gateEmail);
+            let h = '';
+            if (mode === 'loading') h = `${logo}<p class="text-sm text-slate-500 mt-4"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>${esc(msg || 'Carregando seus dados...')}</p>`;
+            else if (mode === 'config') h = `${logo}<p class="text-sm text-slate-600 mt-3 leading-snug">O sistema ainda não foi ligado ao Supabase. Preencha o arquivo <b>config.js</b> com a URL e a chave do seu projeto (veja o guia).</p>
+                <button onclick="useLocalOnly()" class="${BT} mt-5">Testar sem conta (dados só neste aparelho)</button>`;
+            else if (mode === 'login') h = `${logo}<p class="text-sm text-slate-500 mt-1 mb-4">Entre com o seu e-mail para abrir os seus dados.</p>
+                <form onsubmit="gateSubmit(event)" class="space-y-3 text-left">
+                    <input id="gate-email" type="email" autocomplete="email" inputmode="email" required placeholder="Seu e-mail" value="${em}" class="${IN}">
+                    <input id="gate-pass" type="password" autocomplete="current-password" required placeholder="Senha" class="${IN}">
+                    <button type="submit" id="gate-btn" class="${BT}">Entrar</button>
+                </form>${note}
+                <div class="flex justify-between mt-3"><button onclick="renderGate('signup')" class="${LK}">Criar conta</button><button onclick="gateKeepEmail();renderGate('forgot')" class="${LK}">Esqueci a senha</button></div>`;
+            else if (mode === 'signup') h = `${logo}<p class="text-sm text-slate-500 mt-1 mb-4">Crie a sua conta. Tudo o que você preencher fica salvo no seu e-mail.</p>
+                <form onsubmit="gateSubmit(event)" class="space-y-3 text-left">
+                    <input id="gate-email" type="email" autocomplete="email" inputmode="email" required placeholder="Seu e-mail" value="${em}" class="${IN}">
+                    <input id="gate-pass" type="password" autocomplete="new-password" minlength="8" required placeholder="Senha (mínimo 8 caracteres)" class="${IN}">
+                    <input id="gate-pass2" type="password" autocomplete="new-password" minlength="8" required placeholder="Repita a senha" class="${IN}">
+                    <button type="submit" id="gate-btn" class="${BT}">Criar conta</button>
+                </form>${note}
+                <div class="mt-3"><button onclick="gateKeepEmail();renderGate('login')" class="${LK}">Já tenho conta</button></div>`;
+            else if (mode === 'forgot') h = `${logo}<p class="text-sm text-slate-500 mt-1 mb-4">Informe o e-mail da conta. Enviaremos um link para criar uma nova senha.</p>
+                <form onsubmit="gateSubmit(event)" class="space-y-3 text-left">
+                    <input id="gate-email" type="email" autocomplete="email" inputmode="email" required placeholder="Seu e-mail" value="${em}" class="${IN}">
+                    <button type="submit" id="gate-btn" class="${BT}">Enviar link</button>
+                </form>${note}
+                <div class="mt-3"><button onclick="gateKeepEmail();renderGate('login')" class="${LK}">Voltar</button></div>`;
+            else if (mode === 'recovery') h = `${logo}<p class="text-sm text-slate-500 mt-1 mb-4">Crie uma nova senha para a sua conta.</p>
+                <form onsubmit="gateSubmit(event)" class="space-y-3 text-left">
+                    <input id="gate-pass" type="password" autocomplete="new-password" minlength="8" required placeholder="Nova senha (mínimo 8 caracteres)" class="${IN}">
+                    <input id="gate-pass2" type="password" autocomplete="new-password" minlength="8" required placeholder="Repita a nova senha" class="${IN}">
+                    <button type="submit" id="gate-btn" class="${BT}">Salvar nova senha</button>
+                </form>${note}`;
+            else if (mode === 'confirm') h = `${logo}<div class="mt-4 p-4 rounded-2xl bg-emerald-50 text-emerald-800 text-sm leading-snug"><i class="fa-solid fa-envelope-circle-check text-xl mb-2 block"></i>Enviamos um link de confirmação para <b>${em}</b>.<br>Abra o e-mail, toque no link e depois volte aqui para entrar.</div>
+                <button onclick="renderGate('login')" class="${BT} mt-4">Ir para o login</button><p class="text-[11px] text-slate-400 mt-3">Não achou? Olhe também a caixa de spam.</p>`;
+            box.innerHTML = h;
+            const f = gateEl(mode === 'recovery' ? 'gate-pass' : 'gate-email'); if (f && mode !== 'loading' && !_gateEmail) { try { f.focus(); } catch (e) {} }
+        }
+        function gateKeepEmail() { const e = gateEl('gate-email'); if (e) _gateEmail = e.value.trim(); }
+        function gateBusy(on) { const b = gateEl('gate-btn'); if (b) { b.disabled = on; b.style.opacity = on ? .6 : 1; } }
+        async function gateSubmit(ev) {
+            ev.preventDefault();
+            const email = (gateEl('gate-email') || {}).value ? gateEl('gate-email').value.trim() : _gateEmail;
+            const pass = gateEl('gate-pass') ? gateEl('gate-pass').value : '', pass2 = gateEl('gate-pass2') ? gateEl('gate-pass2').value : '';
+            _gateEmail = email || _gateEmail;
+            const fail = m => { renderGateKeep(m); };
+            gateBusy(true);
+            try {
+                if (_gateMode === 'login') {
+                    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+                    if (error) throw error;
+                } else if (_gateMode === 'signup') {
+                    if (pass.length < 8) return fail('A senha precisa ter pelo menos 8 caracteres.');
+                    if (pass !== pass2) return fail('As senhas não são iguais.');
+                    const { data, error } = await sb.auth.signUp({ email, password: pass, options: { emailRedirectTo: location.origin + location.pathname } });
+                    if (error) throw error;
+                    if (data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) return fail('Este e-mail já tem conta. Use "Entrar" (ou "Esqueci a senha").');
+                    if (!data.session) renderGate('confirm');   // com sessão, o login segue sozinho
+                } else if (_gateMode === 'forgot') {
+                    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+                    if (error) throw error;
+                    renderGate('login', 'Se o e-mail tiver conta, o link já está a caminho. Depois de trocar a senha, entre aqui.', 'ok');
+                } else if (_gateMode === 'recovery') {
+                    if (pass.length < 8) return fail('A senha precisa ter pelo menos 8 caracteres.');
+                    if (pass !== pass2) return fail('As senhas não são iguais.');
+                    const { error } = await sb.auth.updateUser({ password: pass });
+                    if (error) throw error;
+                    showToast('Senha alterada!', 'success');
+                    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+                    if (cloudSession) await startSession(cloudSession, true); else renderGate('login');
+                }
+            } catch (e) { console.error(e); fail(cloudMsg(e)); }
+            finally { gateBusy(false); }
+        }
+        function renderGateKeep(msg) { const m = gateEl('gate-msg'); if (m) { m.className = 'text-xs text-rose-500 mt-3 min-h-[1rem] leading-snug'; m.textContent = msg; } gateBusy(false); }
+        function useLocalOnly() { CUR_UID = null; CUR_EMAIL = ''; loadAppData(); applyTheme(); gateShow(false); afterLoad(); cloudBanner(); }
+
+        // ---- sessão ----
+        async function cloudInit() {
+            if (!CLOUD_ON) { renderGate('config'); return; }
+            renderGate('loading', 'Abrindo...');
+            sb = window.supabase.createClient(CFG.url, CFG.anonKey, { auth: { storageKey: 'sb-isis-auth', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+            sb.auth.onAuthStateChange((ev, sess) => {
+                setTimeout(() => {   // fora do callback, para não travar o cliente
+                    if (ev === 'PASSWORD_RECOVERY') { cloudSession = sess; renderGate('recovery'); return; }
+                    if (ev === 'SIGNED_OUT') { if (CUR_UID && cloudReady) { cloudSession = null; resetToGate(); } return; }
+                    if (sess) { cloudSession = sess; if (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION') { if (_gateMode !== 'recovery') startSession(sess); } }
+                }, 0);
+            });
+            let session = null;
+            try { const r = await sb.auth.getSession(); session = r.data && r.data.session; } catch (e) { console.warn(e); }
+            if (session) { cloudSession = session; if (_gateMode !== 'recovery') await startSession(session); return; }
+            // sem sessão: se está sem internet e já usou neste aparelho, abre com os dados locais
+            let last = null; try { last = JSON.parse(localStorage.getItem('isis_last_user') || 'null'); } catch (e) {}
+            if (!navigator.onLine && last && last.uid && localStorage.getItem('isis_data_' + last.uid)) { await startSession(null, false, last); return; }
+            if (_gateMode !== 'recovery') renderGate('login');
+        }
+        async function startSession(session, force, offlineUser) {
+            const uid = session ? session.user.id : offlineUser.uid;
+            if (_starting) return;
+            if (!force && CUR_UID === uid && cloudReady) return;
+            _starting = true;
+            try {
+                CUR_UID = uid; CUR_EMAIL = session ? (session.user.email || '') : offlineUser.email; cloudOffline = !session;
+                try { localStorage.setItem('isis_last_user', JSON.stringify({ uid: CUR_UID, email: CUR_EMAIL })); } catch (e) {}
+                cloudRev = Number(localStorage.getItem(kRev()) || 0) || 0;
+                cloudBase = (await kvGet('base_' + CUR_UID)) || null;
+                let legacy = null;
+                if (!localStorage.getItem(dataKey())) {
+                    try { const s = localStorage.getItem('meusistema_pessoal_data'); if (s) { const o = JSON.parse(s); if (o && typeof o === 'object' && dataCount(o) > 0) legacy = o; } } catch (e) {}
+                }
+                if (legacy) {
+                    let adopt = true;
+                    if (session) {
+                        try {
+                            const h = await sb.from(TBL).select('rev').eq('user_id', CUR_UID).maybeSingle();
+                            if (h.data && Number(h.data.rev) > 0) adopt = confirm('Encontramos dados antigos neste aparelho (' + dataCount(legacy) + ' registros). Juntar com os dados que já estão na sua conta?');
+                        } catch (e) {}
+                    }
+                    if (adopt) { try { localStorage.setItem(dataKey(), JSON.stringify(legacy)); setDirty(true); _legacyAdopted = true; } catch (e) { console.warn(e); } }
+                }
+                appData = JSON.parse(APP_DEFAULTS); loadAppData(); applyTheme();
+                cloudReady = true;
+                if (session) {
+                    renderGate('loading', 'Carregando seus dados...');
+                    try { await cloudPull(true); } catch (e) { console.warn(e); cloudErr = cloudMsg(e); updateSyncStatus('Sem conexão: dados só neste aparelho', 'amber'); }
+                    cloudUploadPending(); cloudSyncAttachments();
+                }
+                gateShow(false);
+                afterLoad();
+                cloudBanner();
+            } finally { _starting = false; }
+        }
+        function afterLoad() {
+            applyTheme(); updateFolderLabel();
+            switchTab(currentActiveTab || 'dashboard');
+            if (!_folderStarted) { _folderStarted = true; initBackupFolder(); }
+            if (_newAccount) { _newAccount = false; setTimeout(offerDriveImport, 400); }
+        }
+        function resetToGate() {
+            cloudReady = false; CUR_UID = null; CUR_EMAIL = ''; cloudRev = 0; cloudBase = null;
+            appData = JSON.parse(APP_DEFAULTS); applyTheme();
+            document.getElementById('main-content-container').innerHTML = '';
+            _gateEmail = ''; renderGate('login');
+        }
+
+        // ---- gravação e leitura ----
+        function scheduleCloudSave() {
+            if (!CUR_UID) return;
+            setDirty(true);
+            clearTimeout(cloudPushTimer);
+            cloudPushTimer = setTimeout(() => cloudPush(), 1200);
+            updateSyncStatus('Salvando...', 'amber');
+        }
+        function adoptRemote(R, rev) {
+            try { localStorage.setItem(dataKey(), JSON.stringify(R)); } catch (e) {}
+            appData = JSON.parse(JSON.stringify(R));
+            loadAppData();                         // normaliza o formato (lê o que acabou de ser gravado)
+            cloudRev = rev; try { localStorage.setItem(kRev(), String(rev)); } catch (e) {}
+            cloudBase = JSON.parse(JSON.stringify(R)); kvSet('base_' + CUR_UID, cloudBase);
+            applyTheme();
+            const modalOpen = !document.getElementById('global-modal').classList.contains('hidden');
+            if (modalOpen) cloudRenderPending = true; else renderCurrentTabContent();
+        }
+        async function cloudPull(first) {
+            if (!sb || !cloudSession || !CUR_UID) return;
+            // consulta leve primeiro (só o número da versão); baixa os dados apenas se mudaram
+            const head = await sb.from(TBL).select('rev').eq('user_id', CUR_UID).maybeSingle();
+            if (head.error) throw head.error;
+            cloudOffline = false;
+            if (head.data && Number(head.data.rev) === cloudRev && !first) { if (isDirty()) await cloudPush(); else cloudMarkOk(); return; }
+            const { data, error } = await sb.from(TBL).select('data,rev').eq('user_id', CUR_UID).maybeSingle();
+            if (error) throw error;
+            if (!data) {                                   // conta nova: cria a linha na nuvem
+                cloudRev = 0; _newAccount = dataCount(appData) === 0; setDirty(true); await cloudPush(); return;
+            }
+            const rr = Number(data.rev);
+            if (rr === cloudRev && !first) { if (isDirty()) await cloudPush(); else cloudMarkOk(); return; }
+            if (rr === cloudRev && first) { if (isDirty()) await cloudPush(); else cloudMarkOk(); return; }
+            if (!isDirty()) { adoptRemote(data.data, rr); cloudMarkOk(); return; }
+            // há alterações locais ainda não enviadas e a nuvem também mudou: mescla
+            const merged = merge3(cloudBase || {}, appData, data.data);
+            merged._savedAt = new Date().toISOString();
+            try { localStorage.setItem(dataKey(), JSON.stringify(merged)); } catch (e) {}
+            appData = merged; loadAppData();
+            cloudRev = rr; try { localStorage.setItem(kRev(), String(rr)); } catch (e) {}
+            cloudBase = JSON.parse(JSON.stringify(data.data));
+            applyTheme();
+            const modalOpen = !document.getElementById('global-modal').classList.contains('hidden');
+            if (modalOpen) cloudRenderPending = true; else renderCurrentTabContent();
+            await cloudPush();
+        }
+        function cloudMarkOk() { cloudLast = new Date(); cloudErr = ''; updateSyncStatus('Salvo na nuvem', 'emerald'); cloudBanner(); }
+        async function cloudPush(depth = 0) {
+            if (!sb || !cloudSession || !CUR_UID) return;
+            if (cloudBusy) { cloudAgain = true; return; }
+            if (!isDirty() && cloudRev > 0) return;
+            cloudBusy = true;
+            const sentAt = appData._savedAt || '';
+            const payload = JSON.parse(JSON.stringify(appData));
+            try {
+                const { data, error } = await sb.rpc(RPC_SAVE, { p_data: payload, p_expected_rev: cloudRev });
+                if (error) throw error;
+                if (data && data.ok) {
+                    cloudRev = Number(data.rev); try { localStorage.setItem(kRev(), String(cloudRev)); } catch (e) {}
+                    cloudBase = payload; kvSet('base_' + CUR_UID, payload);
+                    if ((appData._savedAt || '') === sentAt) setDirty(false);
+                    cloudRetryN = 0; cloudForce = false; cloudMarkOk(); refreshBackupTab();
+                    if (_legacyAdopted) {   // os dados antigos do aparelho já estão na nuvem: guarda a cópia antiga só por segurança
+                        _legacyAdopted = false;
+                        try { localStorage.setItem('meusistema_pessoal_data_migrado', localStorage.getItem('meusistema_pessoal_data')); localStorage.removeItem('meusistema_pessoal_data'); } catch (e) {}
+                        showToast('Os dados deste aparelho foram enviados para a sua conta!', 'success');
+                    }
+                } else if (cloudForce && data) {              // restauração de backup: a versão local vence
+                    cloudRev = Number(data.rev); cloudBusy = false;
+                    if (depth < 3) return cloudPush(depth + 1);
+                } else {                                      // outro aparelho salvou antes: puxa e mescla
+                    cloudBusy = false;
+                    if (depth < 3) { await cloudPull(false); return; }
+                    throw new Error('Conflito de versões. Toque em sincronizar de novo.');
+                }
+            } catch (e) {
+                console.error(e); cloudErr = cloudMsg(e);
+                updateSyncStatus('Sem conexão: salvo só neste aparelho', 'amber');
+                cloudBanner(); cloudScheduleRetry();
+            } finally {
+                cloudBusy = false;
+                if (cloudAgain) { cloudAgain = false; setTimeout(() => cloudPush(), 300); }
+            }
+        }
+        function cloudScheduleRetry() {
+            clearTimeout(cloudRetryTimer);
+            const wait = Math.min(120000, 8000 * Math.pow(2, cloudRetryN++));
+            cloudRetryTimer = setTimeout(() => { if (isDirty()) cloudPush(); }, wait);
+        }
+        function cloudBanner() {
             const el = document.getElementById('drive-banner'); if (!el) return;
             let msg = '';
-            if (driveLinked() && driveNeedsLogin) msg = 'Drive desconectado: ' + (driveDirty() ? 'suas últimas alterações ainda NÃO foram salvas na nuvem. ' : '') + 'Toque para reconectar.';
-            else if (driveLinked() && driveDirty() && driveErr) msg = 'Falha ao salvar no Drive. Toque para tentar de novo.';
+            if (CUR_UID && CLOUD_ON) {
+                if (cloudOffline && (isDirty() || pendingUploads().length)) msg = 'Sem conexão. Suas alterações estão neste aparelho e serão enviadas quando a internet voltar.';
+                else if (cloudErr && (isDirty() || pendingUploads().length)) msg = 'Não foi possível salvar na nuvem agora (' + cloudErr + '). Toque para tentar de novo.';
+            }
             el.classList.toggle('hidden', !msg); el.classList.toggle('flex', !!msg);
             const sp = el.querySelector('span'); if (sp) sp.textContent = msg;
         }
-        function driveBannerClick() { if (driveNeedsLogin || !driveToken) driveSignIn(); else { driveRetryN = 0; driveUpload(); } }
-        function driveScheduleRetry() {
-            clearTimeout(driveRetryTimer);
-            if (driveNeedsLogin) return; // precisa de um toque do usuário para reconectar
-            const wait = Math.min(120000, 10000 * Math.pow(2, driveRetryN++));
-            driveRetryTimer = setTimeout(() => { if (driveDirty()) driveUpload(); }, wait);
+        function driveBannerClick() { cloudSyncNow(true); }
+        async function cloudSyncNow(manual) {
+            if (!CUR_UID) { saveAppData(); if (manual) showToast('Dados salvos neste aparelho.', 'info'); return; }
+            if (!sb) return;
+            const ic = document.getElementById('header-sync-icon'); if (ic) ic.classList.add('fa-spin');
+            try {
+                if (!cloudSession) { const r = await sb.auth.getSession(); cloudSession = r.data && r.data.session; }
+                if (!cloudSession) { if (manual) showToast('Entre novamente para sincronizar.', 'warning'); renderGate('login', 'Sua sessão expirou. Entre de novo para continuar (seus dados deste aparelho estão guardados).'); return; }
+                cloudErr = ''; clearTimeout(cloudPushTimer);
+                await cloudPull(false);
+                await cloudUploadPending(); await cloudSyncAttachments();
+                if (cloudErr) { if (manual) showToast('Falha ao sincronizar: ' + cloudErr, 'error'); }
+                else if (manual) { showToast('Tudo sincronizado!', 'success'); renderCurrentTabContent(); }
+            } catch (e) { console.error(e); cloudErr = cloudMsg(e); cloudOffline = !navigator.onLine; cloudBanner(); if (manual) showToast('Falha ao sincronizar: ' + cloudErr, 'error'); }
+            finally { if (ic) ic.classList.remove('fa-spin'); }
         }
-        const DRIVE_FOLDER = 'MeuSistema';
-        const DRIVE_DATA = 'meusistema_dados.json';
-        const DRIVE_LINK_KEY = 'meusistema_drive_linked';
-        const DRIVE_SYNC_KEY = 'meusistema_drive_sync';
-        let driveClient = null, driveToken = null, driveTokenExp = 0;
-        let driveBestFile = null, driveFolderId = null, driveFileId = null, driveReconciled = false, driveHadData = false;
-        let driveSaveTimer = null, driveLastSync = null, driveErr = '';
-        let _tokRes = null, _tokRej = null;
+        const syncNow = () => cloudSyncNow(true);
+        async function cloudWake() {
+            if (!CLOUD_ON || !sb || !cloudReady) return;
+            try {
+                if (!cloudSession) { const r = await sb.auth.getSession(); cloudSession = r.data && r.data.session; if (cloudSession && cloudOffline) cloudOffline = false; }
+                if (!cloudSession) return;
+                await cloudPull(false); cloudUploadPending();
+            } catch (e) { cloudErr = cloudMsg(e); cloudOffline = !navigator.onLine; cloudBanner(); }
+        }
+        function cloudFlush() { if (cloudReady && cloudSession && isDirty()) { clearTimeout(cloudPushTimer); cloudPush(); } }
+        document.addEventListener('visibilitychange', () => { if (document.hidden) cloudFlush(); else cloudWake(); });
+        window.addEventListener('pagehide', cloudFlush);
+        window.addEventListener('online', () => { cloudOffline = false; cloudWake(); });
+        window.addEventListener('offline', () => { cloudOffline = true; cloudBanner(); });
+        setInterval(() => { if (!document.hidden && cloudReady && cloudSession && !cloudBusy) cloudWake(); }, 30000);
 
-        function driveAvailable() { return location.protocol.indexOf('http') === 0; }
-        function showLoginGate(show, msg) {
-            const g = document.getElementById('login-gate');
-            if (!g) return;
-            g.classList.toggle('hidden', !show); g.classList.toggle('flex', !!show);
-            const m = document.getElementById('login-gate-msg'); if (m) m.innerText = msg || '';
-            updateGateMode();
+        // ---- anexos (Storage privado: pasta = id do usuário) ----
+        const upPath = id => CUR_UID + '/' + id;
+        function attachmentIds() {
+            const ids = [];
+            appData.financeiro.transactions.forEach(t => (t.attachments || []).forEach(a => ids.push(a.id)));
+            appData.habitacao.docFolders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
+            (appData.habitacao.budgets || []).forEach(b => (b.attachments || []).forEach(a => ids.push(a.id)));
+            (appData.hobbies || []).forEach(h => (h.attachments || []).forEach(a => ids.push(a.id)));
+            ((appData.saude && appData.saude.exams) || []).forEach(x => (x.attachments || []).forEach(a => ids.push(a.id)));
+            vacData().forEach(v => (v.attachments || []).forEach(a => ids.push(a.id)));
+            recData().forEach(r => (r.attachments || []).forEach(a => ids.push(a.id)));
+            docsData().files.forEach(a => ids.push(a.id));
+            docsData().folders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
+            return [...new Set(ids)];
         }
-        function loadGis() {
+        function queueUpload(id) { const a = pendingUploads(); if (!a.includes(id)) { a.push(id); setPendingUploads(a); } }
+        async function cloudUploadPending() {
+            if (!sb || !cloudSession || !CUR_UID) return;
+            for (const id of pendingUploads().slice()) {
+                try {
+                    const blob = await getFileLocal(id);
+                    if (blob) {
+                        const { error } = await sb.storage.from(BUCKET).upload(upPath(id), blob, { upsert: true, contentType: blob.type || 'application/octet-stream' });
+                        if (error) throw error;
+                    }
+                    setPendingUploads(pendingUploads().filter(x => x !== id));
+                } catch (e) { console.warn('Anexo', id, e); cloudErr = cloudMsg(e); cloudBanner(); cloudScheduleRetryUp(); break; }
+            }
+        }
+        let _upRetry = null;
+        function cloudScheduleRetryUp() { clearTimeout(_upRetry); _upRetry = setTimeout(() => cloudUploadPending(), 30000); }
+        async function cloudSyncAttachments() {   // garante que todo anexo local esteja na nuvem
+            if (!sb || !cloudSession || !CUR_UID) return;
+            try {
+                const remote = new Set();
+                for (let off = 0; ; off += 1000) {
+                    const { data, error } = await sb.storage.from(BUCKET).list(CUR_UID, { limit: 1000, offset: off });
+                    if (error) throw error;
+                    (data || []).forEach(x => remote.add(x.name));
+                    if (!data || data.length < 1000) break;
+                }
+                for (const id of attachmentIds()) if (!remote.has(id) && await getFileLocal(id)) queueUpload(id);
+                await cloudUploadPending();
+            } catch (e) { console.warn('Anexos:', e); }
+        }
+        async function cloudFetchAttachment(id) {
+            if (!sb || !cloudSession || !CUR_UID) return null;
+            try {
+                const { data, error } = await sb.storage.from(BUCKET).download(upPath(id));
+                if (error || !data) return null;
+                await putFile(id, data); return data;
+            } catch (e) { console.warn(e); return null; }
+        }
+        function cloudRemoveAttachment(id) { if (sb && cloudSession && CUR_UID) sb.storage.from(BUCKET).remove([upPath(id)]).catch(() => {}); setPendingUploads(pendingUploads().filter(x => x !== id)); }
+
+        // ---- sair / excluir conta ----
+        async function wipeLocal(uid) {
+            try { localStorage.removeItem('isis_data_' + uid); localStorage.removeItem('isis_rev_' + uid); localStorage.removeItem('isis_dirty_' + uid); localStorage.removeItem('isis_up_' + uid); localStorage.removeItem('isis_last_user'); } catch (e) {}
+            await kvDel('base_' + uid);
+            try { const db = await filesDB(); await new Promise(r => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').clear(); tx.oncomplete = r; tx.onerror = r; }); } catch (e) {}
+        }
+        async function cloudSignOut() {
+            if (!sb) return;
+            clearTimeout(cloudPushTimer);
+            try { if (isDirty() && cloudSession) { await cloudPush(); } if (pendingUploads().length && cloudSession) await cloudUploadPending(); } catch (e) {}
+            if (isDirty() || pendingUploads().length) {
+                if (!confirm('Há informações deste aparelho que ainda não foram enviadas à nuvem. Se sair agora, elas serão perdidas. Sair mesmo assim?')) return;
+            } else if (!confirm('Sair da conta? Os seus dados continuam salvos na nuvem.')) return;
+            const uid = CUR_UID;
+            try { await sb.auth.signOut(); } catch (e) { console.warn(e); }
+            await wipeLocal(uid);
+            cloudSession = null; resetToGate();
+        }
+        async function cloudDeleteAccount() {
+            if (!sb || !cloudSession) { showToast('Entre na conta para excluir.', 'warning'); return; }
+            const t = prompt('Isto apaga a sua conta e TODOS os seus dados (inclusive anexos), sem volta.\nDigite EXCLUIR para confirmar:');
+            if (t === null) return;
+            if (t.trim().toUpperCase() !== 'EXCLUIR') { showToast('Confirmação incorreta. Nada foi apagado.', 'warning'); return; }
+            try {
+                for (;;) {   // apaga os anexos
+                    const { data } = await sb.storage.from(BUCKET).list(CUR_UID, { limit: 100 });
+                    if (!data || !data.length) break;
+                    await sb.storage.from(BUCKET).remove(data.map(x => upPath(x.name)));
+                }
+                const { error } = await sb.rpc('delete_my_account');
+                if (error) throw error;
+                const uid = CUR_UID;
+                try { await sb.auth.signOut(); } catch (e) {}
+                await wipeLocal(uid); cloudSession = null; resetToGate();
+                renderGate('login', 'Conta excluída.', 'ok');
+            } catch (e) { console.error(e); showToast('Não foi possível excluir: ' + cloudMsg(e), 'error'); }
+        }
+        function cloudCardHtml() {
+            const btn = 'w-full sm:w-auto px-6 py-3 rounded-2xl text-sm font-bold shadow flex items-center justify-center space-x-2';
+            let st, actions = '';
+            if (!CLOUD_ON) st = '<span class="text-amber-600">Nuvem não configurada: os dados ficam só neste aparelho.</span>';
+            else if (!CUR_UID) st = '<span class="text-slate-500">Sem conta conectada.</span>';
+            else {
+                const pend = isDirty() || pendingUploads().length;
+                st = pend ? `<span class="text-amber-600">Há alterações aguardando envio.${cloudErr ? ' ' + esc(cloudErr) : ''}</span>`
+                          : `<span class="text-emerald-600">Tudo salvo na nuvem${cloudLast ? ' · ' + cloudLast.toLocaleTimeString('pt-BR') : ''}.</span>`;
+                actions = `<button onclick="cloudSyncNow(true)" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-solid fa-rotate"></i><span>Sincronizar agora</span></button>
+                    <button onclick="cloudSignOut()" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-right-from-bracket"></i><span>Sair da conta</span></button>`;
+            }
+            return `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2"><i class="fa-solid fa-cloud text-teal-500"></i><span>Sua conta e a nuvem</span></h3>
+                ${CUR_EMAIL ? `<p class="text-sm text-slate-500 mb-1">E-mail: <b class="break-all">${esc(CUR_EMAIL)}</b></p>` : ''}
+                <p class="text-sm text-slate-500 mb-2">Tudo o que você preenche é salvo automaticamente e acompanha o seu e-mail: entre em qualquer aparelho com a mesma conta e as informações estarão lá.</p>
+                <p class="text-sm mb-4">${st}</p>
+                <div class="flex flex-col sm:flex-row gap-3">${actions}</div>
+                ${CUR_UID && CLOUD_ON ? `<p class="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-400">Quer apagar tudo? <button onclick="cloudDeleteAccount()" class="underline text-rose-500">Excluir minha conta e todos os dados</button></p>` : ''}
+            </div>`;
+        }
+
+
+        // =====================================================
+        // TRAZER OS DADOS DO GOOGLE DRIVE (migração, uma vez)
+        // O Drive só é LIDO: nada é gravado nem apagado lá. Depois disso, tudo fica na conta (Supabase).
+        // =====================================================
+        const GOOGLE_CLIENT_ID = '737517508578-oh51pl1lmnav4c14cjqt3ptfikltjnm7.apps.googleusercontent.com';
+        const G_SCOPE = 'https://www.googleapis.com/auth/drive';   // mesmo acesso que o ISIS já usava (necessário para enxergar a pasta compartilhada); aqui só é usado para LER
+        const G_FOLDER = 'MeuSistema', G_DATA = 'meusistema_dados.json', G_API = 'https://www.googleapis.com/drive/v3/files';
+        let gClient = null, gTok = null, gRes = null, gRej = null, _driveImp = null;
+        function gLoad() {
             return new Promise(res => {
                 let n = 0;
                 const t = setInterval(() => {
@@ -5464,315 +5995,111 @@
                 }, 200);
             });
         }
-        function driveRequestToken(prompt) {
+        function gToken() {
             return new Promise((resolve, reject) => {
-                const to = setTimeout(() => { driveNeedsLogin = true; driveBannerUpdate(); reject(new Error('tempo esgotado')); }, 20000);
-                _tokRes = v => { clearTimeout(to); driveNeedsLogin = false; driveBannerUpdate(); resolve(v); };
-                _tokRej = e => { clearTimeout(to); driveNeedsLogin = true; driveBannerUpdate(); reject(e); };
-                driveClient.requestAccessToken({ prompt });
+                const to = setTimeout(() => reject(new Error('Tempo esgotado esperando o login do Google.')), 120000);
+                gRes = v => { clearTimeout(to); resolve(v); };
+                gRej = e => { clearTimeout(to); reject(e); };
+                if (!gClient) gClient = google.accounts.oauth2.initTokenClient({
+                    client_id: GOOGLE_CLIENT_ID, scope: G_SCOPE,
+                    callback: r => { if (r.error) gRej && gRej(new Error(r.error)); else { gTok = r.access_token; gRes && gRes(gTok); } },
+                    error_callback: e => gRej && gRej(new Error(e.type === 'popup_closed' ? 'Login do Google cancelado.' : (e.type || 'erro de login')))
+                });
+                gClient.requestAccessToken({ prompt: 'select_account' });
             });
         }
-        async function driveFetch(url, opts = {}, retry = true) {
-            if (!driveToken || Date.now() > driveTokenExp) await driveRequestToken('none');
-            const r = await fetch(url, Object.assign({}, opts, { headers: Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + driveToken }) }));
-            if (r.status === 401 && retry) { driveToken = null; return driveFetch(url, opts, false); }
-            if (!r.ok) {
-                let det = '';
-                try { const j = await r.clone().json(); det = (j.error && ((j.error.errors && j.error.errors[0] && j.error.errors[0].reason) || j.error.status)) || ''; } catch (e) {}
-                if (det === 'storageQuotaExceeded') throw new Error('Drive sem espaço: a conta Google que está salvando (ou a dona da pasta) está com o armazenamento cheio. Libere espaço em drive.google.com/drive/quota');
-                throw new Error('Drive ' + r.status + (det ? ' (' + det + ')' : ''));
-            }
+        async function gFetch(url) {
+            const r = await fetch(url, { headers: { Authorization: 'Bearer ' + gTok } });
+            if (!r.ok) throw new Error('Google Drive ' + r.status + (r.status === 403 ? ' (sem permissão para ler esta pasta)' : ''));
             return r;
         }
-        const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
-        const DRIVE_UP = 'https://www.googleapis.com/upload/drive/v3/files';
-        async function driveList(q, fields) {
-            const r = await driveFetch(`${DRIVE_API}?q=${encodeURIComponent(q)}&fields=${encodeURIComponent('files(' + fields + ')')}&pageSize=1000`);
+        async function gList(q, fields) {
+            const r = await gFetch(`${G_API}?q=${encodeURIComponent(q)}&fields=${encodeURIComponent('files(' + fields + ')')}&pageSize=1000`);
             return (await r.json()).files || [];
         }
-        async function driveEnsureFolder() {
-            if (driveFolderId) return;
-            // Pode haver mais de uma pasta/arquivo de dados (o seu e o compartilhado). Vence o que tem MAIS dados;
-            // em empate, prefere o de outra conta (compartilhado) e depois o mais recente.
-            const f = await driveList(`name='${DRIVE_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`, 'id,ownedByMe');
-            if (f.length) {
+        function importStatus(msg) { const el = document.getElementById('imp-msg'); if (el) el.textContent = msg; }
+        async function importFromDrive() {
+            if (!CUR_UID || !cloudSession) { showToast('Entre na sua conta primeiro.', 'warning'); return; }
+            showModal('Trazer dados do Google Drive', `<p class="text-sm text-slate-600 dark:text-slate-300 mb-3">Vai abrir o login do Google. Escolha a conta onde está a pasta <b>MeuSistema</b> (a sua ou a compartilhada). O Drive só será lido, nada é alterado lá.</p><p id="imp-msg" class="text-sm text-amber-600"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Conectando ao Google...</p>`);
+            try {
+                if (!(await gLoad())) throw new Error('O Google não carregou. Verifique a internet.');
+                await gToken();
+                importStatus('Procurando a pasta MeuSistema...');
+                // pode haver mais de uma pasta/arquivo (a sua e a compartilhada): vale a que tem MAIS dados
+                const folders = await gList(`name='${G_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`, 'id,ownedByMe');
+                if (!folders.length) throw new Error('Não encontrei a pasta "MeuSistema" nesta conta Google. Tente outra conta ou use "Restaurar de arquivo .json".');
                 let best = null;
-                for (const fo of f) {
-                    const d = await driveList(`name='${DRIVE_DATA}' and '${fo.id}' in parents and trashed=false`, 'id,modifiedTime,ownedByMe');
-                    for (const df of d) {
-                        let n = 0;
-                        try { n = dataCount(await (await driveFetch(`${DRIVE_API}/${df.id}?alt=media`)).json()); } catch (e) {}
-                        const c = { folder: fo.id, file: df.id, n, mine: !!df.ownedByMe, t: df.modifiedTime || '' };
-                        if (!best || c.n > best.n || (c.n === best.n && ((best.mine && !c.mine) || (best.mine === c.mine && c.t > best.t)))) best = c;
+                for (const fo of folders) {
+                    const files = await gList(`name='${G_DATA}' and '${fo.id}' in parents and trashed=false`, 'id,modifiedTime');
+                    for (const f of files) {
+                        importStatus('Lendo o arquivo de dados...');
+                        let obj = null; try { obj = await (await gFetch(`${G_API}/${f.id}?alt=media`)).json(); } catch (e) { continue; }
+                        const n = dataCount(obj), c = { folder: fo.id, obj, n, t: f.modifiedTime || '' };
+                        if (!best || c.n > best.n || (c.n === best.n && c.t > best.t)) best = c;
                     }
                 }
-                if (best) { driveFolderId = best.folder; driveBestFile = best.file; return; }
-                f.sort((x, y) => (x.ownedByMe ? 1 : 0) - (y.ownedByMe ? 1 : 0));
-                driveFolderId = f[0].id; return;
-            }
-            const r = await driveFetch(DRIVE_API + '?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: DRIVE_FOLDER, mimeType: 'application/vnd.google-apps.folder' }) });
-            driveFolderId = (await r.json()).id;
+                if (!best || !looksLikeBackup(best.obj)) throw new Error('A pasta existe, mas não achei o arquivo meusistema_dados.json dentro dela.');
+                _driveImp = best;
+                const cur = dataCount(appData);
+                showModal('Dados encontrados no Drive', `
+                    <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">No Drive: <b>${best.n}</b> registros${best.t ? ' (salvo em ' + new Date(best.t).toLocaleString('pt-BR') + ')' : ''}.<br>Hoje nesta conta: <b>${cur}</b> registros.</p>
+                    ${cur ? '<p class="text-xs text-slate-500 mb-3">Antes de mudar qualquer coisa, uma cópia dos dados atuais é baixada no seu aparelho.</p>' : ''}
+                    <div class="space-y-2">
+                        <button onclick="driveImportApply('merge')" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">${cur ? 'Juntar com o que já está na conta (recomendado)' : 'Trazer os dados do Drive'}</button>
+                        ${cur ? '<button onclick="driveImportApply(\'replace\')" class="w-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold text-sm">Substituir tudo pelos dados do Drive</button>' : ''}
+                        <button onclick="closeModal()" class="w-full text-xs text-slate-500 underline py-1">Cancelar</button>
+                    </div>`);
+            } catch (e) { console.error(e); const el = document.getElementById('imp-msg'); if (el) { el.className = 'text-sm text-rose-600'; el.textContent = e.message || 'Não foi possível ler o Drive.'; } else showToast(e.message, 'error'); }
         }
-        async function driveCreateFile(name, blob, type) {
-            const b = 'ms' + uid();
-            const meta = JSON.stringify({ name, parents: [driveFolderId] });
-            const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: ${type}\r\n\r\n`, blob, `\r\n--${b}--`]);
-            const r = await driveFetch(`${DRIVE_UP}?uploadType=multipart&fields=id`, { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body });
-            return (await r.json()).id;
-        }
-        function dataBlob() { return new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' }); }
-        async function driveUpload() {
-            if (!driveReconciled || !driveToken && !driveClient) return;
-            if (dataCount(appData) === 0 && driveHadData) { updateSyncStatus('Drive tem dados: não sobrescrevi', 'amber'); return; }
-            const sentAt = appData._savedAt || '';
+        async function driveImportApply(mode) {
+            const b = _driveImp; if (!b) return;
             try {
-                if (driveFileId) {
-                    const rr = await driveFetch(`${DRIVE_UP}/${driveFileId}?uploadType=media&fields=id,modifiedTime`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: dataBlob() });
-                    try { driveCloudMod = (await rr.json()).modifiedTime || driveCloudMod; } catch (e) {}
-                } else {
-                    await driveEnsureFolder();
-                    driveFileId = await driveCreateFile(DRIVE_DATA, dataBlob(), 'application/json');
+                if (dataCount(appData) > 0) downloadCurrentData('isis_antes_de_trazer_do_drive');
+                showModal('Trazendo do Drive', `<p id="imp-msg" class="text-sm text-amber-600"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Salvando os dados na conta...</p>`);
+                const incoming = JSON.parse(JSON.stringify(b.obj));
+                if (mode === 'replace' || dataCount(appData) === 0) { restoreFromObject(incoming); }
+                else {
+                    const merged = merge3({}, appData, incoming);
+                    merged._savedAt = new Date().toISOString();
+                    appData = merged; localStorage.setItem(dataKey(), JSON.stringify(appData)); loadAppData(); saveAppData();
                 }
-                driveHadData = dataCount(appData) > 0;
-                localStorage.setItem(DRIVE_SYNC_KEY, sentAt);
-                if ((appData._savedAt || '') === sentAt) localStorage.removeItem(DRIVE_DIRTY_KEY);
-                driveRetryN = 0; driveNeedsLogin = false;
-                driveLastSync = new Date(); driveErr = '';
-                driveBannerUpdate();
-                updateSyncStatus('Sincronizado no Drive', 'emerald');
-                updateFolderLabel(); refreshBackupTab();
-            } catch (e) {
-                console.error(e); driveErr = e.message;
-                updateSyncStatus('Drive: falha ao salvar', 'rose');
-                driveBannerUpdate(); driveScheduleRetry();
-            }
-        }
-        function scheduleDriveSave() {
-            if (!driveLinked()) return;
-            localStorage.setItem(DRIVE_DIRTY_KEY, '1'); driveBannerUpdate();
-            if (!driveReconciled) return;
-            clearTimeout(driveSaveTimer);
-            driveSaveTimer = setTimeout(driveUpload, 1500);
-        }
-        async function driveReconcile() {
-            await driveGuardAccount();
-            await driveEnsureFolder();
-            const f = driveBestFile ? [{ id: driveBestFile }] : await driveList(`name='${DRIVE_DATA}' and '${driveFolderId}' in parents and trashed=false`, 'id,modifiedTime');
-            if (!f.length) { driveFileId = null; driveReconciled = true; await driveUpload(); await driveSyncAttachments(); return; }
-            driveFileId = f[0].id;
-            try { driveCloudMod = (await (await driveFetch(`${DRIVE_API}/${driveFileId}?fields=modifiedTime`)).json()).modifiedTime || ''; } catch (e) {}
-            const cloud = await (await driveFetch(`${DRIVE_API}/${driveFileId}?alt=media`)).json();
-            const cN = dataCount(cloud), lN = dataCount(appData);
-            const cT = cloud._savedAt || '', lT = appData._savedAt || '';
-            driveHadData = cN > 0;
-            if (cN === 0 && lN === 0) showToast('Nenhum dado encontrado no Drive. Confira se a pasta MeuSistema foi compartilhada com o e-mail que você usou para entrar.', 'warning');
-            const localUnchanged = localStorage.getItem(DRIVE_SYNC_KEY) === lT;
-            if (cN > 0 && (lN === 0 || (cT > lT && localUnchanged))) {
-                restoreFromObject(cloud);
-                driveReconciled = true;
-                showToast('Dados carregados do Drive!', 'success');
-            } else if (cN > 0 && cT > lT) {
-                driveReconciled = false;
-                showRestoreModal(cloud, 'do Drive (mais recente que este navegador)', () => { driveReconciled = true; driveUpload(); }, 'Manter os dados deste navegador');
-                return;
-            } else {
-                driveReconciled = true;
-                if (cT !== lT) await driveUpload(); else { localStorage.setItem(DRIVE_SYNC_KEY, lT); updateSyncStatus('Sincronizado no Drive', 'emerald'); }
-            }
-            driveLastSync = new Date();
-            await driveSyncAttachments();
-            updateFolderLabel(); refreshBackupTab();
-        }
-
-        // --- anexos (arquivos) no Drive ---
-        function attachmentIds() {
-            const ids = [];
-            appData.financeiro.transactions.forEach(t => (t.attachments || []).forEach(a => ids.push(a.id)));
-            appData.habitacao.docFolders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
-            (appData.hobbies || []).forEach(h => (h.attachments || []).forEach(a => ids.push(a.id)));
-            ((appData.saude && appData.saude.exams) || []).forEach(x => (x.attachments || []).forEach(a => ids.push(a.id)));
-            vacData().forEach(v => (v.attachments || []).forEach(a => ids.push(a.id)));
-            recData().forEach(r => (r.attachments || []).forEach(a => ids.push(a.id)));
-            docsData().files.forEach(a => ids.push(a.id));
-            docsData().folders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
-            return ids;
-        }
-        async function driveUploadAttachment(id, blob) {
-            if (!driveToken || !driveFolderId) return;
-            await driveCreateFile('anexo_' + id, blob, blob.type || 'application/octet-stream');
-        }
-        async function driveSyncAttachments() {
-            try {
-                const remote = new Set((await driveList(`name contains 'anexo_' and '${driveFolderId}' in parents and trashed=false`, 'name')).map(x => x.name));
-                for (const id of attachmentIds()) {
-                    if (remote.has('anexo_' + id)) continue;
-                    const blob = await getFile(id);
-                    if (blob) await driveUploadAttachment(id, blob);
+                // anexos: baixa do Drive os que faltam neste aparelho e envia para a nuvem
+                const ids = attachmentIds();
+                const remote = {};
+                try { (await gList(`name contains 'anexo_' and '${b.folder}' in parents and trashed=false`, 'id,name')).forEach(f => { remote[f.name] = f.id; }); } catch (e) { console.warn(e); }
+                let done = 0, miss = 0;
+                for (const id of ids) {
+                    if (await getFileLocal(id)) { queueUpload(id); continue; }
+                    const gid = remote['anexo_' + id];
+                    if (!gid) { miss++; continue; }
+                    importStatus(`Baixando anexos... ${++done}`);
+                    try { const blob = await (await gFetch(`${G_API}/${gid}?alt=media`)).blob(); await putFile(id, blob); queueUpload(id); } catch (e) { console.warn(e); miss++; }
                 }
-            } catch (e) { console.error('Anexos:', e); }
+                _driveImp = null;
+                if (gTok && window.google && google.accounts && google.accounts.oauth2) { try { google.accounts.oauth2.revoke(gTok, () => {}); } catch (e) {} }
+                gTok = null; gClient = null;
+                closeModal();
+                clearTimeout(cloudPushTimer); await cloudPush(); await cloudUploadPending();
+                renderCurrentTabContent();
+                showToast(`Dados do Drive trazidos para a conta!${done ? ' ' + done + ' anexo(s).' : ''}${miss ? ' ' + miss + ' anexo(s) não estavam no Drive.' : ''}`, miss ? 'warning' : 'success');
+            } catch (e) { console.error(e); closeModal(); showToast('Não foi possível trazer: ' + (e.message || e), 'error'); }
         }
-        async function driveFetchAttachment(id) {
-            if (!driveToken || !driveFolderId) return null;
-            try {
-                const f = await driveList(`name='anexo_${id}' and '${driveFolderId}' in parents and trashed=false`, 'id');
-                if (!f.length) return null;
-                const blob = await (await driveFetch(`${DRIVE_API}/${f[0].id}?alt=media`)).blob();
-                await putFile(id, blob);
-                return blob;
-            } catch (e) { console.error(e); return null; }
+        function offerDriveImport() {
+            showModal('Bem-vindo(a)! Sua conta está vazia', `
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">Se você já usava o ISIS com o Google Drive, dá para trazer tudo (dados e anexos) para esta conta agora.</p>
+                <div class="space-y-2">
+                    <button onclick="closeModal();importFromDrive()" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow"><i class="fa-brands fa-google-drive mr-2"></i>Trazer meus dados do Google Drive</button>
+                    <button onclick="closeModal();switchTab('backup')" class="w-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold text-sm">Tenho um arquivo de backup (.json)</button>
+                    <button onclick="closeModal()" class="w-full text-xs text-slate-500 underline py-1">Começar do zero</button>
+                </div>`);
         }
-
-        // --- login / logout ---
-        async function driveSignIn() {
-            if (!driveAvailable()) { showLoginGate(true, 'Abra o sistema pelo endereço hospedado (https://...) para entrar com o Google.'); return; }
-            try {
-                if (!driveClient) throw new Error('Google não carregou. Verifique a internet.');
-                await driveRequestToken('');
-                localStorage.setItem(DRIVE_LINK_KEY, '1');
-                showLoginGate(false);
-                updateSyncStatus('Conectando ao Drive...', 'amber');
-                await driveReconcile();
-            } catch (e) {
-                console.error(e);
-                showLoginGate(true, 'Não foi possível entrar: ' + e.message);
-                updateSyncStatus('Drive desconectado', 'amber');
-            }
-        }
-        function driveSignOut() {
-            if (driveToken && window.google) google.accounts.oauth2.revoke(driveToken, () => {});
-            driveToken = null; driveFolderId = null; driveBestFile = null; driveFileId = null; driveReconciled = false; driveGuardDone = false;
-            localStorage.removeItem(DRIVE_LINK_KEY); driveBannerUpdate();
-            updateSyncStatus('Drive desconectado', 'amber');
-            updateFolderLabel(); refreshBackupTab();
-        }
-        async function driveSyncManual() {
-            if (!driveToken) { await driveSignIn(); return; }
-            try { await driveReconcile(); showToast('Drive sincronizado!', 'success'); }
-            catch (e) { console.error(e); showToast('Falha ao sincronizar: ' + e.message, 'error'); }
-        }
-        // Botão discreto do cabeçalho: sincroniza na hora (envia o pendente e puxa o que mudou no Drive)
-        let _syncBusy = false;
-        async function syncNow() {
-            if (_syncBusy) return;
-            _syncBusy = true;
-            const ic = document.getElementById('header-sync-icon');
-            if (ic) ic.classList.add('fa-spin');
-            try {
-                if (!driveAvailable() || !(driveLinked() || driveToken)) {
-                    saveAppData();
-                    showToast('Drive não conectado. Dados salvos neste aparelho.', 'info');
-                } else if (!driveToken || Date.now() > driveTokenExp) {
-                    await driveSignIn();
-                } else {
-                    driveErr = '';
-                    if (driveDirty() && driveReconciled) { clearTimeout(driveSaveTimer); await driveUpload(); }
-                    await driveReconcile();
-                    if (driveErr) showToast('Falha ao sincronizar: ' + driveErr, 'error');
-                    else { showToast('Sincronizado com o Drive!', 'success'); renderCurrentTabContent(); }
-                }
-            } catch (e) {
-                console.error(e);
-                showToast('Falha ao sincronizar: ' + (e && e.message ? e.message : e), 'error');
-            } finally {
-                _syncBusy = false;
-                if (ic) ic.classList.remove('fa-spin');
-            }
-        }
-        function driveMakeClient() {
-            const mode = driveMode();
-            driveClient = google.accounts.oauth2.initTokenClient({
-                client_id: (mode === 'own' && GOOGLE_CLIENT_ID_OWN) ? GOOGLE_CLIENT_ID_OWN : GOOGLE_CLIENT_ID,
-                scope: mode === 'shared' ? DRIVE_SCOPE_FULL : DRIVE_SCOPE_OWN,
-                callback: r => {
-                    if (r.error) { _tokRej && _tokRej(new Error(r.error)); return; }
-                    driveToken = r.access_token; driveTokenExp = Date.now() + (Number(r.expires_in) - 60) * 1000;
-                    _tokRes && _tokRes(driveToken);
-                },
-                error_callback: e => { _tokRej && _tokRej(new Error(e.type || 'erro de login')); }
-            });
-        }
-        function driveSetMode(m) {
-            if (driveToken && window.google) google.accounts.oauth2.revoke(driveToken, () => {});
-            driveToken = null; driveFolderId = null; driveBestFile = null; driveFileId = null; driveReconciled = false; driveGuardDone = false;
-            localStorage.setItem(DRIVE_MODE_KEY, m); localStorage.removeItem(DRIVE_LINK_KEY);
-            if (window.google && google.accounts && google.accounts.oauth2) driveMakeClient();
-            updateSyncStatus('Drive desconectado', 'amber');
-        }
-        function updateGateMode() {
-            const b = document.getElementById('login-gate-mode'); if (!b) return;
-            b.textContent = driveMode() === 'shared' ? 'Modo: conta compartilhada (Tayná e Samuel). Tocar para usar o modo pessoal, com dados separados.' : 'Modo: uso pessoal (dados só seus). Sou Tayná ou Samuel: usar a conta compartilhada.';
-        }
-        function driveToggleMode() { driveSetMode(driveMode() === 'shared' ? 'own' : 'shared'); updateGateMode(); driveSignIn(); }
-        function driveToggleModeCard() {
-            const next = driveMode() === 'shared' ? 'own' : 'shared';
-            if (!confirm(next === 'shared' ? 'Trocar para a conta compartilhada (Tayná e Samuel)? Você será desconectado e precisará entrar de novo.' : 'Trocar para o modo pessoal? Você será desconectado e precisará entrar de novo. Nada é apagado do Drive.')) return;
-            driveSetMode(next); refreshBackupTab(); showLoginGate(true);
-        }
-        // Protege os dados: se outra conta Google entrar neste aparelho, os dados locais da conta anterior NÃO vão para o Drive da nova.
-        async function driveGuardAccount() {
-            if (driveGuardDone) return;
-            let me = '';
-            try { const j = await (await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)')).json(); me = ((j.user && j.user.emailAddress) || '').toLowerCase(); } catch (e) { console.warn(e); }
-            if (!me) return;
-            const last = localStorage.getItem(DRIVE_EMAIL_KEY);
-            if (last && last !== me && dataCount(appData) > 0) {
-                downloadCurrentData('meusistema_copia_' + last.split('@')[0]);
-                localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(DRIVE_SYNC_KEY);
-                try { const db = await filesDB(); await new Promise(r => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').clear(); tx.oncomplete = r; tx.onerror = r; }); } catch (e) {}
-                appData = JSON.parse(APP_DEFAULTS); loadAppData(); applyTheme(); renderCurrentTabContent();
-                driveFolderId = null; driveBestFile = null; driveFileId = null; driveReconciled = false;
-                showToast('Este aparelho tinha dados de outra conta. Uma cópia foi baixada e o sistema foi limpo para você.', 'info');
-            }
-            localStorage.setItem(DRIVE_EMAIL_KEY, me);
-            driveGuardDone = true;
-        }
-        async function initDrive() {
-            if (!driveAvailable()) return;
-            if (!(await loadGis())) { showLoginGate(true, 'Google não carregou. Verifique a internet.'); return; }
-            driveMakeClient();
-            if (localStorage.getItem(DRIVE_LINK_KEY) === '1') {
-                try { await driveRequestToken('none'); await driveReconcile(); return; }
-                catch (e) { console.warn('Login automático falhou:', e); }
-            }
-            showLoginGate(true);
-        }
-        function driveFlush() { if (driveDirty() && driveToken && driveReconciled) { clearTimeout(driveSaveTimer); driveUpload(); } }
-        async function driveWake() {
-            if (!driveLinked() || !driveClient) return;
-            try {
-                if (!driveToken || Date.now() > driveTokenExp) await driveRequestToken('none');
-                await driveReconcile(); // puxa o que veio de outro aparelho e envia o que ficou pendente
-            } catch (e) { console.warn('Drive:', e.message); driveBannerUpdate(); }
-        }
-        async function drivePoll() {
-            if (document.hidden || !driveToken || !driveReconciled || !driveFileId || Date.now() > driveTokenExp) return;
-            if (driveDirty()) { driveUpload(); return; }
-            try {
-                const j = await (await driveFetch(`${DRIVE_API}/${driveFileId}?fields=modifiedTime`)).json();
-                if (j.modifiedTime && driveCloudMod && j.modifiedTime !== driveCloudMod) await driveReconcile();
-            } catch (e) { console.warn(e.message); }
-        }
-        document.addEventListener('visibilitychange', () => { if (document.hidden) driveFlush(); else { driveBannerUpdate(); driveWake(); } });
-        window.addEventListener('pagehide', driveFlush);
-        window.addEventListener('online', () => { if (driveLinked()) driveWake(); });
-        setInterval(drivePoll, 45000);
-        function driveCardHtml() {
+        function driveImportCardHtml() {
             const btn = 'w-full sm:w-auto px-6 py-3 rounded-2xl text-sm font-bold shadow flex items-center justify-center space-x-2';
-            let st, actions;
-            if (!driveAvailable()) { st = '<span class="text-amber-600">Disponível só quando o sistema é aberto por um endereço web (https://...), não pelo arquivo no computador.</span>'; actions = ''; }
-            else if (driveToken) {
-                st = `<span class="text-emerald-600">Conectado ao Drive (pasta "${DRIVE_FOLDER}")${driveLastSync ? ' · última sincronização ' + driveLastSync.toLocaleTimeString('pt-BR') : ''}.${driveErr ? ' <b class="text-rose-500">Erro: ' + esc(driveErr) + '</b>' : ''}</span>`;
-                actions = `<button onclick="driveSyncManual()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-solid fa-rotate"></i><span>Sincronizar agora</span></button>
-                           <button onclick="driveSignOut()" class="${btn} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-right-from-bracket"></i><span>Sair do Drive</span></button>`;
-            } else { st = '<span class="text-slate-500">Não conectado.</span>'; actions = `<button onclick="driveSignIn()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-brands fa-google"></i><span>Entrar com Google</span></button>`; }
             return `<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2"><i class="fa-brands fa-google-drive text-teal-500"></i><span>Google Drive</span></h3>
-                <p class="text-sm text-slate-500 mb-2">Salva automaticamente dados e anexos no seu Drive, na pasta <b>${DRIVE_FOLDER}</b>, e carrega em qualquer computador ao entrar com a mesma conta.</p>
-                <p class="text-sm mb-2">${st}</p>
-                <p class="text-xs text-slate-500 mb-5">Modo: <b>${driveMode() === 'shared' ? 'Conta compartilhada (Tayná e Samuel)' : 'Uso pessoal (dados só seus)'}</b> · <button onclick="driveToggleModeCard()" class="underline text-teal-600">trocar modo</button></p>
-                <div class="flex flex-col sm:flex-row gap-3">${actions}</div></div>`;
+                <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-2 flex items-center space-x-2"><i class="fa-brands fa-google-drive text-teal-500"></i><span>Trazer dados do Google Drive</span></h3>
+                <p class="text-sm text-slate-500 mb-4">Para quem já usava o ISIS com o Drive: lê a pasta <b>MeuSistema</b> (dados e anexos) e passa tudo para a sua conta. O Drive só é lido, nada é apagado nem alterado lá.</p>
+                <button onclick="importFromDrive()" class="${btn} bg-teal-600 hover:bg-teal-700 text-white"><i class="fa-brands fa-google"></i><span>Trazer do Drive</span></button></div>`;
         }
-
         // =====================================================
         // APARÊNCIA — cores personalizáveis
         // =====================================================
@@ -6142,6 +6469,197 @@
                 return true;
             }).sort(finCmp);
         }
+
+        // ========== CALCULADORA (sobreposta) ==========
+        const CALC = { cur: '0', acc: null, op: null, fresh: false, expr: '' };
+        const CALC_KEYS = [['C','k-fn'],['⌫','k-fn'],['%','k-fn'],['÷','k-op'],['7'],['8'],['9'],['×','k-op'],['4'],['5'],['6'],['−','k-op'],['1'],['2'],['3'],['+','k-op'],['±','k-fn'],['0'],[',' ],['=','k-eq']];
+        function calcRender() {
+            const keys = document.getElementById('calc-keys');
+            if (keys && !keys.children.length) {
+                keys.innerHTML = CALC_KEYS.map(([k, c]) => {
+                    const cls = c === 'k-op' ? 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-200' : c === 'k-eq' ? 'bg-teal-600 text-white' : c === 'k-fn' ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200' : 'bg-slate-50 dark:bg-slate-700/60 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-600';
+                    return `<button type="button" onclick="calcPress('${k}')" class="h-12 rounded-xl text-lg font-bold active:scale-95 transition ${cls}">${k}</button>`;
+                }).join('');
+            }
+            const fmt = s => { const [i, f] = String(s).split('.'); const neg = i.startsWith('-'); const n = (neg ? i.slice(1) : i).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); return (neg ? '-' : '') + n + (f !== undefined ? ',' + f : ''); };
+            document.getElementById('calc-disp').textContent = fmt(CALC.cur);
+            document.getElementById('calc-expr').textContent = CALC.expr;
+        }
+        function calcNum(x) { return Number(x); }
+        function calcFmtNum(n) { if (!isFinite(n)) return 'Erro'; return String(parseFloat(n.toPrecision(12))); }
+        function calcApply(a, op, b) { return op === '+' ? a + b : op === '−' ? a - b : op === '×' ? a * b : op === '÷' ? (b === 0 ? NaN : a / b) : b; }
+        function calcPress(k) {
+            if (CALC.cur === 'Erro' && k !== 'C') CALC.cur = '0';
+            if (/^[0-9]$/.test(k)) {
+                if (CALC.fresh) { CALC.cur = '0'; CALC.fresh = false; if (CALC.op === null) CALC.expr = ''; }
+                CALC.cur = CALC.cur === '0' ? k : (CALC.cur.replace(/[-.]/g, '').length >= 15 ? CALC.cur : CALC.cur + k);
+            } else if (k === ',') {
+                if (CALC.fresh) { CALC.cur = '0'; CALC.fresh = false; if (CALC.op === null) CALC.expr = ''; }
+                if (!CALC.cur.includes('.')) CALC.cur += '.';
+            } else if (k === 'C') {
+                CALC.cur = '0'; CALC.acc = null; CALC.op = null; CALC.fresh = false; CALC.expr = '';
+            } else if (k === '⌫') {
+                if (!CALC.fresh) CALC.cur = CALC.cur.length > 1 && !(CALC.cur.length === 2 && CALC.cur[0] === '-') ? CALC.cur.slice(0, -1) : '0';
+            } else if (k === '±') {
+                if (CALC.cur !== '0') CALC.cur = CALC.cur.startsWith('-') ? CALC.cur.slice(1) : '-' + CALC.cur;
+            } else if (k === '%') {
+                const v = calcNum(CALC.cur);
+                CALC.cur = calcFmtNum(CALC.acc !== null && CALC.op && (CALC.op === '+' || CALC.op === '−') ? CALC.acc * v / 100 : v / 100);
+                CALC.fresh = false;
+            } else if (['+', '−', '×', '÷'].includes(k)) {
+                if (CALC.op && !CALC.fresh) {
+                    CALC.acc = calcApply(CALC.acc, CALC.op, calcNum(CALC.cur)); CALC.cur = calcFmtNum(CALC.acc);
+                } else if (!CALC.op) CALC.acc = calcNum(CALC.cur);
+                if (CALC.cur === 'Erro') { CALC.acc = null; CALC.op = null; CALC.expr = ''; calcRender(); return; }
+                CALC.op = k; CALC.fresh = true; CALC.expr = calcFmtNum(CALC.acc).replace('.', ',') + ' ' + k;
+            } else if (k === '=') {
+                if (CALC.op) {
+                    const b = calcNum(CALC.cur), a = CALC.acc;
+                    CALC.expr = calcFmtNum(a).replace('.', ',') + ' ' + CALC.op + ' ' + calcFmtNum(b).replace('.', ',') + ' =';
+                    CALC.cur = calcFmtNum(calcApply(a, CALC.op, b)); CALC.acc = null; CALC.op = null; CALC.fresh = true;
+                }
+            }
+            calcRender();
+        }
+        function calcOpen() { const o = document.getElementById('calc-overlay'); return o && !o.classList.contains('hidden'); }
+        function openCalc() {
+            const sb = document.getElementById('sidebar');
+            if (window.innerWidth < 768 && sb && !sb.classList.contains('-translate-x-full')) { sb.classList.add('-translate-x-full'); syncSidebarBackdrop(); }
+            const o = document.getElementById('calc-overlay'); o.classList.remove('hidden');
+            if (!o.dataset.placed) { o.dataset.placed = '1'; calcMoveTo(window.innerWidth - o.offsetWidth - 12, 90); } else calcMoveTo(o.offsetLeft, o.offsetTop);
+            calcRender();
+        }
+        function closeCalc() { document.getElementById('calc-overlay').classList.add('hidden'); }
+        function calcMoveTo(x, y) {
+            const o = document.getElementById('calc-overlay');
+            o.style.left = Math.max(4, Math.min(x, window.innerWidth - o.offsetWidth - 4)) + 'px';
+            o.style.top = Math.max(4, Math.min(y, window.innerHeight - o.offsetHeight - 4)) + 'px';
+        }
+        (function () {
+            let dx = 0, dy = 0, on = false;
+            document.addEventListener('pointerdown', e => {
+                const h = e.target.closest && e.target.closest('#calc-handle'); if (!h) return;
+                const o = document.getElementById('calc-overlay'); on = true; dx = e.clientX - o.offsetLeft; dy = e.clientY - o.offsetTop;
+                try { h.setPointerCapture(e.pointerId); } catch (x) {}
+                e.preventDefault();
+            });
+            document.addEventListener('pointermove', e => { if (on) calcMoveTo(e.clientX - dx, e.clientY - dy); });
+            const end = () => { on = false; };
+            document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+            window.addEventListener('resize', () => { if (calcOpen()) { const o = document.getElementById('calc-overlay'); calcMoveTo(o.offsetLeft, o.offsetTop); } });
+        })();
+        function calcCopy() { const t = document.getElementById('calc-disp').textContent; try { navigator.clipboard.writeText(t.replace(/\./g, '').replace(',', '.')); showToast('Resultado copiado: ' + t, 'success'); } catch (e) { showToast(t, 'info'); } }
+        document.addEventListener('keydown', e => {
+            if (!calcOpen()) return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const tg = e.target, tn = tg && tg.tagName;
+            if (tn === 'INPUT' || tn === 'TEXTAREA' || tn === 'SELECT' || (tg && tg.isContentEditable)) return; // não atrapalha quem está digitando no fundo
+            const k = e.key;
+            const map = { '*': '×', 'x': '×', 'X': '×', '/': '÷', '-': '−', '+': '+', '.': ',', ',': ',', 'Enter': '=', '=': '=', 'Backspace': '⌫', 'Delete': 'C', 'c': 'C', 'C': 'C', '%': '%' };
+            if (/^[0-9]$/.test(k)) { calcPress(k); e.preventDefault(); }
+            else if (map[k]) { calcPress(map[k]); e.preventDefault(); }
+        });
+
+        // ========== FINANÇAS · ANÁLISE DE INVESTIMENTOS ==========
+        const AN_LS = 'isis_analise_params';
+        function anLoad() { try { return JSON.parse(localStorage.getItem(AN_LS)) || {}; } catch (e) { return {}; } }
+        function anNum(id) { const el = document.getElementById(id); if (!el) return 0; const s = String(el.value || '').trim().replace(/[R$\s%]/g, ''); if (!s) return 0; const n = s.includes(',') ? Number(s.replace(/\./g, '').replace(',', '.')) : Number(s); return isFinite(n) ? n : 0; }
+        function anIrRate(days, isento) { if (isento) return 0; return days <= 180 ? 0.225 : days <= 360 ? 0.20 : days <= 720 ? 0.175 : 0.15; }
+        // taxa efetiva anual bruta
+        function anAnnual(p) {
+            if (p.tipo === 'cdi') return p.cdi / 100 * (p.taxa / 100);
+            if (p.tipo === 'pre') return p.taxa / 100;
+            if (p.tipo === 'ipca') return (1 + p.ipca / 100) * (1 + p.taxa / 100) - 1;
+            return Math.pow(1.005, 12) - 1; // poupança (0,5% a.m. com Selic > 8,5%)
+        }
+        // simula resgate no mês m: aporte inicial em t0 e aportes mensais no início de cada mês a partir do mês 1
+        function anSim(p, m) {
+            const rm = Math.pow(1 + anAnnual(p), 1 / 12) - 1, isento = p.isento || p.tipo === 'poup';
+            let inv = 0, gross = 0, ir = 0;
+            for (let d = 0; d < m; d++) {
+                const a = d === 0 ? p.ini : p.aporte;
+                if (!a) continue;
+                const v = a * Math.pow(1 + rm, m - d), g = v - a;
+                inv += a; gross += v; ir += g > 0 ? g * anIrRate((m - d) * 30.4167, isento) : 0;
+            }
+            return { inv, gross, ir, liq: gross - ir };
+        }
+        function openAnalise() {
+            const s = anLoad();
+            const v = (k, def) => s[k] !== undefined ? s[k] : def;
+            const inp = 'w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            const lab = 'block text-[11px] font-bold text-slate-500 uppercase mb-1';
+            showModal('Análise de Investimentos', `
+                <div class="space-y-3" oninput="anCalc()" onchange="anCalc()">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="col-span-2"><label class="${lab}">Tipo de rendimento</label>
+                            <select id="an-tipo" class="${inp}">
+                                <option value="cdi" ${v('tipo','cdi')==='cdi'?'selected':''}>% do CDI (CDB, LCI, LCA…)</option>
+                                <option value="pre" ${v('tipo')==='pre'?'selected':''}>Prefixado (% ao ano)</option>
+                                <option value="ipca" ${v('tipo')==='ipca'?'selected':''}>IPCA + taxa (% ao ano)</option>
+                                <option value="poup" ${v('tipo')==='poup'?'selected':''}>Poupança</option>
+                            </select></div>
+                        <div id="an-taxa-wrap"><label id="an-taxa-lab" class="${lab}">% do CDI</label><input id="an-taxa" inputmode="decimal" class="${inp}" value="${v('taxa','100')}"></div>
+                        <div id="an-cdi-wrap"><label class="${lab}">CDI atual (% a.a.)</label><input id="an-cdi" inputmode="decimal" class="${inp}" value="${v('cdi','14,90')}"></div>
+                        <div id="an-ipca-wrap" class="hidden"><label class="${lab}">IPCA estimado (% a.a.)</label><input id="an-ipca" inputmode="decimal" class="${inp}" value="${v('ipca','4,50')}"></div>
+                        <div class="col-span-2" id="an-ir-wrap"><label class="${lab}">Imposto de renda</label>
+                            <select id="an-ir" class="${inp}">
+                                <option value="reg" ${v('ir','reg')==='reg'?'selected':''}>Tabela regressiva (CDB, RDB, Tesouro)</option>
+                                <option value="isento" ${v('ir')==='isento'?'selected':''}>Isento (LCI, LCA, CRI, CRA)</option>
+                            </select></div>
+                        <div><label class="${lab}">Valor inicial (R$)</label><input id="an-ini" inputmode="decimal" class="${inp}" value="${v('ini','10.000,00')}"></div>
+                        <div><label class="${lab}">Aporte mensal (R$)</label><input id="an-aporte" inputmode="decimal" class="${inp}" value="${v('aporte','0')}"></div>
+                        <div><label class="${lab}">Prazo</label><input id="an-prazo" inputmode="numeric" class="${inp}" value="${v('prazo','12')}"></div>
+                        <div><label class="${lab}">Unidade</label>
+                            <select id="an-un" class="${inp}"><option value="m" ${v('un','m')==='m'?'selected':''}>meses</option><option value="a" ${v('un')==='a'?'selected':''}>anos</option></select></div>
+                    </div>
+                    <div id="an-out"></div>
+                    <p class="text-[10px] text-slate-400 leading-snug">O CDI de 14,90% é um valor padrão e você pode editá-lo: ajuste para o CDI atual, porque o resultado depende dele. O valor digitado fica salvo no aparelho. É uma estimativa: não considera IOF, taxas nem inflação e supõe a taxa constante no período. Aportes são feitos no início de cada mês a partir do 2º; o IR regressivo é calculado por aporte (22,5% até 180 dias, 20% até 360, 17,5% até 720, 15% acima); a poupança usa 0,5% ao mês.</p>
+                </div>`);
+            document.getElementById('modal-content').classList.replace('max-w-lg', 'max-w-2xl');
+            anCalc();
+        }
+        function anCalc() {
+            const g = id => document.getElementById(id); if (!g('an-out')) return;
+            const tipo = g('an-tipo').value;
+            g('an-taxa-lab').textContent = tipo === 'cdi' ? '% do CDI' : tipo === 'pre' ? 'Taxa (% a.a.)' : tipo === 'ipca' ? 'Taxa acima do IPCA (% a.a.)' : 'Taxa';
+            g('an-taxa-wrap').classList.toggle('hidden', tipo === 'poup');
+            g('an-cdi-wrap').classList.toggle('hidden', tipo !== 'cdi');
+            g('an-ipca-wrap').classList.toggle('hidden', tipo !== 'ipca');
+            g('an-ir-wrap').classList.toggle('hidden', tipo === 'poup');
+            const p = { tipo, taxa: anNum('an-taxa'), cdi: anNum('an-cdi'), ipca: anNum('an-ipca'), isento: g('an-ir').value === 'isento', ini: anNum('an-ini'), aporte: anNum('an-aporte') };
+            const prazo = Math.max(0, Math.floor(anNum('an-prazo'))), un = g('an-un').value, m = un === 'a' ? prazo * 12 : prazo;
+            try { localStorage.setItem(AN_LS, JSON.stringify({ tipo, taxa: g('an-taxa').value, cdi: g('an-cdi').value, ipca: g('an-ipca').value, ir: g('an-ir').value, ini: g('an-ini').value, aporte: g('an-aporte').value, prazo: g('an-prazo').value, un })); } catch (e) {}
+            const out = g('an-out');
+            if (!m || m > 1200 || (!p.ini && !p.aporte)) { out.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Informe um valor e um prazo (até 100 anos) para ver o resultado.</p>'; return; }
+            const r = anSim(p, m), ann = anAnnual(p), rend = r.liq - r.inv, pct = r.inv > 0 ? rend / r.inv * 100 : 0;
+            const m2 = x => Number(x).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const R = x => 'R$ ' + m2(x);
+            const card = (l, val, c = 'text-slate-800 dark:text-white') => `<div class="bg-slate-50 dark:bg-slate-900 rounded-xl p-3 min-w-0"><p class="text-[10px] font-semibold text-slate-400 uppercase truncate">${l}</p><p class="text-sm sm:text-lg font-bold ${c} truncate">${val}</p></div>`;
+            const nSteps = Math.min(m, 10), rows = [];
+            for (let i = 1; i <= nSteps; i++) { const mm = Math.round(m * i / nSteps); if (rows.length && rows[rows.length - 1].mm === mm) continue; const s = anSim(p, mm); rows.push({ mm, ...s }); }
+            const lbl = mm => mm % 12 === 0 && mm >= 12 ? (mm / 12) + (mm === 12 ? ' ano' : ' anos') : mm + (mm === 1 ? ' mês' : ' meses');
+            let cmp = '';
+            if (tipo === 'cdi') {
+                cmp = `<div class="mt-3"><p class="text-[11px] font-bold text-slate-500 uppercase mb-1">E se fosse outro % do CDI? (líquido em ${lbl(m)})</p><div class="grid grid-cols-5 gap-1.5 text-center">${[80, 90, 100, 110, 120].map(x => { const s = anSim({ ...p, taxa: x }, m); return `<div class="rounded-lg p-1.5 ${Math.round(p.taxa) === x ? 'bg-teal-100 dark:bg-teal-900/50' : 'bg-slate-50 dark:bg-slate-900'}"><p class="text-[10px] font-bold text-slate-400">${x}%</p><p class="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 truncate">${m2(s.liq)}</p></div>`; }).join('')}</div></div>`;
+            }
+            out.innerHTML = `
+                <div class="rounded-2xl bg-gradient-to-br from-teal-600 to-teal-800 text-white p-4">
+                    <p class="text-xs text-teal-100">Em ${lbl(m)}, ${R(p.ini)}${p.aporte ? ' + ' + R(p.aporte) + '/mês' : ''} a ${tipo === 'cdi' ? p.taxa.toLocaleString('pt-BR') + '% do CDI' : tipo === 'pre' ? p.taxa.toLocaleString('pt-BR') + '% a.a.' : tipo === 'ipca' ? 'IPCA + ' + p.taxa.toLocaleString('pt-BR') + '%' : 'poupança'} rendem</p>
+                    <p class="text-2xl sm:text-3xl font-extrabold">${R(rend)}</p>
+                    <p class="text-xs text-teal-100 mt-0.5">líquidos de IR · saldo final ${R(r.liq)}</p>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                    ${card('Total investido', R(r.inv))}${card('Rendimento bruto', R(r.gross - r.inv), 'text-emerald-600')}
+                    ${card('Imposto de renda', R(r.ir), 'text-rose-600')}${card('Rentab. líquida', pct.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%')}
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1.5">Taxa bruta equivalente: ${(ann * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% a.a.${tipo === 'ipca' ? ' (com IPCA estimado)' : ''}</p>
+                ${cmp}
+                <div class="mt-3 overflow-x-auto"><table class="w-full text-left text-xs"><thead class="text-slate-400 uppercase text-[10px]"><tr><th class="py-1.5">Prazo</th><th>Investido</th><th>Líquido</th><th class="text-right">Rendimento</th></tr></thead><tbody>
+                    ${rows.map(x => `<tr class="border-t border-slate-100 dark:border-slate-700"><td class="py-1.5 font-semibold">${lbl(x.mm)}</td><td>${m2(x.inv)}</td><td>${m2(x.liq)}</td><td class="text-right text-emerald-600 font-semibold">${m2(x.liq - x.inv)}</td></tr>`).join('')}
+                </tbody></table></div>`;
+        }
+
         function renderFinanceiro(container) {
             const list = finFiltered();
             let tr = 0, td = 0, tp = 0;
@@ -6156,7 +6674,7 @@
             const cats = [...new Set(appData.financeiro.transactions.map(t => t.category).filter(Boolean))].sort();
             const o = (v, l, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`;
             const S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
-            const card = (l, v, c) => `<div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700"><p class="text-xs font-semibold text-slate-400 uppercase">${l}</p><h3 class="text-2xl font-bold ${c} mt-1">R$ ${money(v)}</h3></div>`;
+            const card = (l, v, c) => `<div class="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 min-w-0"><p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase truncate">${l}</p><h3 class="text-base sm:text-2xl font-bold ${c} mt-0.5 sm:mt-1 truncate">R$ ${money(v)}</h3></div>`;
             container.innerHTML = `
                 <div class="space-y-6 max-w-7xl mx-auto">
                     <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
@@ -6164,6 +6682,7 @@
                             ${perBarHtml('fin')}
                             <div class="flex flex-wrap items-center gap-2">
                                 <button onclick="finToggleFilter()" class="px-3 py-2 rounded-xl text-xs font-bold ${finFilterOpen || nAct ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid fa-filter mr-1"></i>Filtro${nAct ? ' (' + nAct + ')' : ''}<i class="fa-solid fa-chevron-${finFilterOpen ? 'up' : 'down'} ml-1.5 text-[9px]"></i></button>
+                                <button onclick="openAnalise()" class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5"><i class="fa-solid fa-chart-line"></i><span>Análise</span></button>
                                 <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
                             </div>
                         </div>
@@ -6178,7 +6697,7 @@
                             <button onclick="finClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Limpar filtros</button>
                         </div>` : ''}
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-5">
                         ${card('Receitas', tr, 'text-emerald-600')}${card('Despesas', td, 'text-rose-600')}${card('Saldo do Período', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${card('Pendente', tp, 'text-amber-600')}
                     </div>
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
@@ -7005,12 +7524,8 @@
         }
 
         window.onload = async function() {
-            loadAppData();
             applyColors(getColors());
-            if (appData.profile.theme === 'dark') document.documentElement.classList.add('dark');
-            switchTab('dashboard');
-            await initBackupFolder();
-            initDrive();
+            await cloudInit();
         };
     </script>
 <script>if(window.innerWidth<768){var _sb=document.getElementById('sidebar');if(_sb)_sb.classList.add('-translate-x-full');}</script>
