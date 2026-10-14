@@ -364,7 +364,7 @@
         let obraSortKey = 'date', obraSortDir = 'desc';
         let budgetView = 'bloco', budgetSelectMode = false, budgetSelected = [], budgetGroupOpen = {};
         let cardSelectedId = null, cardInvMonth = '';
-        let finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' };
+        let finF = { acc: '', cat: '', type: '', min: '', max: '', q: '', hab: false };
         let contaSel = null;
         let dashAcc = '', dashMode = 'saldo';
         let dashBase = 'geral', dashMonth = localDateStr().slice(0, 7); // início: geral do mês atual
@@ -373,7 +373,7 @@
         let dashHide = localStorage.getItem('meusistema_hide') === '1';
         let dashFund = localStorage.getItem('meusistema_dash_fund') || '';
         let dashCardAcc = localStorage.getItem('meusistema_dash_card') || '';
-        let habLibOpen = false, libView = 'cards', libQ = '', libVia = '', libFrom = '', libTo = '', careMetaView = 'cards', saudeCareOpen = false, careTab = 'rotinas', careDate = localDateStr(), colorsOpen = false;
+        let habCasaOpen = false, casaView = (() => { try { return localStorage.getItem('isis_casa_view') === 'cards' ? 'cards' : 'linhas'; } catch (e) { return 'linhas'; } })(), casaQ = '', casaSt = '', casaComp = '', habLibOpen = false, libView = 'cards', libQ = '', libVia = '', libFrom = '', libTo = '', careMetaView = 'cards', saudeCareOpen = false, careTab = 'rotinas', careDate = localDateStr(), colorsOpen = false;
         let recOpen = false, recViewId = null, recQuery = '', recSel = new Set();
         let finSel = new Set();
         let dashCardMonth = 'auto'; // fatura do cartão na tela inicial: 'auto' = fatura em aberto mais próxima; 'AAAA-MM' = mês; '' = total
@@ -601,6 +601,7 @@
 
         function saveAppData() {
             try { syncHabTransfers(); } catch (e) { console.error(e); }
+            try { casaSyncAll(); } catch (e) { console.error(e); }
             try {
                 appData._savedAt = new Date().toISOString();
                 localStorage.setItem(dataKey(), JSON.stringify(appData));
@@ -925,7 +926,7 @@
             if (tabId === 'lembretes') { agTab = 'lembretes'; tabId = 'agenda'; }
             else if (tabId === 'agenda' && prevTab !== 'agenda') agTab = 'compromissos';
             currentActiveTab = tabId;
-            if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; }
+            if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; habCasaOpen = false; }
             if (tabId === 'financeiro') { financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); } // sempre abre no mês atual cheio
             if (tabId !== 'saude') { saudeDiagOpen = false; saudeVacOpen = false; saudeCareOpen = false; }
             if (tabId !== 'hobbies') { recOpen = false; recViewId = null; }
@@ -1010,7 +1011,7 @@
             
             let totalHabitacaoFundos = 0;
             appData.habitacao.contributions.forEach(c => {
-                if (c.type === 'pendente') return;
+                if (c.type === 'pendente' || c.fin) return;
                 if (c.type === 'aporte') totalHabitacaoFundos += Number(c.amount);
                 else totalHabitacaoFundos -= Number(c.amount);
             });
@@ -2971,7 +2972,8 @@
         function renderHabitacao(container) {
             if (habDocsOpen) { renderHabDocs(container); return; }
             if (habLibOpen) { renderHabLib(container); return; }
-            const { balances, spent, totalAportes, totalRetiradas, totalPrev, saldoCaixaObra } = habSummary();
+            if (habCasaOpen) { renderHabCasa(container); return; }
+            const { balances, spent, totalAportes, totalRetiradas, totalGasto, totalPrev, saldoCaixaObra } = habSummary();
 
             // Filtro e Ordenação de Movimentações
             let contributionsList = [...appData.habitacao.contributions];
@@ -3002,6 +3004,10 @@
                             <button onclick="openLibView()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-hand-holding-dollar"></i>
                                 <span>Liberações</span>
+                            </button>
+                            <button onclick="openCasaView()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm">
+                                <i class="fa-solid fa-house-chimney"></i>
+                                <span>DESPESAS DA CASA</span>
                             </button>
                             <button onclick="openDocsView()" class="bg-white hover:bg-amber-50 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-folder-open"></i>
@@ -3038,7 +3044,7 @@
                                 </div>
                                 <h3 class="font-bold text-xl text-white">Saldo em Caixa</h3>
                                 <p class="text-3xl font-extrabold text-emerald-400 mt-2">R$ ${saldoCaixaObra.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                <p class="text-[10px] text-teal-200/80 mt-1.5 leading-tight">Total gasto: <b>R$ ${money(totalRetiradas)}</b></p>
+                                <p class="text-[10px] text-teal-200/80 mt-1.5 leading-tight">Total gasto: <b>R$ ${money(totalGasto)}</b></p>
                                 ${totalPrev > 0 ? `<p class="text-[11px] text-amber-300 mt-1">Previsto a pagar: R$ ${money(totalPrev)}</p>` : ''}
                             </div>
                         </div>
@@ -3086,7 +3092,7 @@
                                             return `
                                                 <tr class="hover:bg-slate-50/50">
                                                     <td class="p-3.5 font-bold text-slate-800 dark:text-white">${person.name}</td>
-                                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? 'Pendente' : 'Retirada'}</span></td>
+                                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? 'Pendente' : c.fin ? 'Gasto' : 'Retirada'}</span></td>
                                                     <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}${c.linkKey ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">via Financeiro</span>' : ''}</td>
                                                     <td class="p-3.5 text-slate-500">${c.date}</td>
                                                     <td class="p-3.5 font-bold ${c.type === 'aporte' ? 'text-emerald-600' : c.type === 'pendente' ? 'text-amber-600' : 'text-rose-600'}">R$ ${Number(c.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
@@ -4000,6 +4006,17 @@
                         <input type="text" id="fin-desc" value="${esc(t.desc)}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                     </div>
                     ${finAccHtml(t)}
+                    <datalist id="fin-cat-list"><option value="Despesa da casa"></datalist>
+                    <div id="fin-hab-wrap" class="${t.type !== 'despesa' || t.cardInvoice ? 'hidden' : ''} rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-3">
+                        <label class="flex items-center gap-2 text-sm font-bold text-amber-800 dark:text-amber-300 cursor-pointer"><input type="checkbox" id="fin-hab" ${t.habitacional ? 'checked' : ''} onchange="document.getElementById('fin-hab-person-wrap').classList.toggle('hidden', !this.checked)" class="rounded w-4 h-4"> <i class="fa-solid fa-hammer"></i> Habitacional</label>
+                        <div id="fin-hab-person-wrap" class="${t.habitacional ? '' : 'hidden'} mt-2">
+                            <select id="fin-hab-person" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm">
+                                <option value="">Sem nome (aparece só como previsão)</option>
+                                ${(appData.habitacao.people || []).map(p => `<option value="${p.id}" ${t.habPerson === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+                            </select>
+                            <p class="text-[11px] text-amber-700/80 dark:text-amber-300/70 mt-1.5">Aparece também em Habitação (Obra). Com cartão/conta comum, o valor sai dele e não mexe nos saldos de aportes: com um nome, soma só no GASTO dele; sem nome, fica como previsão. Escolhendo a conta “Habitacional …” acima, movimenta o saldo dessa pessoa.</p>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">${!id ? 'Valor total (R$)' : 'Valor (R$)'}</label>
@@ -4007,7 +4024,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Categoria</label>
-                            <input type="text" id="fin-category" value="${esc(t.category)}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            <input type="text" id="fin-category" list="fin-cat-list" value="${esc(t.category)}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -4040,6 +4057,7 @@
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>
             `);
+            finHabAccUi();
             if (t.cardInvoice) {
                 ['fin-type', 'fin-desc', 'fin-amount', 'fin-category', 'fin-date'].forEach(i => { const el = document.getElementById(i); if (el) el.disabled = true; });
                 const lb = document.getElementById('fin-acc-lbl'); if (lb) lb.textContent = 'Banco/conta que paga a fatura';
@@ -4070,11 +4088,16 @@
             const toAccId = type === 'transferencia' ? document.getElementById('fin-to').value : '';
             if (type === 'transferencia' && (!accId || !toAccId || accId === toAccId)) { showToast('Na transferência, escolha duas contas diferentes (origem e destino).', 'warning'); return; }
             const newAtts = await storeFiles(document.getElementById('fin-files').files);
+            const hb = document.getElementById('fin-hab');
+            const habAcc = isHabId(accId) && type !== 'transferencia';
+            const habitacional = habAcc || !!(hb && hb.checked && type === 'despesa');
+            const habPerson = habAcc ? accId.slice(4) : (habitacional ? (document.getElementById('fin-hab-person').value || '') : '');
 
             if (id) {
                 const tr = appData.financeiro.transactions.find(x => x.id === id);
                 if (tr) {
                     tr.type = type; tr.status = status; tr.desc = desc; tr.amount = amount; tr.category = category; tr.date = date; tr.accId = accId; tr.toAccId = toAccId;
+                    if (!tr.cardInvoice) { if (habitacional) { tr.habitacional = true; tr.habPerson = habPerson; } else { delete tr.habitacional; delete tr.habPerson; } }
                     const toRemove = Array.from(document.querySelectorAll('.fin-remove-att:checked')).map(c => c.value);
                     toRemove.forEach(rid => deleteStoredFile(rid));
                     tr.attachments = (tr.attachments || []).filter(a => !toRemove.includes(a.id)).concat(newAtts);
@@ -4082,21 +4105,21 @@
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(document.getElementById('fin-installments').value) || 1));
                 if (n === 1) {
-                    appData.financeiro.transactions.push({ id: uid(), type, status, desc, amount, category, date, accId, toAccId, attachments: newAtts });
+                    appData.financeiro.transactions.push(Object.assign({ id: uid(), type, status, desc, amount, category, date, accId, toAccId, attachments: newAtts }, habitacional ? { habitacional: true, habPerson } : {}));
                 } else {
                     const totalCents = Math.round(Number(amount) * 100);
                     const base = Math.floor(totalCents / n);
                     const group = uid();
                     for (let i = 0; i < n; i++) {
                         const cents = i === n - 1 ? totalCents - base * (n - 1) : base;
-                        appData.financeiro.transactions.push({
+                        appData.financeiro.transactions.push(Object.assign({
                             id: uid(), type, desc, category, accId, toAccId,
                             amount: (cents / 100).toFixed(2),
                             date: addMonthsToDate(date, i),
                             status: i === 0 ? status : 'pendente',
                             installment: { group, n: i + 1, total: n },
                             attachments: i === 0 ? newAtts : []
-                        });
+                        }, habitacional ? { habitacional: true, habPerson } : {}));
                     }
                 }
             }
@@ -4133,6 +4156,7 @@
                 : [id];
             appData.financeiro.transactions.filter(x => ids.includes(x.id)).forEach(x => (x.attachments || []).forEach(a => deleteStoredFile(a.id)));
             appData.financeiro.transactions = appData.financeiro.transactions.filter(x => !ids.includes(x.id));
+            appData.habitacao.casa = casaData().filter(r => !ids.includes(r.finId));
             saveAppData(); closeModal(); renderCurrentTabContent();
         }
 
@@ -4437,12 +4461,12 @@
         }
         function editHabitacaoContrib(id) {
             const c = appData.habitacao.contributions.find(x => x.id === id);
-            if (c && c.linkKey) { showToast('Esta movimentação vem de uma Transferência no Financeiro. Edite por lá.', 'warning'); return; }
+            if (c && c.linkKey) { showToast('Esta movimentação vem do Financeiro. Edite por lá (marque/desmarque “Habitacional”).', 'warning'); return; }
             openHabitacaoContribModal(id);
         }
         function deleteHabitacaoContrib(id) {
             const c = appData.habitacao.contributions.find(x => x.id === id);
-            if (c && c.linkKey) { showToast('Esta movimentação vem de uma Transferência no Financeiro. Exclua por lá.', 'warning'); return; }
+            if (c && c.linkKey) { showToast('Esta movimentação vem do Financeiro. Exclua ou desmarque “Habitacional” por lá.', 'warning'); return; }
             if (!confirm('Excluir esta movimentação?')) return;
             appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
 
@@ -6266,6 +6290,19 @@
             const H = appData.habitacao; if (!H || !appData.financeiro) return;
             const want = {};
             appData.financeiro.transactions.forEach(t => {
+                if ((t.type === 'despesa' || t.type === 'receita') && isHabId(t.accId) && !t.cardInvoice) {
+                    const pid = t.accId.slice(4);
+                    if (H.people.some(p => p.id === pid)) {
+                        want[t.id + '|acc'] = { personId: pid, type: t.status === 'pendente' ? 'pendente' : (t.type === 'receita' ? 'aporte' : 'retirada'), fin: false, amount: t.amount, date: t.date, desc: 'Financeiro: ' + (t.desc || '') };
+                        return;
+                    }
+                }
+                if (t.habitacional && t.type === 'despesa' && !t.cardInvoice) {
+                    const ok = t.habPerson && H.people.some(p => p.id === t.habPerson);
+                    const prev = !ok || t.status === 'pendente';
+                    want[t.id + '|hab'] = { personId: ok ? t.habPerson : '', type: prev ? 'pendente' : 'retirada', fin: !prev, amount: t.amount, date: t.date, desc: 'Financeiro: ' + (t.desc || '') };
+                    return;
+                }
                 if (t.type !== 'transferencia') return;
                 [['from', t.accId, 'retirada'], ['to', t.toAccId, 'aporte']].forEach(([side, id, ty]) => {
                     if (!isHabId(id)) return;
@@ -6474,22 +6511,35 @@
             const isT = t.type === 'transferencia';
             const opt = v => finAccOpts(v, isT);
             return `<div class="grid grid-cols-2 gap-4">
-                <div><label class="${LBL}" id="fin-acc-lbl">${isT ? 'Conta de origem' : 'Cartão / Conta'}</label><select id="fin-acc" class="${INP}">${opt(t.accId || '')}</select></div>
+                <div><label class="${LBL}" id="fin-acc-lbl">${isT ? 'Conta de origem' : 'Cartão / Conta'}</label><select id="fin-acc" onchange="finHabAccUi()" class="${INP}">${opt(t.accId || '')}</select></div>
                 <div id="fin-to-wrap" class="${isT ? '' : 'hidden'}"><label class="${LBL}">Conta de destino</label><select id="fin-to" class="${INP}">${opt(t.toAccId || '')}</select></div>
-            </div>${cs.length ? '' : '<p class="text-[11px] text-amber-600 -mt-2">Nenhum cartão cadastrado ainda. Cadastre no menu "Cartão".</p>'}`;
+            </div><p id="fin-acc-note" class="hidden text-[11px] text-amber-700 dark:text-amber-300 -mt-2"></p>${cs.length ? '' : '<p class="text-[11px] text-amber-600 -mt-2">Nenhum cartão cadastrado ainda. Cadastre no menu "Cartão".</p>'}`;
+        }
+        // conta "Habitacional X" escolhida: movimenta o saldo dessa pessoa na Habitação
+        function finHabAccUi() {
+            const ac = document.getElementById('fin-acc'), note = document.getElementById('fin-acc-note'), ty = document.getElementById('fin-type'); if (!ac || !note) return;
+            const hab = isHabId(ac.value) && ty && ty.value !== 'transferencia';
+            const cb = document.getElementById('fin-hab'), pw = document.getElementById('fin-hab-person-wrap');
+            note.classList.toggle('hidden', !hab);
+            if (hab) {
+                const p = appData.habitacao.people.find(x => x.id === ac.value.slice(4));
+                note.textContent = 'Movimenta o saldo de ' + (p ? p.name : '') + ' em Habitação (despesa = retirada, receita = aporte). Fica fora dos totais do Financeiro.';
+                if (cb) { cb.checked = true; cb.disabled = true; } if (pw) pw.classList.add('hidden');
+            } else if (cb) { cb.disabled = false; if (pw) pw.classList.toggle('hidden', !cb.checked); }
         }
         function finAccOpts(v, isT) {
             const cs = contasData();
             let h = `<option value="">— Sem cartão/conta —</option>` + cs.map(a => `<option value="${a.id}" ${v === a.id ? 'selected' : ''}>${esc(accLabel(a))}</option>`).join('');
-            if (isT) h += `<optgroup label="Habitacional (Fundo de Obra)">` + appData.habitacao.people.map(p => { const id = 'hab:' + p.id; return `<option value="${id}" ${v === id ? 'selected' : ''}>Habitacional ${esc(p.name)}</option>`; }).join('') + `</optgroup>`;
+            h += `<optgroup label="Habitacional (Fundo de Obra)">` + appData.habitacao.people.map(p => { const id = 'hab:' + p.id; return `<option value="${id}" ${v === id ? 'selected' : ''}>Habitacional ${esc(p.name)}</option>`; }).join('') + `</optgroup>`;
             return h;
         }
         function finTypeChange() {
             const ty = document.getElementById('fin-type').value;
             const sel = document.getElementById('fin-status');
             sel.innerHTML = finStatusOpts(ty, sel.value === 'pendente' ? 'pendente' : 'ok');
-            ['fin-acc', 'fin-to'].forEach(i => { const el = document.getElementById(i); let v = el.value; if (ty !== 'transferencia' && isHabId(v)) v = ''; el.innerHTML = finAccOpts(v, ty === 'transferencia'); });
+            ['fin-acc', 'fin-to'].forEach(i => { const el = document.getElementById(i); let v = el.value; if (ty !== 'transferencia' && i === 'fin-to') v = ''; el.innerHTML = finAccOpts(v, ty === 'transferencia'); });
             document.getElementById('fin-to-wrap').classList.toggle('hidden', ty !== 'transferencia');
+            const hw = document.getElementById('fin-hab-wrap'); if (hw) hw.classList.toggle('hidden', ty !== 'despesa'); finHabAccUi();
             document.getElementById('fin-acc-lbl').textContent = ty === 'transferencia' ? 'Conta de origem' : 'Cartão / Conta';
             const c = document.getElementById('fin-category');
             if (ty === 'transferencia' && !c.value.trim()) c.value = 'Transferência';
@@ -6536,7 +6586,7 @@
             </div>`;
         }
         function finSet(k, v) { finF[k] = v; renderCurrentTabContent(); }
-        function finClear() { finF = { acc: '', cat: '', type: '', min: '', max: '', q: '' }; financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); financeFilterStatus = 'todos'; renderCurrentTabContent(); }
+        function finClear() { finF = { acc: '', cat: '', type: '', min: '', max: '', q: '', hab: false }; financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); financeFilterStatus = 'todos'; renderCurrentTabContent(); }
         function finToggleFilter() { finFilterOpen = !finFilterOpen; renderCurrentTabContent(); }
         function finSortBy(k) {
             if (finSort.k === k) finSort.dir *= -1; else finSort = { k, dir: (k === 'amount' || k === 'date') ? -1 : 1 };
@@ -6561,6 +6611,7 @@
                 if (f.acc && t.accId !== f.acc && t.toAccId !== f.acc) return false;
                 if (f.cat && (t.category || '') !== f.cat) return false;
                 if (f.type && t.type !== f.type) return false;
+                if (f.hab && !(t.habitacional || isHabId(t.accId) || (t.type === 'transferencia' && isHabId(t.toAccId)))) return false;
                 const a = Number(t.amount) || 0;
                 if (f.min !== '' && a < Number(f.min)) return false;
                 if (f.max !== '' && a > Number(f.max)) return false;
@@ -6781,6 +6832,7 @@
                             ${perBarHtml('fin')}
                             <div class="flex flex-wrap items-center gap-2">
                                 <button onclick="finToggleFilter()" class="px-3 py-2 rounded-xl text-xs font-bold ${finFilterOpen || nAct ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid fa-filter mr-1"></i>Filtro${nAct ? ' (' + nAct + ')' : ''}<i class="fa-solid fa-chevron-${finFilterOpen ? 'up' : 'down'} ml-1.5 text-[9px]"></i></button>
+                                <button onclick="finSet('hab', !finF.hab)" title="${finF.hab ? 'Mostrando só movimentações Habitacional (toque para ver tudo)' : 'Ver só movimentações Habitacional'}" class="w-9 h-9 rounded-xl flex items-center justify-center ${finF.hab ? 'bg-amber-500 text-white shadow' : 'bg-slate-100 dark:bg-slate-700 text-amber-600'}"><i class="fa-solid fa-hammer"></i></button>
                                 <button onclick="openAnalise()" class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5"><i class="fa-solid fa-chart-line"></i><span>Análise</span></button>
                                 <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
                             </div>
@@ -6820,7 +6872,7 @@
                                     <td class="p-3.5"><input type="checkbox" ${finSel.has(t.id) ? 'checked' : ''} onchange="finSelToggle('${t.id}', this.checked)"></td>
                                     <td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
                                         ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
-                                        ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}
+                                        ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}${t.habitacional ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Também aparece em Habitação"><i class="fa-solid fa-hammer"></i></span>` : ''}${t.casaId ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Também aparece em Habitação › Despesas da casa"><i class="fa-solid fa-house-chimney"></i></span>` : ''}
                                         ${isT ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">transf.</span>` : ''}</td>
                                     <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>
                                     <td class="p-3.5 text-xs text-slate-500 whitespace-nowrap">${acc}</td>
@@ -7173,15 +7225,16 @@
         function habSummary() {
             const H = appData.habitacao, balances = {}, spent = {}, aportado = {};
             (H.people || []).forEach(p => { balances[p.id] = Number(p.initialBalance) || 0; });
-            let totalAportes = 0, totalRetiradas = 0, totalPrev = 0;
+            let totalAportes = 0, totalRetiradas = 0, totalPrev = 0, totalGastoFin = 0;
             H.contributions.forEach(c => {
                 const v = Number(c.amount) || 0;
                 if (c.type === 'pendente') { totalPrev += v; return; }
+                if (c.fin) { if (c.type === 'retirada') { spent[c.personId] = (spent[c.personId] || 0) + v; totalGastoFin += v; } return; }   // gasto lançado pelo Financeiro: só soma no GASTO, não mexe em saldo
                 if (!balances[c.personId]) balances[c.personId] = 0;
                 if (c.type === 'aporte') { balances[c.personId] += v; totalAportes += v; aportado[c.personId] = (aportado[c.personId] || 0) + v; }
                 else { balances[c.personId] -= v; totalRetiradas += v; spent[c.personId] = (spent[c.personId] || 0) + v; }
             });
-            return { balances, spent, aportado, totalAportes, totalRetiradas, totalPrev, saldoCaixaObra: totalAportes - totalRetiradas };
+            return { balances, spent, aportado, totalAportes, totalRetiradas, totalGasto: totalRetiradas + totalGastoFin, totalPrev, saldoCaixaObra: totalAportes - totalRetiradas };
         }
         function dashFundSet(v) { dashFund = v; localStorage.setItem('meusistema_dash_fund', v); renderCurrentTabContent(); }
         function dashFundHtml() {
@@ -7190,7 +7243,7 @@
             const H = habSummary();
             const v = dashFund ? (H.balances[dashFund] || 0) : H.saldoCaixaObra;
             const ap = dashFund ? (H.aportado[dashFund] || 0) : H.totalAportes;
-            const gs = dashFund ? (H.spent[dashFund] || 0) : H.totalRetiradas;
+            const gs = dashFund ? (H.spent[dashFund] || 0) : H.totalGasto;
             const nm = dashFund ? ((ppl.find(p => p.id === dashFund) || {}).name || '') : 'Total';
             const S = 'px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[10px]';
             return `<div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
@@ -7234,6 +7287,222 @@
 
         // ---------- Habitação: LIBERAÇÕES (só controle; não movimenta nada) ----------
         function libData() { const H = appData.habitacao; if (!Array.isArray(H.liberacoes)) H.liberacoes = []; return H.liberacoes; }
+
+        // ========== HABITAÇÃO › DESPESAS DA CASA (água, energia, telefone…) ==========
+        const CASA_CAT = 'Despesa da casa';
+        function casaData() { const H = appData.habitacao; if (!Array.isArray(H.casa)) H.casa = []; return H.casa; }
+        function isCasaCat(c) { const s = String(c || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); return s === 'despesa da casa' || s === 'despesas da casa'; }
+        function casaNextNum() { return String(casaData().reduce((m, r) => Math.max(m, parseInt(r.numero) || 0), 0) + 1); }
+        function casaTxFields(r) {
+            const pago = r.status === 'pago';
+            const amount = pago ? (Number(r.valorPago) || Number(r.valorOriginal) || 0) : (Number(r.valorOriginal) || 0);
+            const date = (pago && r.pagamento) ? r.pagamento : (r.vencimento || r.pagamento || localDateStr());
+            return { type: 'despesa', category: CASA_CAT, desc: r.desc || 'Despesa da casa', amount, date, status: pago ? 'pago' : 'pendente', accId: r.accId || '', toAccId: '' };
+        }
+        // Casa → Financeiro (chamado ao salvar pela tela da casa)
+        function casaApplyToTx(r) {
+            const T = appData.financeiro.transactions; let t = r.finId ? T.find(x => x.id === r.finId) : null;
+            const f = casaTxFields(r);
+            if (!t) { t = { id: uid(), attachments: [] }; T.push(t); r.finId = t.id; }
+            Object.assign(t, f); t.casaId = r.id; t.attachments = (r.attachments || []).slice();
+            if (r.parcGroup) t.installment = { group: r.parcGroup, n: r.parcN, total: r.parcTotal }; else delete t.installment;
+            return t;
+        }
+        // Financeiro → Casa
+        function casaFromTx(r, t) {
+            const pago = (t.status || 'pago') !== 'pendente';
+            r.desc = t.desc || r.desc || '';
+            r.status = pago ? 'pago' : 'pendente';
+            if (pago) { r.valorPago = Number(t.amount) || 0; if (!r.valorOriginal) r.valorOriginal = r.valorPago; r.pagamento = t.date; if (!r.vencimento) r.vencimento = t.date; }
+            else { r.valorOriginal = Number(t.amount) || 0; r.valorPago = ''; r.pagamento = ''; r.vencimento = t.date; }
+            r.accId = t.accId || ''; r.attachments = (t.attachments || []).slice();
+            if (!r.competencia) r.competencia = String(r.vencimento || t.date || '').slice(0, 7);
+            if (t.installment) { r.parcGroup = t.installment.group; r.parcN = t.installment.n; r.parcTotal = t.installment.total; }
+        }
+        function casaSyncAll() {
+            const H = appData.habitacao; if (!H || !appData.financeiro) return;
+            const C = casaData();
+            appData.financeiro.transactions.forEach(t => {
+                const isCasa = isCasaCat(t.category) && t.type === 'despesa' && !t.cardInvoice;
+                const rec = t.casaId ? C.find(r => r.id === t.casaId) : null;
+                if (rec && !isCasa) { H.casa = casaData().filter(r => r.id !== rec.id); delete t.casaId; return; }   // categoria mudou: sai da tela da casa
+                if (rec) {
+                    const f = casaTxFields(rec);
+                    const ids = a => (a || []).map(x => x.id).join(',');
+                    if (f.desc !== (t.desc || '') || Number(f.amount) !== Number(t.amount) || f.date !== t.date || f.status !== (t.status || 'pago') || f.accId !== (t.accId || '') || ids(rec.attachments) !== ids(t.attachments)) casaFromTx(rec, t);
+                    return;
+                }
+                if (isCasa) {
+                    const r = { id: uid(), numero: casaNextNum(), desc: t.desc || '', fatura: '', competencia: '', vencimento: '', pagamento: '', status: 'pendente', valorOriginal: 0, valorPago: '', accId: '', pagador: '', attachments: [], finId: t.id };
+                    casaFromTx(r, t); casaData().push(r); t.casaId = r.id;
+                }
+            });
+        }
+        function openCasaView() { habCasaOpen = true; renderCurrentTabContent(); window.scrollTo(0, 0); }
+        function closeCasaView() { habCasaOpen = false; renderCurrentTabContent(); }
+        function casaSet(k, v) { if (k === 'view') { casaView = v; try { localStorage.setItem('isis_casa_view', v); } catch (e) {} } else if (k === 'q') casaQ = v; else if (k === 'st') casaSt = v; else if (k === 'comp') casaComp = v; renderCurrentTabContent(); }
+        function casaClear() { casaQ = ''; casaSt = ''; casaComp = ''; renderCurrentTabContent(); }
+        function casaStatusOf(r) { if (r.status === 'pago') return 'pago'; return r.vencimento && r.vencimento < localDateStr() ? 'atrasado' : 'pendente'; }
+        function casaFiltered() {
+            const q = casaQ.trim().toLowerCase();
+            return casaData().filter(r => {
+                if (casaSt && casaStatusOf(r) !== casaSt) return false;
+                if (casaComp && r.competencia !== casaComp) return false;
+                if (q && ![r.numero, r.desc, r.fatura, r.valorOriginal, r.valorPago].join(' ').toLowerCase().includes(q)) return false;
+                return true;
+            }).sort((a, b) => String(b.vencimento || '').localeCompare(String(a.vencimento || '')) || (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0));
+        }
+        function renderHabCasa(container) {
+            const all = casaData(), list = casaFiltered();
+            const S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            const dt = x => x ? fmtBR(x) : '—', R = x => (x === '' || x == null) ? '—' : 'R$ ' + money(x);
+            const orig = list.reduce((s, r) => s + (Number(r.valorOriginal) || 0), 0), pago = list.filter(r => r.status === 'pago').reduce((s, r) => s + (Number(r.valorPago) || Number(r.valorOriginal) || 0), 0);
+            const aberto = list.filter(r => r.status !== 'pago').reduce((s, r) => s + (Number(r.valorOriginal) || 0), 0);
+            const nF = (casaQ ? 1 : 0) + (casaSt ? 1 : 0) + (casaComp ? 1 : 0);
+            const stBadge = r => { const s = casaStatusOf(r); return `<span class="px-2 py-0.5 rounded-md text-[11px] font-bold ${s === 'pago' ? 'bg-emerald-100 text-emerald-700' : s === 'atrasado' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}">${s === 'pago' ? 'Pago' : s === 'atrasado' ? 'Atrasado' : 'Pendente'}</span>`; };
+            const acc = r => { const a = contasData().find(c => c.id === r.accId); return a ? esc(accLabel(a)) : '—'; };
+            const pessoa = r => { const p = (appData.habitacao.people || []).find(x => x.id === r.pagador); return p ? esc(p.name) : '—'; };
+            const card = r => `<div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0"><p class="text-[11px] text-slate-400 font-bold">Nº ${esc(r.numero || '—')}${r.parcN ? ` · parcela ${r.parcN}/${r.parcTotal}` : ' · à vista'}</p>
+                        <p class="font-bold text-slate-800 dark:text-white truncate">${esc(r.desc || 'Sem descrição')}</p></div>
+                    <div class="flex items-center gap-1 shrink-0">${stBadge(r)}
+                        <button onclick="openCasaModal('${r.id}')" class="px-2 py-1 bg-white dark:bg-slate-700 rounded-lg text-xs" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteCasa('${r.id}')" class="px-2 py-1 bg-white dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600" title="Excluir"><i class="fa-solid fa-trash"></i></button></div>
+                </div>
+                <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+                    <p><span class="text-slate-400 uppercase text-[10px]">Competência</span><br><b>${r.competencia ? fmtYM(r.competencia) : '—'}</b></p>
+                    <p><span class="text-slate-400 uppercase text-[10px]">Fatura</span><br><b>${esc(r.fatura || '—')}</b></p>
+                    <p><span class="text-slate-400 uppercase text-[10px]">Vencimento</span><br><b>${dt(r.vencimento)}</b></p>
+                    <p><span class="text-slate-400 uppercase text-[10px]">Pagamento</span><br><b>${dt(r.pagamento)}</b></p>
+                    <p><span class="text-slate-400 uppercase text-[10px]">Valor original</span><br><b>${R(r.valorOriginal)}</b></p>
+                    <p><span class="text-slate-400 uppercase text-[10px]">Valor pago</span><br><b class="text-emerald-600">${R(r.valorPago)}</b></p>
+                    <p class="truncate"><span class="text-slate-400 uppercase text-[10px]">Conta</span><br><b>${acc(r)}</b></p>
+                    <p class="truncate"><span class="text-slate-400 uppercase text-[10px]">Pagador</span><br><b>${pessoa(r)}</b></p>
+                </div>
+                ${(r.attachments || []).length ? `<div class="mt-2 flex flex-wrap gap-1.5">${r.attachments.map(a => `<button onclick="openStoredFile('${a.id}')" class="px-2 py-1 rounded-lg bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 text-[11px] font-bold max-w-[180px] truncate"><i class="fa-solid ${fileIcon(a)} mr-1"></i>${esc(a.name)}</button>`).join('')}</div>` : ''}
+            </div>`;
+            const att = r => (r.attachments || []).map(a => `<button onclick="openStoredFile('${a.id}')" title="${esc(a.name)}" class="text-teal-600 hover:text-teal-800"><i class="fa-solid ${fileIcon(a)}"></i></button>`).join(' ') || '—';
+            const rowsHtml = `<div class="overflow-x-auto"><table class="w-full text-left text-sm whitespace-nowrap">
+                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
+                    <th class="p-3 rounded-l-xl">Nº</th><th class="p-3">Descrição</th><th class="p-3">Fatura</th><th class="p-3">Compet.</th><th class="p-3">Vencimento</th><th class="p-3">Pagamento</th><th class="p-3">Status</th>
+                    <th class="p-3 text-right">Original</th><th class="p-3 text-right">Pago</th><th class="p-3">Parcela</th><th class="p-3">Conta</th><th class="p-3">Pagador</th><th class="p-3">Anexos</th><th class="p-3 rounded-r-xl text-right">Ações</th></tr></thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">${list.map(r => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                    <td class="p-3 text-slate-400 font-bold">${esc(r.numero || '—')}</td><td class="p-3 font-bold text-slate-800 dark:text-white">${esc(r.desc || 'Sem descrição')}</td><td class="p-3">${esc(r.fatura || '—')}</td>
+                    <td class="p-3">${r.competencia ? r.competencia.slice(5) + '/' + r.competencia.slice(0, 4) : '—'}</td><td class="p-3">${dt(r.vencimento)}</td><td class="p-3">${dt(r.pagamento)}</td><td class="p-3">${stBadge(r)}</td>
+                    <td class="p-3 text-right font-semibold">${R(r.valorOriginal)}</td><td class="p-3 text-right font-bold text-emerald-600">${R(r.valorPago)}</td>
+                    <td class="p-3">${r.parcN ? r.parcN + '/' + r.parcTotal : 'À vista'}</td><td class="p-3">${acc(r)}</td><td class="p-3">${pessoa(r)}</td><td class="p-3">${att(r)}</td>
+                    <td class="p-3 text-right"><button onclick="openCasaModal('${r.id}')" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs" title="Editar"><i class="fa-solid fa-pen"></i></button> <button onclick="deleteCasa('${r.id}')" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600" title="Excluir"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('')}</tbody>
+                <tfoot><tr class="font-bold text-sm"><td class="p-3" colspan="7">Total (${list.length})</td><td class="p-3 text-right">R$ ${money(orig)}</td><td class="p-3 text-right text-emerald-600">R$ ${money(pago)}</td><td colspan="5"></td></tr></tfoot></table></div>`;
+            const vb = (k, l, ic) => `<button onclick="casaSet('view','${k}')" class="px-3 py-1.5 text-xs font-bold ${casaView === k ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${ic} mr-1"></i>${l}</button>`;
+            container.innerHTML = `
+                <div class="space-y-6 max-w-7xl mx-auto">
+                    <div class="bg-gradient-to-r from-amber-900 via-amber-800 to-teal-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div>
+                            <button onclick="closeCasaView()" class="text-amber-200 hover:text-white text-xs font-semibold mb-2 flex items-center space-x-1"><i class="fa-solid fa-arrow-left"></i><span>Voltar para Habitação</span></button>
+                            <h2 class="text-2xl sm:text-3xl font-bold"><i class="fa-solid fa-house-chimney mr-2"></i> Despesas da Casa</h2>
+                            <p class="text-amber-100 mt-1 text-sm">Contas mensais (água, energia, telefone…). Tudo que é lançado aqui vai também para o Financeiro, e o que entra no Financeiro com a categoria "Despesa da casa" aparece aqui.</p>
+                        </div>
+                        <button onclick="openCasaModal()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm"><i class="fa-solid fa-plus"></i><span>NOVA DESPESA</span></button>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-100 dark:border-slate-700 space-y-4">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <input type="text" placeholder="Pesquisar (nº, descrição, fatura, valor)..." value="${esc(casaQ)}" onchange="casaSet('q',this.value)" class="${S} w-full sm:w-72">
+                            <select onchange="casaSet('st',this.value)" class="${S}"><option value="">Todos os status</option><option value="pendente" ${casaSt === 'pendente' ? 'selected' : ''}>Pendentes</option><option value="atrasado" ${casaSt === 'atrasado' ? 'selected' : ''}>Atrasadas</option><option value="pago" ${casaSt === 'pago' ? 'selected' : ''}>Pagas</option></select>
+                            <label class="flex items-center gap-1.5 text-xs text-slate-500">Competência <input type="month" value="${casaComp}" onchange="casaSet('comp',this.value)" class="${S}"></label>
+                            ${nF ? `<button onclick="casaClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Limpar filtros</button>` : ''}
+                        </div>
+                        <div class="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">${vb('linhas', 'Linhas', 'fa-list')}${vb('cards', 'Cartões', 'fa-table-cells-large')}</div>
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            <div class="rounded-xl bg-slate-50 dark:bg-slate-900 p-2"><p class="text-[10px] uppercase text-slate-400 font-bold">Original</p><p class="text-sm font-bold truncate">R$ ${money(orig)}</p></div>
+                            <div class="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-2"><p class="text-[10px] uppercase text-slate-400 font-bold">Pago</p><p class="text-sm font-bold text-emerald-600 truncate">R$ ${money(pago)}</p></div>
+                            <div class="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-2"><p class="text-[10px] uppercase text-slate-400 font-bold">Em aberto</p><p class="text-sm font-bold text-amber-600 truncate">R$ ${money(aberto)}</p></div>
+                        </div>
+                        ${list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-house-chimney text-4xl mb-2"></i><p class="text-sm">${all.length ? 'Nenhuma despesa para este filtro.' : 'Nenhuma despesa cadastrada. Toque em NOVA DESPESA.'}</p></div>` : casaView === 'linhas' ? rowsHtml : `<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">${list.map(card).join('')}</div>`}
+                    </div>
+                </div>`;
+        }
+        function casaParcToggle() {
+            const p = document.getElementById('casa-parc').value === 'parcelado';
+            document.getElementById('casa-nparc-wrap').classList.toggle('hidden', !p);
+        }
+        function openCasaModal(id = null) {
+            const cur = id ? casaData().find(x => x.id === id) : null;
+            const r = cur || { numero: casaNextNum(), desc: '', fatura: '', competencia: localDateStr().slice(0, 7), vencimento: localDateStr(), pagamento: '', status: 'pendente', valorOriginal: '', valorPago: '', accId: '', pagador: '', attachments: [] };
+            const atts = r.attachments || [];
+            showModal(id ? 'Editar despesa da casa' : 'Nova despesa da casa', `
+                <form onsubmit="saveCasa(event, '${id || ''}')" class="space-y-3">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div><label class="${LBL}">Número</label><input id="casa-num" value="${esc(r.numero)}" class="${INP}"></div>
+                        <div class="col-span-2"><label class="${LBL}">Descrição</label><input id="casa-desc" value="${esc(r.desc)}" placeholder="Água, Energia, Telefone…" required class="${INP}"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="${LBL}">Fatura</label><input id="casa-fatura" value="${esc(r.fatura)}" placeholder="Nº / referência" class="${INP}"></div>
+                        <div><label class="${LBL}">Competência</label><input type="month" id="casa-comp" value="${r.competencia || ''}" class="${INP}"></div>
+                        <div><label class="${LBL}">Vencimento</label><input type="date" id="casa-venc" value="${r.vencimento || ''}" class="${INP}"></div>
+                        <div><label class="${LBL}">Pagamento</label><input type="date" id="casa-pgto" value="${r.pagamento || ''}" class="${INP}"></div>
+                        <div><label class="${LBL}">Status</label><select id="casa-status" class="${INP}"><option value="pendente" ${r.status !== 'pago' ? 'selected' : ''}>Pendente</option><option value="pago" ${r.status === 'pago' ? 'selected' : ''}>Pago</option></select></div>
+                        <div><label class="${LBL}">Pagador</label><select id="casa-pagador" class="${INP}"><option value="">—</option>${(appData.habitacao.people || []).map(p => `<option value="${p.id}" ${r.pagador === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+                        <div><label class="${LBL}">Valor original (R$)</label><input type="number" step="0.01" min="0" inputmode="decimal" id="casa-vorig" value="${r.valorOriginal}" class="${INP}"></div>
+                        <div><label class="${LBL}">Valor pago (R$)</label><input type="number" step="0.01" min="0" inputmode="decimal" id="casa-vpago" value="${r.valorPago}" class="${INP}"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="${LBL}">À vista ou parcelado</label>
+                            ${r.parcN ? `<div class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-sm text-slate-500">Parcela ${r.parcN} de ${r.parcTotal}</div>` :
+                              id ? `<div class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-sm text-slate-500">À vista</div>` :
+                              `<select id="casa-parc" onchange="casaParcToggle()" class="${INP}"><option value="avista">À vista</option><option value="parcelado">Parcelado</option></select>`}</div>
+                        <div id="casa-nparc-wrap" class="hidden"><label class="${LBL}">Nº de parcelas</label><input type="number" id="casa-nparc" min="2" max="60" value="2" class="${INP}"></div>
+                    </div>
+                    <div><label class="${LBL}">Conta de onde saiu o valor</label><select id="casa-acc" class="${INP}">${finAccOpts(r.accId, false)}</select></div>
+                    <div><label class="${LBL}">Anexos</label><input type="file" id="casa-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
+                        ${atts.length ? `<div class="mt-2 space-y-1">${atts.map(a => `<label class="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-700/50 rounded-lg px-3 py-1.5"><span class="truncate max-w-[220px]"><i class="fa-solid ${fileIcon(a)} mr-1"></i>${esc(a.name)}</span><span class="text-rose-600 flex items-center gap-1"><input type="checkbox" class="casa-rm" value="${a.id}"> remover</span></label>`).join('')}</div>` : ''}</div>
+                    <p class="text-[11px] text-slate-400"><i class="fa-solid fa-link mr-1"></i>Este lançamento também aparece no Financeiro, na categoria “${CASA_CAT}”.</p>
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
+                </form>`);
+        }
+        async function saveCasa(e, id) {
+            e.preventDefault();
+            const g = k => document.getElementById(k).value;
+            const newAtts = await storeFiles(document.getElementById('casa-files').files);
+            let status = g('casa-status'), vo = g('casa-vorig'), vp = g('casa-vpago'), pg = g('casa-pgto');
+            if (status === 'pago') { if (vp === '' && vo !== '') vp = vo; if (vo === '' && vp !== '') vo = vp; if (!pg) pg = localDateStr(); }
+            const base = { numero: g('casa-num'), desc: g('casa-desc'), fatura: g('casa-fatura'), competencia: g('casa-comp'), vencimento: g('casa-venc'), accId: g('casa-acc'), pagador: g('casa-pagador') };
+            if (id) {
+                const r = casaData().find(x => x.id === id); if (!r) return;
+                const rm = Array.from(document.querySelectorAll('.casa-rm:checked')).map(c => c.value);
+                rm.forEach(x => deleteStoredFile(x));
+                Object.assign(r, base, { status, pagamento: status === 'pago' ? pg : g('casa-pgto'), valorOriginal: vo === '' ? '' : Number(vo), valorPago: vp === '' ? '' : Number(vp) });
+                r.attachments = (r.attachments || []).filter(a => !rm.includes(a.id)).concat(newAtts);
+                casaApplyToTx(r);
+            } else {
+                const parcelado = document.getElementById('casa-parc') && g('casa-parc') === 'parcelado';
+                const n = parcelado ? Math.max(2, Math.min(60, parseInt(g('casa-nparc')) || 2)) : 1;
+                if (n === 1) {
+                    const r = Object.assign({ id: uid() }, base, { status, pagamento: pg, valorOriginal: vo === '' ? '' : Number(vo), valorPago: vp === '' ? '' : Number(vp), attachments: newAtts });
+                    casaData().push(r); casaApplyToTx(r);
+                } else {
+                    const total = Math.round((Number(vo) || 0) * 100), baseC = Math.floor(total / n), group = uid(), num0 = parseInt(base.numero) || parseInt(casaNextNum());
+                    for (let i = 0; i < n; i++) {
+                        const cents = i === n - 1 ? total - baseC * (n - 1) : baseC;
+                        const r = Object.assign({ id: uid() }, base, {
+                            numero: String(num0 + i), competencia: base.competencia ? ymAdd(base.competencia, i) : '', vencimento: base.vencimento ? addMonthsToDate(base.vencimento, i) : '',
+                            status: i === 0 ? status : 'pendente', pagamento: i === 0 ? pg : '', valorOriginal: cents / 100, valorPago: i === 0 && vp !== '' ? Number(vp) : '',
+                            parcGroup: group, parcN: i + 1, parcTotal: n, attachments: i === 0 ? newAtts : [] });
+                        casaData().push(r); casaApplyToTx(r);
+                    }
+                }
+            }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Salvo! Também lançado no Financeiro.', 'success');
+        }
+        function deleteCasa(id) {
+            const r = casaData().find(x => x.id === id); if (!r) return;
+            if (!confirm('Excluir esta despesa? Ela também será removida do Financeiro.')) return;
+            (r.attachments || []).forEach(a => deleteStoredFile(a.id));
+            appData.financeiro.transactions = appData.financeiro.transactions.filter(t => t.id !== r.finId);
+            appData.habitacao.casa = casaData().filter(x => x.id !== id);
+            saveAppData(); renderCurrentTabContent();
+        }
+
         function openLibView() { habLibOpen = true; renderCurrentTabContent(); window.scrollTo(0, 0); }
         function closeLibView() { habLibOpen = false; renderCurrentTabContent(); }
         function libSet(k, v) { if (k === 'view') libView = v; else if (k === 'q') libQ = v; else if (k === 'via') libVia = v; else if (k === 'from') libFrom = v; else if (k === 'to') libTo = v; renderCurrentTabContent(); }
