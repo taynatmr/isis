@@ -343,7 +343,7 @@
         let lembreteFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
         let hobbyFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
         let financeFilterDate = localDateStr().slice(0, 7); // padrão: mês atual; '' = todos os meses
-        let obraFilterStatus = 'todos';
+        let obraFilterStatus = 'todos', obraHidePend = false, obraHideOther = false;
         let obraSortOrder = 'date-desc';
         let budgetFilterStatus = 'todos';
         let finFilterOpen = false, finSort = { k: 'date', dir: 1 };
@@ -373,7 +373,7 @@
         let dashHide = localStorage.getItem('meusistema_hide') === '1';
         let dashFund = localStorage.getItem('meusistema_dash_fund') || '';
         let dashCardAcc = localStorage.getItem('meusistema_dash_card') || '';
-        let habCasaOpen = false, casaView = (() => { try { return localStorage.getItem('isis_casa_view') === 'cards' ? 'cards' : 'linhas'; } catch (e) { return 'linhas'; } })(), casaQ = '', casaSt = '', casaComp = '', habLibOpen = false, libView = 'cards', libQ = '', libVia = '', libFrom = '', libTo = '', careMetaView = 'cards', saudeCareOpen = false, careTab = 'rotinas', careDate = localDateStr(), colorsOpen = false;
+        let habCasaOpen = false, habEvoOpen = false, casaView = (() => { try { return localStorage.getItem('isis_casa_view') === 'cards' ? 'cards' : 'linhas'; } catch (e) { return 'linhas'; } })(), casaQ = '', casaSt = '', casaComp = '', habLibOpen = false, libView = 'cards', libQ = '', libVia = '', libFrom = '', libTo = '', careMetaView = 'cards', saudeCareOpen = false, careTab = 'rotinas', careDate = localDateStr(), colorsOpen = false;
         let recOpen = false, recViewId = null, recQuery = '', recSel = new Set();
         let finSel = new Set();
         let dashCardMonth = 'auto'; // fatura do cartão na tela inicial: 'auto' = fatura em aberto mais próxima; 'AAAA-MM' = mês; '' = total
@@ -509,6 +509,7 @@
             ((appData.saude && appData.saude.exams) || []).forEach(x => (x.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
             vacData().forEach(v => (v.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
             recData().forEach(r => (r.attachments || []).forEach(a => { if (a.id === id) name = a.name; }));
+            evoData().forEach(g => (g.files || []).forEach(a => { if (a.id === id) name = a.name; }));
             docsData().files.forEach(a => { if (a.id === id) name = a.name; });
             docsData().folders.forEach(fo => (fo.files || []).forEach(a => { if (a.id === id) name = a.name; }));
             downloadStoredFile(id, name);
@@ -928,7 +929,7 @@
             if (tabId === 'lembretes') { agTab = 'lembretes'; tabId = 'agenda'; }
             else if (tabId === 'agenda' && prevTab !== 'agenda') agTab = 'compromissos';
             currentActiveTab = tabId;
-            if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; habCasaOpen = false; }
+            if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; habCasaOpen = false; habEvoOpen = false; }
             if (tabId === 'financeiro') { financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); } // sempre abre no mês atual cheio
             if (tabId !== 'saude') { saudeDiagOpen = false; saudeVacOpen = false; saudeCareOpen = false; saudeGymOpen = false; }
             if (tabId !== 'hobbies') { recOpen = false; recViewId = null; }
@@ -1200,7 +1201,7 @@
                                 </button>
 <button onclick="openGym()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
                                     <i class="fa-solid fa-dumbbell"></i>
-                                    <span>Academia</span>
+                                    <span>Exercícios</span>
                                 </button>
 <button onclick="openCare()" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2">
                                     <i class="fa-solid fa-spa"></i>
@@ -1224,12 +1225,19 @@
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 ${appData.saude.meds.map(med => {
                                     const taken = isMedTaken(med.id, medSelectedDate);
+                                    const mi = medInfo(med, medSelectedDate);
                                     return `
-                                    <div class="p-4 rounded-2xl ${taken ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'} border">
+                                    <div class="p-4 rounded-2xl ${mi.expired ? 'opacity-60 ' : ''}${taken ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'} border">
                                         <div class="flex justify-between items-start">
                                             <div>
-                                                <h4 class="font-bold text-slate-800 dark:text-white text-sm">${esc(med.name)}</h4>
-                                                <p class="text-xs text-slate-500 mt-0.5"><i class="fa-regular fa-clock mr-1"></i> ${esc(med.time)}</p>
+                                                <h4 class="font-bold text-slate-800 dark:text-white text-sm">${esc(med.name)}${mi.dose ? ' <span class="text-teal-600">' + esc(mi.dose) + '</span>' : ''}</h4>
+                                                <p class="text-xs text-slate-500 mt-0.5"><i class="fa-regular fa-clock mr-1"></i> ${esc(med.time)}${mi.freq ? ' · ' + esc(mi.freq) : ''}</p>
+                                                <div class="mt-1 flex flex-wrap gap-1 text-[10px] font-bold">
+                                                    <span class="px-1.5 py-0.5 rounded-md ${med.tipo === 'controlado' ? 'bg-rose-100 text-rose-700' : med.tipo === 'periodo' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}">${MED_TIPOS[med.tipo] || MED_TIPOS.continuo}</span>
+                                                    <span class="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-500">${med.ate ? 'até ' + fmtBR(med.ate) : 'sem data definida'}</span>
+                                                    ${mi.expired ? '<span class="px-1.5 py-0.5 rounded-md bg-slate-300 text-slate-700">encerrado</span>' : ''}
+                                                </div>
+                                                ${mi.next ? `<p class="text-[10px] text-rose-600 mt-1"><i class="fa-solid fa-arrow-trend-up mr-1"></i>Dose muda para <b>${esc(mi.next.dose)}</b> em ${fmtBR(mi.next.date)}</p>` : ''}
                                             </div>
                                             <div class="flex items-center space-x-1">
                                                 <button onclick="editMed('${med.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
@@ -2213,6 +2221,35 @@
         }
 
         // --- SAÚDE: REMÉDIOS TOMADOS ---
+        const MED_TIPOS = { continuo: 'Contínuo', controlado: 'Controlado', periodo: 'Período' };
+        const MED_UN = { horas: 'horas', dias: 'dias', meses: 'meses' };
+        function medAlts(med) { return (med.alteracoes || []).filter(a => a.date && a.dose).slice().sort((a, b) => a.date.localeCompare(b.date)); }
+        function medInfo(med, date) {
+            let dose = med.dose || '', next = null;
+            medAlts(med).forEach(a => { if (a.date <= date) dose = a.dose; else if (!next) next = a; });
+            const q = Number(med.qtd) || 0, n = Number(med.cadN) || 0;
+            let freq = '';
+            if (q || n) freq = (q ? 'Tomar ' + q : 'Tomar') + (n ? ' a cada ' + n + ' ' + (MED_UN[med.cadUn] || 'horas') : ' por dia');
+            const expired = !!(med.ate && med.ate < date);
+            const started = !med.inicio || med.inicio <= date;
+            return { dose, next, freq, expired, started };
+        }
+        function medActiveToday(m) { const i = medInfo(m, localDateStr()); return !i.expired && i.started; }
+        function medAltRow(a = {}) {
+            return `<div class="ma-row grid grid-cols-12 gap-1.5 items-center">
+                <input type="date" class="ma-d ${INP} col-span-6 !px-1.5 !text-xs" value="${esc(a.date || '')}">
+                <input class="ma-g ${INP} col-span-4 !px-2" placeholder="Ex.: 75mg" value="${esc(a.dose || '')}">
+                <button type="button" onclick="this.closest('.ma-row').remove()" class="col-span-2 text-rose-500 text-sm"><i class="fa-solid fa-trash"></i></button></div>`;
+        }
+        function medAddAlt() { document.getElementById('med-alts').insertAdjacentHTML('beforeend', medAltRow({ date: localDateStr() })); }
+        function medToggleUI() {
+            const t = document.getElementById('med-tipo').value;
+            document.getElementById('med-alt-box').classList.toggle('hidden', t !== 'controlado');
+            const nd = document.getElementById('med-nodate');
+            if (t === 'periodo' && nd.checked && !document.getElementById('med-ate').value) { nd.checked = false; }
+            document.getElementById('med-ate').disabled = nd.checked;
+            if (nd.checked) document.getElementById('med-ate').value = '';
+        }
         function isMedTaken(medId, date) { return (appData.saude.medLog[date] || []).includes(medId); }
         function takenMedsOn(date) {
             const ids = appData.saude.medLog[date] || [];
@@ -2673,6 +2710,7 @@
                                     </div>
                                 </button>
                                 <div class="px-5 pb-4 pt-0 flex justify-end gap-1 text-xs">
+                                    <button onclick="openRecCustos('${x.id}')" class="px-2.5 py-1.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg font-bold" title="Custos"><i class="fa-solid fa-coins mr-1"></i>CUSTOS</button>
                                     <button onclick="recDownload('${x.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg" title="Baixar"><i class="fa-solid fa-download"></i></button>
                                     <button onclick="openRecModal('${x.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg" title="Editar"><i class="fa-solid fa-pen"></i></button>
                                     <button onclick="deleteRec('${x.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg hover:text-rose-600" title="Excluir"><i class="fa-solid fa-trash"></i></button>
@@ -2694,6 +2732,7 @@
                         <div class="flex flex-wrap justify-between items-start gap-3 mb-4">
                             <button onclick="recBack()" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> Receitas</button>
                             <div class="flex gap-2 text-xs">
+                                <button onclick="openRecCustos('${r.id}')" class="px-3 py-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 font-bold"><i class="fa-solid fa-coins mr-1"></i>CUSTOS</button>
                                 <button onclick="recDownload('${r.id}')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold"><i class="fa-solid fa-download mr-1"></i>Baixar</button>
                                 <button onclick="openRecModal('${r.id}')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
                                 <button onclick="deleteRec('${r.id}')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold hover:text-rose-600"><i class="fa-solid fa-trash mr-1"></i>Excluir</button>
@@ -2706,6 +2745,7 @@
                             ${Number(r.servings) > 0 ? `<span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="fa-solid fa-user-group mr-1"></i>Serve ${esc(r.servings)} pessoa${Number(r.servings) === 1 ? '' : 's'}</span>` : ''}
                             ${r.prep ? `<span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="fa-regular fa-clock mr-1"></i>Preparo: ${esc(r.prep)}</span>` : ''}
                             ${Number(r.rating) > 0 ? `<span class="flex gap-0.5 text-sm">${starsHtml(r.rating)}</span>` : ''}
+                            ${(r.custos || []).length ? `<button onclick="openRecCustos('${r.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700">Custo total R$ ${recMoney(recCustoTotal(r))}</button>` : ''}
                         </div>
                         ${imgs.length ? `<div class="flex flex-wrap gap-3 mt-5">${imgs.map(a => `<img data-att="${a.id}" alt="${esc(a.name)}" onclick="openStoredFile('${a.id}')" class="h-48 max-w-full rounded-2xl object-cover bg-slate-200 dark:bg-slate-600 cursor-pointer">`).join('')}</div>` : ''}
                         <div class="grid grid-cols-1 md:grid-cols-5 gap-8 mt-6">
@@ -2803,8 +2843,111 @@
             saveAppData(); renderCurrentTabContent(); showToast('Receita excluída.', 'info');
         }
 
+
+        // --- CUSTOS da receita (orçamento por ingrediente) ---
+        function recNum(s) {
+            s = String(s == null ? '' : s).trim().replace(/[^\d.,-]/g, '');
+            if (!s) return 0;
+            if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+            const n = parseFloat(s); return isFinite(n) ? n : 0;
+        }
+        function recMoney(n) { return (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+        function recUnitMoney(n) { n = Number(n) || 0; return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: n < 0.1 ? 4 : 2 }); }
+        function recQty(n) { return (Number(n) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3, useGrouping: false }); }
+        function recCustoCalc(c) {
+            const qo = recNum(c.qtdOrig), po = recNum(c.precoOrig), qu = recNum(c.qtdUsada);
+            const unit = qo > 0 ? po / qo : 0;
+            return { unit, custo: unit * qu };
+        }
+        function recCustoTotal(r) { return (r.custos || []).reduce((s, c) => s + recCustoCalc(c).custo, 0); }
+        const REC_MEDIDAS = ['unidade', 'grama', 'quilo', 'litro', 'ml', 'xícara', 'colher de sopa', 'colher de chá', 'pacote', 'caixa', 'lata', 'dúzia'];
+        function recCustoRow(c) {
+            c = c || {};
+            const s = 'w-full px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            const l = 'block text-[10px] font-bold text-slate-400 uppercase';
+            return `<div class="rc-row p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 space-y-2">
+                <div class="grid grid-cols-12 gap-2 items-end">
+                    <div class="col-span-7"><span class="${l}">Item</span><input class="rc-item ${s}" value="${esc(c.item || '')}" placeholder="Ex.: Ovo"></div>
+                    <div class="col-span-4"><span class="${l}">Medida</span><input class="rc-med ${s}" list="rc-medidas" value="${esc(c.medida || '')}" placeholder="unidade"></div>
+                    <button type="button" onclick="this.closest('.rc-row').remove();recCustoLive()" class="col-span-1 text-slate-400 hover:text-rose-600 pb-2"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div><span class="${l}">Qtd original</span><input class="rc-qo ${s}" inputmode="decimal" oninput="recCustoLive()" value="${esc(c.qtdOrig || '')}" placeholder="12"></div>
+                    <div><span class="${l}">Preço original</span><input class="rc-po ${s}" inputmode="decimal" oninput="recCustoLive()" value="${esc(c.precoOrig || '')}" placeholder="12,00"></div>
+                    <div><span class="${l}">Qtd usada</span><input class="rc-qu ${s}" inputmode="decimal" oninput="recCustoLive()" value="${esc(c.qtdUsada || '')}" placeholder="4"></div>
+                </div>
+                <div class="flex justify-between text-xs"><span class="text-slate-500">Preço por <span class="rc-un-l">${esc(c.medida || 'item')}</span>: <b class="rc-unit text-slate-700 dark:text-slate-200">R$ 0,00</b></span><span class="text-slate-500">Custo: <b class="rc-custo text-emerald-600">R$ 0,00</b></span></div>
+            </div>`;
+        }
+        function recCustoRead() {
+            return Array.from(document.querySelectorAll('#rc-rows .rc-row')).map(r => ({
+                id: uid(), item: r.querySelector('.rc-item').value.trim(), medida: r.querySelector('.rc-med').value.trim(),
+                qtdOrig: r.querySelector('.rc-qo').value.trim(), precoOrig: r.querySelector('.rc-po').value.trim(), qtdUsada: r.querySelector('.rc-qu').value.trim()
+            }));
+        }
+        function recCustoLive() {
+            let tot = 0, n = 0;
+            document.querySelectorAll('#rc-rows .rc-row').forEach(r => {
+                const c = { qtdOrig: r.querySelector('.rc-qo').value, precoOrig: r.querySelector('.rc-po').value, qtdUsada: r.querySelector('.rc-qu').value };
+                const x = recCustoCalc(c); tot += x.custo; n++;
+                r.querySelector('.rc-unit').textContent = 'R$ ' + recUnitMoney(x.unit);
+                r.querySelector('.rc-custo').textContent = 'R$ ' + recMoney(x.custo);
+                r.querySelector('.rc-un-l').textContent = r.querySelector('.rc-med').value.trim() || 'item';
+            });
+            const T = document.getElementById('rc-total'); if (T) T.textContent = 'R$ ' + recMoney(tot);
+            const S = document.getElementById('rc-serv'), sv = Number(document.getElementById('rc-servings') && document.getElementById('rc-servings').value) || 0;
+            if (S) S.textContent = sv > 0 ? 'Por porção (' + sv + '): R$ ' + recMoney(tot / sv) : '';
+        }
+        function recCustoAdd() { document.getElementById('rc-rows').insertAdjacentHTML('beforeend', recCustoRow({})); recCustoLive(); }
+        function recCustoFromIngs(id) {
+            const r = recData().find(x => x.id === id); if (!r) return;
+            const have = new Set(recCustoRead().map(c => normKey(c.item)));
+            let n = 0;
+            (r.ingredients || []).forEach(i => {
+                if (!String(i.name || '').trim() || have.has(normKey(i.name))) return;
+                document.getElementById('rc-rows').insertAdjacentHTML('beforeend', recCustoRow({ item: i.name, medida: i.unit || '', qtdUsada: i.qty || '' })); n++;
+            });
+            recCustoLive(); showToast(n ? n + ' ingrediente(s) trazido(s).' : 'Nenhum ingrediente novo para trazer.', n ? 'success' : 'warning');
+        }
+        function openRecCustos(id) {
+            const r = recData().find(x => x.id === id); if (!r) return;
+            showModal('Custos · ' + esc(r.name || 'Receita'), `
+                <div class="space-y-3">
+                    <datalist id="rc-medidas">${REC_MEDIDAS.map(u => `<option value="${esc(u)}"></option>`).join('')}</datalist>
+                    <p class="text-[11px] text-slate-400">Ex.: comprou 12 ovos por R$ 12,00 e usou 4 → custo R$ 4,00 (R$ 1,00 por unidade).</p>
+                    <div id="rc-rows" class="space-y-2">${(r.custos || []).map(recCustoRow).join('')}</div>
+                    <div class="flex flex-wrap gap-3">
+                        <button type="button" onclick="recCustoAdd()" class="text-xs font-bold text-teal-600"><i class="fa-solid fa-plus mr-1"></i>Adicionar item</button>
+                        <button type="button" onclick="recCustoFromIngs('${r.id}')" class="text-xs font-bold text-amber-600"><i class="fa-solid fa-basket-shopping mr-1"></i>Trazer ingredientes da receita</button>
+                    </div>
+                    <div class="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900">
+                        <div class="flex justify-between items-center"><span class="text-xs font-bold text-slate-500 uppercase">Custo total da receita</span><b id="rc-total" class="text-lg text-emerald-600">R$ 0,00</b></div>
+                        <input type="hidden" id="rc-servings" value="${Number(r.servings) || 0}"><p id="rc-serv" class="text-xs text-slate-500 mt-1"></p>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-1"><button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Cancelar</button>
+                    <button type="button" onclick="saveRecCustos('${r.id}')" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-teal-600 text-white shadow">Salvar</button></div>
+                </div>`);
+            const c = document.getElementById('modal-content'); c.classList.remove('max-w-lg'); c.classList.add('max-w-2xl');
+            recCustoLive();
+        }
+        function saveRecCustos(id) {
+            const r = recData().find(x => x.id === id); if (!r) return;
+            r.custos = recCustoRead().filter(c => c.item || c.precoOrig || c.qtdUsada);
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Custos salvos!', 'success');
+        }
+        function recCustoLines(r) {
+            return (r.custos || []).map(c => {
+                const x = recCustoCalc(c), m = c.medida || 'un', q = n => recQty(recNum(n)) + (m.length <= 3 ? '' : ' ') + m;
+                return `${c.item || 'Item'}: usou ${q(c.qtdUsada)} (comprou ${q(c.qtdOrig)} por R$ ${recMoney(recNum(c.precoOrig))}; R$ ${recUnitMoney(x.unit)}/${m}) = R$ ${recMoney(x.custo)}`;
+            });
+        }
+        function recCustoSummary(r) {
+            const t = recCustoTotal(r), sv = Number(r.servings) || 0;
+            return 'Custo total: R$ ' + recMoney(t) + (sv > 0 ? ' | Por porção (' + sv + '): R$ ' + recMoney(t / sv) : '');
+        }
+
         // --- baixar (arquivo de texto) ---
-        function recToText(r) {
+        function recToText(r, withCost) {
             const L = [];
             L.push((r.name || 'Receita sem nome').toUpperCase());
             if (r.type) L.push('Tipo: ' + r.type);
@@ -2816,6 +2959,7 @@
             if (ings.length) { L.push('', 'INGREDIENTES'); ings.forEach(x => L.push('- ' + x)); }
             if (r.steps) L.push('', 'MODO DE PREPARO', r.steps);
             if (r.obs) L.push('', 'OBSERVAÇÕES', r.obs);
+            if (withCost && (r.custos || []).length) { L.push('', 'ORÇAMENTO / CUSTOS'); recCustoLines(r).forEach(x => L.push('- ' + x)); L.push(recCustoSummary(r)); }
             return L.join('\n') + '\n';
         }
         function recSaveText(text, filename) {
@@ -2829,7 +2973,13 @@
         function recAskFormat(ids) {
             const n = ids.length;
             showModal(n > 1 ? `Baixar ${n} receitas` : 'Baixar receita', `
-                <p class="text-sm text-slate-500 mb-4">Escolha o formato do arquivo.</p>
+                ${ids.some(i => (recData().find(x => x.id === i) || {}).custos && recData().find(x => x.id === i).custos.length) ? `
+                <p class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">O que deve sair no arquivo?</p>
+                <div class="space-y-1.5 mb-4 text-sm">
+                    <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40"><input type="radio" name="rec-cost" value="0" checked> Só a receita</label>
+                    <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40"><input type="radio" name="rec-cost" value="1"> Receita + orçamento (custos)</label>
+                </div>` : ''}
+                <p class="text-sm text-slate-500 mb-3">Escolha o formato do arquivo.</p>
                 <div class="space-y-2">
                     <button onclick='recExport(${JSON.stringify(ids)}, "pdf")' class="w-full bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl text-sm font-bold shadow"><i class="fa-solid fa-file-pdf mr-2"></i>PDF</button>
                     <button onclick='recExport(${JSON.stringify(ids)}, "txt")' class="w-full bg-slate-100 dark:bg-slate-700 py-3 rounded-xl text-sm font-bold"><i class="fa-solid fa-file-lines mr-2"></i>Texto (.txt)</button>
@@ -2838,10 +2988,11 @@
         function recExport(ids, fmt) {
             const list = ids.map(id => recData().find(x => x.id === id)).filter(Boolean);
             if (!list.length) return;
+            const rc = document.querySelector('input[name="rec-cost"]:checked'), withCost = !!(rc && rc.value === '1');
             closeModal();
             const name = list.length === 1 ? (list[0].name || 'receita') : 'receitas (' + list.length + ')';
-            if (fmt === 'pdf') { recPdf(list, name); return; }
-            recSaveText(list.map(recToText).join('\n' + '='.repeat(40) + '\n\n'), name);
+            if (fmt === 'pdf') { recPdf(list, name, withCost); return; }
+            recSaveText(list.map(r => recToText(r, withCost)).join('\n' + '='.repeat(40) + '\n\n'), name);
         }
         function recLoadPdf() {
             return new Promise((res, rej) => {
@@ -2852,7 +3003,7 @@
                 document.head.appendChild(sc);
             });
         }
-        async function recPdf(list, filename) {
+        async function recPdf(list, filename, withCost) {
             let J;
             try { J = await recLoadPdf(); } catch (e) { showToast('Não consegui carregar o gerador de PDF. Verifique a internet e tente de novo.', 'error'); return; }
             const clean = t => String(t == null ? '' : t).replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, '-').replace(/\u2026/g, '...').replace(/\u2022/g, '-').replace(/[^\u0009\u000a\u0020-\u00ff]/g, '');
@@ -2879,6 +3030,7 @@
                 if (ings.length) { head('INGREDIENTES'); ings.forEach(x => write('- ' + x, 11, 'normal', [40, 40, 40], 0.5)); }
                 if (r.steps) { head('MODO DE PREPARO'); write(r.steps, 11, 'normal', [40, 40, 40], 1); }
                 if (r.obs) { head('OBSERVAÇÕES'); write(r.obs, 10, 'normal', [90, 90, 90], 1); }
+                if (withCost && (r.custos || []).length) { head('ORÇAMENTO / CUSTOS'); recCustoLines(r).forEach(x => write('- ' + x, 10, 'normal', [40, 40, 40], 0.5)); write(recCustoSummary(r), 11, 'bold', [46, 31, 18], 1); }
             });
             const n = doc.getNumberOfPages();
             for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('ISIS  -  página ' + i + ' de ' + n, W / 2, H - 8, { align: 'center' }); }
@@ -2980,6 +3132,7 @@
             if (habDocsOpen) { renderHabDocs(container); return; }
             if (habLibOpen) { renderHabLib(container); return; }
             if (habCasaOpen) { renderHabCasa(container); return; }
+            if (habEvoOpen) { renderHabEvo(container); return; }
             const { balances, spent, totalAportes, totalRetiradas, totalGasto, totalPrev, saldoCaixaObra } = habSummary();
 
             // Filtro e Ordenação de Movimentações
@@ -2987,6 +3140,8 @@
             if (obraFilterStatus !== 'todos') {
                 contributionsList = contributionsList.filter(c => c.type === obraFilterStatus);
             }
+            if (obraHidePend) contributionsList = contributionsList.filter(c => c.type !== 'pendente');
+            if (obraHideOther) contributionsList = contributionsList.filter(c => c.type === 'pendente');
             contributionsList = sortContribs(contributionsList);
 
             // Lista de Orçamentos
@@ -3015,6 +3170,10 @@
                             <button onclick="openCasaView()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-house-chimney"></i>
                                 <span>DESPESAS DA CASA</span>
+                            </button>
+                            <button onclick="openEvoView()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
+                                <i class="fa-solid fa-camera-retro"></i>
+                                <span>EVOLUÇÃO</span>
                             </button>
                             <button onclick="openDocsView()" class="bg-white hover:bg-amber-50 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-folder-open"></i>
@@ -3071,6 +3230,8 @@
                                     <i class="fa-solid fa-plus"></i>
                                     <span>Inserir Valor</span>
                                 </button>
+                                <button onclick="obraHidePend=!obraHidePend;if(obraHidePend)obraHideOther=false;renderCurrentTabContent()" title="Ocultar as movimentações pendentes (previsão)" class="px-3 py-1.5 rounded-xl text-xs font-bold border ${obraHidePend ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${obraHidePend ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${obraHidePend ? 'Pendentes ocultos' : 'Ocultar pendentes'}</button>
+                                <button onclick="obraHideOther=!obraHideOther;if(obraHideOther)obraHidePend=false;renderCurrentTabContent()" title="Ocultar aportes e retiradas (mostrar só pendentes)" class="px-3 py-1.5 rounded-xl text-xs font-bold border ${obraHideOther ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${obraHideOther ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${obraHideOther ? 'Demais ocultos' : 'Ocultar demais'}</button>
                                 <select onchange="setObraFilter(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
                                     <option value="todos" ${obraFilterStatus === 'todos' ? 'selected' : ''}>Todos os Tipos</option>
                                     <option value="aporte" ${obraFilterStatus === 'aporte' ? 'selected' : ''}>Aportes</option>
@@ -3942,17 +4103,32 @@
 
         // Modals genéricos
         function openMedModal(id = null) {
-            let med = { name: '', time: '08:00' };
-            if (id) med = appData.saude.meds.find(m => m.id === id) || med;
+            let med = { name: '', time: '08:00', dose: '', tipo: 'continuo', ate: '', qtd: 1, cadN: 24, cadUn: 'horas', inicio: localDateStr(), alteracoes: [] };
+            if (id) med = Object.assign(med, appData.saude.meds.find(m => m.id === id) || {});
+            const nodate = !med.ate;
             showModal(id ? 'Editar Medicamento' : 'Inserir Medicamento', `
-                <form onsubmit="saveMed(event, '${id || ''}')" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Nome</label>
-                        <input type="text" id="med-name" value="${med.name}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                <form onsubmit="saveMed(event, '${id || ''}')" class="space-y-3">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="col-span-2"><label class="${LBL}">Nome</label><input type="text" id="med-name" value="${esc(med.name)}" required class="${INP}" placeholder="Ex.: Sertralina"></div>
+                        <div><label class="${LBL}">Dose</label><input type="text" id="med-dose" value="${esc(med.dose || '')}" class="${INP}" placeholder="50mg"></div>
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Horário</label>
-                        <input type="time" id="med-time" value="${med.time}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="${LBL}">Tipo</label><select id="med-tipo" onchange="medToggleUI()" class="${INP}">${Object.entries(MED_TIPOS).map(([k, v]) => `<option value="${k}" ${med.tipo === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+                        <div><label class="${LBL}">Horário</label><input type="time" id="med-time" value="${esc(med.time)}" required class="${INP}"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="${LBL}">Início</label><input type="date" id="med-inicio" value="${esc(med.inicio || '')}" class="${INP}"></div>
+                        <div><label class="${LBL}">Tomar até</label><input type="date" id="med-ate" value="${esc(med.ate || '')}" ${nodate ? 'disabled' : ''} class="${INP}">
+                            <label class="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><input type="checkbox" id="med-nodate" ${nodate ? 'checked' : ''} onchange="medToggleUI()"> Sem data definida</label></div>
+                    </div>
+                    <div><label class="${LBL}">Frequência</label>
+                        <div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 flex-wrap">Tomar <input id="med-qtd" inputmode="decimal" value="${esc(med.qtd || '')}" class="${INP} !w-16 text-center"> por vez, a cada
+                            <input id="med-cadn" inputmode="numeric" value="${esc(med.cadN || '')}" class="${INP} !w-16 text-center">
+                            <select id="med-cadun" class="${INP} !w-auto">${Object.entries(MED_UN).map(([k, v]) => `<option value="${k}" ${med.cadUn === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>
+                    <div id="med-alt-box" class="${med.tipo === 'controlado' ? '' : 'hidden'} p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900">
+                        <label class="${LBL}">Alteração de dose (mg) — vale a partir da data</label>
+                        <div id="med-alts" class="space-y-1.5">${medAlts(med).map(medAltRow).join('')}</div>
+                        <button type="button" onclick="medAddAlt()" class="mt-2 text-xs font-bold text-rose-600"><i class="fa-solid fa-plus mr-1"></i>Incluir alteração de dose</button>
                     </div>
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>
@@ -3960,13 +4136,21 @@
         }
         function saveMed(e, id) {
             e.preventDefault();
-            const name = document.getElementById('med-name').value;
-            const time = document.getElementById('med-time').value;
+            const g = i => document.getElementById(i).value.trim();
+            const tipo = g('med-tipo');
+            const nodate = document.getElementById('med-nodate').checked;
+            const rec = {
+                name: g('med-name'), time: g('med-time'), dose: g('med-dose'), tipo,
+                inicio: g('med-inicio'), ate: nodate ? '' : g('med-ate'),
+                qtd: g('med-qtd').replace(',', '.'), cadN: g('med-cadn'), cadUn: g('med-cadun'),
+                alteracoes: tipo === 'controlado' ? Array.from(document.querySelectorAll('#med-alts .ma-row')).map(r => ({ id: uid(), date: r.querySelector('.ma-d').value, dose: r.querySelector('.ma-g').value.trim() })).filter(a => a.date && a.dose) : []
+            };
+            if (!nodate && !rec.ate) { showToast('Informe a data final ou marque "Sem data definida".', 'error'); return; }
             if (id) {
                 const m = appData.saude.meds.find(x => x.id === id);
-                if (m) { m.name = name; m.time = time; }
+                if (m) Object.assign(m, rec);
             } else {
-                appData.saude.meds.push({ id: Date.now().toString(), name, time });
+                appData.saude.meds.push(Object.assign({ id: Date.now().toString() }, rec));
             }
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast("Salvo!", "success");
         }
@@ -4620,12 +4804,14 @@
                     <p class="text-[11px] text-slate-400 mb-4">Em Finanças aparece apenas "Cartão de Crédito" com o valor final desta fatura.</p>
                     ${Object.keys(byCat).length ? `<div class="flex flex-wrap gap-2 mb-4">${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="px-2.5 py-1 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"><b>${esc(k)}</b> R$ ${money(v)}</span>`).join('')}</div>` : ''}
                     ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhum lançamento nesta fatura.</p></div>` : `
+                    <div id="card-sel-bar">${cardSelBar()}</div>
                     <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                            ${cardTh('Data', 'date', 'rounded-l-xl')}${cardTh('Nome', 'name')}${cardTh('Categoria', 'category')}${cardTh('Parcela', 'inst')}${cardTh('Observação', 'obs')}${cardTh('Valor', 'amount')}<th class="p-3 text-right rounded-r-xl">Ações</th>
+                            <th class="p-3 rounded-l-xl w-8"><input type="checkbox" id="card-sel-all" title="Selecionar todos os lançamentos" onchange="cardSelAll(this.checked)"></th>${cardTh('Data', 'date')}${cardTh('Nome', 'name')}${cardTh('Categoria', 'category')}${cardTh('Parcela', 'inst')}${cardTh('Observação', 'obs')}${cardTh('Valor', 'amount')}<th class="p-3 text-right rounded-r-xl">Ações</th>
                         </tr></thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         ${entries.map(e => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                            <td class="p-3"><input type="checkbox" class="card-sel" data-amt="${Number(e.amount) || 0}" onchange="cardSelUpdate()"></td>
                             <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}</td>
                             <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}</td>
                             <td class="p-3"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(e.category)}</span></td>
@@ -4637,11 +4823,25 @@
                                 <button onclick="deleteCardEntry('${e.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
                             </td></tr>`).join('')}
                         </tbody>
-                        <tfoot><tr><td colspan="5" class="p-3 text-right font-bold text-slate-500">Total da fatura</td><td class="p-3 font-extrabold text-rose-600">R$ ${money(total)}</td><td></td></tr></tfoot>
+                        <tfoot><tr><td colspan="6" class="p-3 text-right font-bold text-slate-500">Total da fatura</td><td class="p-3 font-extrabold text-rose-600">R$ ${money(total)}</td><td></td></tr></tfoot>
                     </table></div>`}
                 </div>
             </div>`;
         }
+        function cardSelBar() {
+            return `<p class="text-[11px] text-slate-400 mb-3"><i class="fa-regular fa-square-check mr-1"></i>Marque os lançamentos na lista para ver a soma.</p>`;
+        }
+        function cardSelUpdate() {
+            const boxes = Array.from(document.querySelectorAll('.card-sel')), on = boxes.filter(b => b.checked);
+            const sum = on.reduce((s, b) => s + (Number(b.dataset.amt) || 0), 0);
+            const all = document.getElementById('card-sel-all'); if (all) all.checked = boxes.length > 0 && on.length === boxes.length;
+            const bar = document.getElementById('card-sel-bar'); if (!bar) return;
+            bar.innerHTML = on.length ? `<div class="flex flex-wrap items-center gap-x-6 gap-y-1 p-3.5 mb-3 rounded-2xl bg-teal-50 dark:bg-teal-950/40 text-sm text-slate-700 dark:text-slate-200">
+                <b>${on.length} selecionado${on.length > 1 ? 's' : ''}</b>
+                <span>Soma: <b class="${sum >= 0 ? 'text-rose-600' : 'text-emerald-600'}">${sum < 0 ? '− ' : ''}R$ ${money(Math.abs(sum))}</b></span>
+                <button onclick="cardSelAll(false)" class="ml-auto text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button></div>` : cardSelBar();
+        }
+        function cardSelAll(on) { document.querySelectorAll('.card-sel').forEach(b => b.checked = on); cardSelUpdate(); }
         function cardSortBy(k) { if (cardSort.k === k) cardSort.dir *= -1; else cardSort = { k, dir: k === 'amount' ? -1 : 1 }; renderCurrentTabContent(); }
         function cardTh(l, k, cls) { return `<th class="p-3 ${cls || ''} cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-200 whitespace-nowrap" onclick="cardSortBy('${k}')" title="Clique para ordenar">${l}${cardSort.k === k ? ` <i class="fa-solid fa-arrow-${cardSort.dir > 0 ? 'up' : 'down'} text-[9px]"></i>` : ''}</th>`; }
         function cardCmp(a, b) {
@@ -4981,7 +5181,8 @@
         // =====================================================
         // DASHBOARD: CATEGORIAS MAIS CONSUMIDAS
         // =====================================================
-        function categoryRanking() {
+        function catHidden() { if (!Array.isArray(appData.catOcultas)) appData.catOcultas = []; return appData.catOcultas; }
+        function categoryRanking(includeHidden) {
             const now = localDateStr(), ym = now.slice(0, 7), yr = now.slice(0, 4);
             const rows = [];
             appData.financeiro.transactions.forEach(t => {
@@ -4996,7 +5197,23 @@
                 const o = map[k] || (map[k] = { name: r.cat, total: 0, count: 0, card: 0 });
                 o.total += r.amount; o.count++; if (r.src === 'card') o.card += r.amount;
             });
-            return Object.values(map).sort((a, b) => b.total - a.total);
+            const hid = new Set(catHidden());
+            return Object.entries(map).filter(([k]) => includeHidden || !hid.has(k)).map(([k, v]) => Object.assign({ key: k, hidden: hid.has(k) }, v)).sort((a, b) => b.total - a.total);
+        }
+        function catHideToggle(k, hide) {
+            const a = catHidden().filter(x => x !== k); if (hide) a.push(k);
+            appData.catOcultas = a; saveAppData(); updateCatRank();
+            const c = document.getElementById('cat-hide-count'); if (c) c.textContent = a.length;
+        }
+        function openCatHide() {
+            const all = categoryRanking(true);
+            const hid = new Set(catHidden());
+            // inclui ocultas sem lançamentos no período
+            catHidden().forEach(k => { if (!all.some(c => c.key === k)) all.push({ key: k, name: k, total: 0, hidden: true }); });
+            showModal('Ocultar categorias', `
+                <p class="text-xs text-slate-400 mb-3">Marque as categorias que não devem aparecer em "Categorias mais consumidas". Isso só esconde da lista; nenhum lançamento é apagado.</p>
+                <div class="space-y-1 max-h-[55vh] overflow-y-auto">${all.length ? all.map(c => `<label class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-700/40 text-sm"><input type="checkbox" ${hid.has(c.key) ? 'checked' : ''} onchange="catHideToggle('${c.key.replace(/'/g, "\\'")}', this.checked)"><span class="flex-1 truncate">${esc(c.name)}</span><span class="text-xs text-slate-400">R$ ${money(c.total)}</span></label>`).join('') : '<p class="text-sm text-slate-400 text-center py-4">Sem categorias.</p>'}</div>
+                <div class="flex justify-between mt-4"><button onclick="appData.catOcultas=[];saveAppData();updateCatRank();openCatHide()" class="text-xs font-bold text-slate-500 underline">Mostrar todas</button><button onclick="closeModal();renderCurrentTabContent()" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-teal-600 text-white">Pronto</button></div>`);
         }
         function catRankListHtml() {
             const all = categoryRanking();
@@ -5026,6 +5243,7 @@
                 <div class="flex gap-2 mb-4">
                     <div class="relative flex-1"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                         <input type="search" value="${esc(catRankQuery)}" oninput="catRankQuery=this.value;updateCatRank()" placeholder="Pesquisar categoria…" class="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm"></div>
+                    <button onclick="openCatHide()" title="Ocultar categorias" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold whitespace-nowrap"><i class="fa-solid fa-eye-slash mr-1"></i>Oculto <span id="cat-hide-count" class="text-teal-600">${catHidden().length}</span></button>
                     <select onchange="catRankPeriod=this.value;updateCatRank()" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
                         <option value="all" ${catRankPeriod === 'all' ? 'selected' : ''}>Tudo</option>
                         <option value="month" ${catRankPeriod === 'month' ? 'selected' : ''}>Este mês</option>
@@ -5520,8 +5738,8 @@
             if (w < goal) add('fa-droplet', 'Saúde', `Água hoje: ${w} ml de ${goal} ml. Faltam ${goal - w} ml, que tal um copo agora?`, w < goal / 2 ? 'warn' : 'info');
             else add('fa-droplet', 'Saúde', 'Meta de água de hoje batida. Parabéns!', 'good');
             const taken = (appData.saude.medLog[today] || []);
-            const missing = appData.saude.meds.filter(m => !taken.includes(m.id));
-            if (appData.saude.meds.length && missing.length) add('fa-pills', 'Saúde', `Remédio(s) ainda não marcado(s) hoje: ${missing.map(m => esc(m.name) + ' (' + esc(m.time) + ')').join(', ')}.`, 'warn');
+            const missing = appData.saude.meds.filter(m => !taken.includes(m.id) && medActiveToday(m) && !((Number(m.cadN) > 1 && m.cadUn !== 'horas') || (m.cadUn === 'horas' && Number(m.cadN) > 24)));
+            if (missing.length) add('fa-pills', 'Saúde', `Remédio(s) ainda não marcado(s) hoje: ${missing.map(m => esc(m.name) + (medInfo(m, today).dose ? ' ' + esc(medInfo(m, today).dose) : '') + ' (' + esc(m.time) + ')').join(', ')}.`, 'warn');
 
             // Agenda / lembretes / hobbies
             const late = appData.lembretes.filter(l => !l.completed && l.date && l.date < today);
@@ -5997,6 +6215,7 @@
             recData().forEach(r => (r.attachments || []).forEach(a => ids.push(a.id)));
             docsData().files.forEach(a => ids.push(a.id));
             docsData().folders.forEach(fo => (fo.files || []).forEach(a => ids.push(a.id)));
+            evoData().forEach(g => (g.files || []).forEach(a => ids.push(a.id)));
             return [...new Set(ids)];
         }
         function queueUpload(id) { const a = pendingUploads(); if (!a.includes(id)) { a.push(id); setPendingUploads(a); } }
@@ -6655,7 +6874,7 @@
             const days = new Set(tr.map(t => t.date));
             const ws = gymWeekStart(today);
             const weekN = new Set(tr.filter(t => t.date >= ws && t.date <= today).map(t => t.date)).size;
-            const meta = Number(S.treinoMeta) || 3;
+            const meta = gymMeta();
             const mTr = tr.filter(t => (t.date || '').startsWith(gymMonth));
             const mMin = mTr.reduce((s, t) => s + (Number(t.duration) || 0), 0);
             const pct = Math.min(100, Math.round(weekN / meta * 100));
@@ -6664,8 +6883,8 @@
             const start = new Date(y, m - 1, 1).getDay(), dim = new Date(y, m, 0).getDate();
             let cells = ''; for (let i = 0; i < start; i++) cells += '<div></div>';
             for (let d = 1; d <= dim; d++) {
-                const ds = `${gymMonth}-${pad2(d)}`, has = days.has(ds);
-                cells += `<button onclick="openGymModal(null,'${ds}')" class="aspect-square rounded-lg text-xs flex items-center justify-center ${has ? 'bg-emerald-500 text-white font-bold' : 'bg-slate-50 dark:bg-slate-700/40 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'} ${ds === today ? 'ring-2 ring-teal-500' : ''}">${d}</button>`;
+                const ds = `${gymMonth}-${pad2(d)}`, has = days.has(ds), plan = gymDias().includes(new Date(y, m - 1, d).getDay());
+                cells += `<button onclick="openGymModal(null,'${ds}')" class="aspect-square rounded-lg text-xs flex items-center justify-center ${has ? 'bg-emerald-500 text-white font-bold' : 'bg-slate-50 dark:bg-slate-700/40 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'} ${ds === today ? 'ring-2 ring-teal-500' : (plan && !has ? 'ring-1 ring-orange-300' : '')}">${d}</button>`;
             }
             // recordes (maior carga por exercício)
             const rec = {};
@@ -6685,7 +6904,7 @@
             container.innerHTML = `<div class="space-y-6 max-w-7xl mx-auto">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <button onclick="closeGym()" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"><i class="fa-solid fa-arrow-left mr-1"></i>Voltar para Saúde</button>
-                    <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-dumbbell text-orange-500"></i><span>Academia & Exercícios</span></h2>
+                    <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center space-x-2"><i class="fa-solid fa-dumbbell text-orange-500"></i><span>Exercícios</span></h2>
                     <button onclick="openGymModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Registrar treino</span></button>
                 </div>
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -6695,8 +6914,10 @@
                     ${stat('fa-stopwatch', 'Minutos no mês', mMin, 'text-sky-500')}
                 </div>
                 <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700">
-                    <div class="flex items-center justify-between mb-2 gap-2"><span class="text-xs font-bold text-slate-500 uppercase">Meta semanal</span>
-                        <span class="text-xs text-slate-500">Treinar <input type="number" min="1" max="7" value="${meta}" onchange="gymSetMeta(this.value)" class="w-14 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-center"> vezes por semana</span></div>
+                    <div class="flex items-center justify-between mb-2 gap-2"><span class="text-xs font-bold text-slate-500 uppercase">Frequência de treinos</span>
+                        ${gymDias().length ? `<span class="text-xs text-slate-500">${meta}x por semana</span>` : `<span class="text-xs text-slate-500">Treinar <input type="number" min="1" max="7" value="${meta}" onchange="gymSetMeta(this.value)" class="w-14 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-center"> vezes por semana</span>`}</div>
+                    <p class="text-[11px] text-slate-400 mb-1">Escolha os dias da semana em que pretende treinar (ou deixe sem marcar e use só o número de vezes):</p>
+                    <div class="flex gap-1.5 mb-3">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n, i) => `<button onclick="gymToggleDia(${i})" class="flex-1 py-1.5 rounded-lg text-[11px] font-bold ${gymDias().includes(i) ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}">${n}</button>`).join('')}</div>
                     <div class="h-3 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"><div class="h-full bg-orange-500" style="width:${pct}%"></div></div>
                     <p class="text-[11px] text-slate-500 mt-1">${weekN >= meta ? 'Meta da semana batida! 💪' : 'Faltam ' + (meta - weekN) + ' treino(s) para bater a meta da semana.'}</p>
                 </div>
@@ -6729,6 +6950,9 @@
                     ${mTr.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${mTr.map(card).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-6">Nenhum treino neste mês.</p>'}
                 </div></div>`;
         }
+        function gymDias() { const a = gymData().treinoDias; return Array.isArray(a) ? a.filter(x => x >= 0 && x <= 6) : []; }
+        function gymMeta() { const n = gymDias().length; return n || Number(gymData().treinoMeta) || 3; }
+        function gymToggleDia(i) { const S = gymData(), a = gymDias(); S.treinoDias = a.includes(i) ? a.filter(x => x !== i) : [...a, i].sort(); saveAppData(); renderCurrentTabContent(); }
         function gymSetMeta(v) { gymData().treinoMeta = Math.max(1, Math.min(7, parseInt(v) || 3)); saveAppData(); renderCurrentTabContent(); }
         function gymExRow(e = {}) {
             const i = 'w-full px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
@@ -6992,6 +7216,50 @@
             const o = (v, l, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`;
             const S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
             const card = (l, v, c) => `<div class="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 min-w-0"><p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase truncate">${l}</p><h3 class="text-base sm:text-2xl font-bold ${c} mt-0.5 sm:mt-1 truncate">R$ ${money(v)}</h3></div>`;
+            const finTbl = (rows, grp) => `
+                        <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
+                                <th class="p-3.5 rounded-l-xl w-8"><input type="checkbox" id="fin-sel-all-${grp}" title="Selecionar todos desta lista" onchange="finSelGroup(this.checked,'${grp}')" ${rows.length && rows.every(t => finSel.has(t.id)) ? 'checked' : ''}></th>${sh('Descrição','desc')}${sh('Categoria','category')}${sh('Cartão/Conta','acc')}${sh('Data','date')}${sh('Valor','amount')}${sh('Status','status')}<th class="p-3.5">Anexos</th><th class="p-3.5 text-right rounded-r-xl">Ações</th>
+                            </tr></thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                            ${rows.map(t => {
+                                const isT = t.type === 'transferencia', nAtt = (t.attachments || []).length;
+                                const a1 = accById(t.accId), a2 = accById(t.toAccId);
+                                const acc = isT ? `${a1 ? esc(a1.name) : '—'} <i class="fa-solid fa-arrow-right text-[9px] mx-0.5"></i> ${a2 ? esc(a2.name) : '—'}` : (a1 ? esc(a1.name) : '<span class="text-slate-300">—</span>');
+                                const ef = isT ? finEffect(t, finF.acc) : null;
+                                const tDir = isT ? (ef.d > 0 ? 'out' : ef.r > 0 ? 'in' : 'mid') : '';
+                                const vc = tDir === 'mid' ? 'text-sky-600' : (tDir === 'in' || (!isT && t.type === 'receita')) ? 'text-emerald-600' : 'text-rose-600';
+                                const sg = tDir === 'mid' ? '⇄' : (tDir === 'in' || (!isT && t.type === 'receita')) ? '+' : '-';
+                                return `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                                    <td class="p-3.5"><input type="checkbox" ${finSel.has(t.id) ? 'checked' : ''} onchange="finSelToggle('${t.id}', this.checked)"></td>
+                                    <td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
+                                        ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
+                                        ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}${t.habitacional ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Também aparece em Habitação"><i class="fa-solid fa-hammer"></i></span>` : ''}${t.casaId ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Também aparece em Habitação › Despesas da casa"><i class="fa-solid fa-house-chimney"></i></span>` : ''}
+                                        ${isT ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">transf.</span>` : ''}</td>
+                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>
+                                    <td class="p-3.5 text-xs text-slate-500 whitespace-nowrap">${acc}</td>
+                                    <td class="p-3.5 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td>
+                                    <td class="p-3.5 font-bold whitespace-nowrap ${vc}">${sg} R$ ${money(t.amount)}</td>
+                                    <td class="p-3.5"><button onclick="toggleFinanceStatus('${t.id}')" title="Clique para alternar entre ${t.type === 'receita' ? 'Recebido' : 'Pago'} e Pendente" class="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${finStCls(t)}"><i class="fa-solid ${finSt(t) === 'pendente' ? 'fa-clock' : 'fa-circle-check'} mr-1"></i>${finStLabel(t)}</button></td>
+                                    <td class="p-3.5"><button onclick="openAttachmentsModal('${t.id}')" title="Anexos" class="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${nAtt ? 'bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}"><i class="fa-solid fa-paperclip mr-1"></i>${nAtt || 'Anexar'}</button></td>
+                                    <td class="p-3.5 text-right space-x-1 whitespace-nowrap">
+                                        <button onclick="editFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                                        <button onclick="deleteFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                                    </td></tr>`;
+                            }).join('')}
+                            </tbody></table></div>`;
+            const pendRows = list.filter(t => finSt(t) === 'pendente'), resRows = list.filter(t => finSt(t) !== 'pendente');
+            const secHead = (ic, cor, title, n, extra) => `<h3 class="font-bold text-base ${cor} mb-3 flex items-center gap-2"><i class="fa-solid ${ic}"></i><span>${title}</span><span class="text-xs font-normal text-slate-400">(${n})${extra || ''}</span></h3>`;
+            const finBody = list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhuma transação encontrada para este filtro.</p></div>`
+                : `<div id="fin-sel-bar">${finSelBar()}</div>` + (pendRows.length === 0 ? finTbl(list, 'all') : `
+                    <div class="mb-8 p-3 sm:p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40">
+                        ${secHead('fa-clock', 'text-amber-700 dark:text-amber-400', 'PENDENTES', pendRows.length, ' · R$ ' + money(pendRows.reduce((s, t) => { const e = finEffect(t, finF.acc); return s + Math.abs(e.r - e.d); }, 0)))}
+                        ${finTbl(pendRows, 'pend')}
+                    </div>
+                    <div>
+                        ${secHead('fa-circle-check', 'text-emerald-700 dark:text-emerald-400', 'RESOLVIDOS', resRows.length)}
+                        ${resRows.length ? finTbl(resRows, 'res') : '<p class="text-sm text-slate-400 text-center py-6">Nada resolvido neste período ainda.</p>'}
+                    </div>`);
             container.innerHTML = `
                 <div class="space-y-6 max-w-7xl mx-auto">
                     <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
@@ -7020,39 +7288,7 @@
                     </div>
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                         <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-wallet text-teal-500"></i><span>Lançamentos Financeiros</span><span class="text-xs font-normal text-slate-400">(${list.length}) · ${perLabel('fin')}</span></h3>
-                        ${list.length === 0 ? `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhuma transação encontrada para este filtro.</p></div>` : `
-                        <div id="fin-sel-bar">${finSelBar()}</div>
-                        <div class="overflow-x-auto"><table class="w-full text-left text-sm">
-                            <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                                <th class="p-3.5 rounded-l-xl w-8"><input type="checkbox" id="fin-sel-all" title="Selecionar todos os lançamentos da lista" onchange="finSelAll(this.checked)" ${list.length && list.every(t => finSel.has(t.id)) ? 'checked' : ''}></th>${sh('Descrição','desc')}${sh('Categoria','category')}${sh('Cartão/Conta','acc')}${sh('Data','date')}${sh('Valor','amount')}${sh('Status','status')}<th class="p-3.5">Anexos</th><th class="p-3.5 text-right rounded-r-xl">Ações</th>
-                            </tr></thead>
-                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                            ${list.map(t => {
-                                const isT = t.type === 'transferencia', nAtt = (t.attachments || []).length;
-                                const a1 = accById(t.accId), a2 = accById(t.toAccId);
-                                const acc = isT ? `${a1 ? esc(a1.name) : '—'} <i class="fa-solid fa-arrow-right text-[9px] mx-0.5"></i> ${a2 ? esc(a2.name) : '—'}` : (a1 ? esc(a1.name) : '<span class="text-slate-300">—</span>');
-                                const ef = isT ? finEffect(t, finF.acc) : null;
-                                const tDir = isT ? (ef.d > 0 ? 'out' : ef.r > 0 ? 'in' : 'mid') : '';
-                                const vc = tDir === 'mid' ? 'text-sky-600' : (tDir === 'in' || (!isT && t.type === 'receita')) ? 'text-emerald-600' : 'text-rose-600';
-                                const sg = tDir === 'mid' ? '⇄' : (tDir === 'in' || (!isT && t.type === 'receita')) ? '+' : '-';
-                                return `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
-                                    <td class="p-3.5"><input type="checkbox" ${finSel.has(t.id) ? 'checked' : ''} onchange="finSelToggle('${t.id}', this.checked)"></td>
-                                    <td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
-                                        ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
-                                        ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}${t.habitacional ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Também aparece em Habitação"><i class="fa-solid fa-hammer"></i></span>` : ''}${t.casaId ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Também aparece em Habitação › Despesas da casa"><i class="fa-solid fa-house-chimney"></i></span>` : ''}
-                                        ${isT ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">transf.</span>` : ''}</td>
-                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>
-                                    <td class="p-3.5 text-xs text-slate-500 whitespace-nowrap">${acc}</td>
-                                    <td class="p-3.5 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td>
-                                    <td class="p-3.5 font-bold whitespace-nowrap ${vc}">${sg} R$ ${money(t.amount)}</td>
-                                    <td class="p-3.5"><button onclick="toggleFinanceStatus('${t.id}')" title="Clique para alternar entre ${t.type === 'receita' ? 'Recebido' : 'Pago'} e Pendente" class="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${finStCls(t)}"><i class="fa-solid ${finSt(t) === 'pendente' ? 'fa-clock' : 'fa-circle-check'} mr-1"></i>${finStLabel(t)}</button></td>
-                                    <td class="p-3.5"><button onclick="openAttachmentsModal('${t.id}')" title="Anexos" class="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${nAtt ? 'bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}"><i class="fa-solid fa-paperclip mr-1"></i>${nAtt || 'Anexar'}</button></td>
-                                    <td class="p-3.5 text-right space-x-1 whitespace-nowrap">
-                                        <button onclick="editFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
-                                        <button onclick="deleteFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
-                                    </td></tr>`;
-                            }).join('')}
-                            </tbody></table></div>`}
+                        ${finBody}
                     </div>
                 </div>`;
         }
@@ -7073,8 +7309,15 @@
         function finSelToggle(id, on) {
             if (on) finSel.add(id); else finSel.delete(id);
             const bar = document.getElementById('fin-sel-bar'); if (bar) bar.innerHTML = finSelBar();
-            const all = document.getElementById('fin-sel-all'), ids = finFiltered().map(t => t.id);
-            if (all) all.checked = ids.length > 0 && ids.every(i => finSel.has(i));
+            finSelSyncAll();
+        }
+        function finSelSyncAll() {
+            const L = finFiltered(), g = { all: L, pend: L.filter(t => finSt(t) === 'pendente'), res: L.filter(t => finSt(t) !== 'pendente') };
+            Object.keys(g).forEach(k => { const el = document.getElementById('fin-sel-all-' + k); if (el) el.checked = g[k].length > 0 && g[k].every(t => finSel.has(t.id)); });
+        }
+        function finSelGroup(on, grp) {
+            finFiltered().filter(t => grp === 'all' || (grp === 'pend') === (finSt(t) === 'pendente')).forEach(t => { if (on) finSel.add(t.id); else finSel.delete(t.id); });
+            renderCurrentTabContent();
         }
         function finSelAll(on) { finFiltered().forEach(t => { if (on) finSel.add(t.id); else finSel.delete(t.id); }); renderCurrentTabContent(); }
         function finSelClear() { finSel.clear(); renderCurrentTabContent(); }
@@ -7505,6 +7748,97 @@
                 }
             });
         }
+        // ========== HABITAÇÃO › EVOLUÇÃO (fotos e vídeos agrupados por data) ==========
+        function evoData() { const H = appData.habitacao; if (!Array.isArray(H.evolucao)) H.evolucao = []; return H.evolucao; }
+        const _evoUrls = {};
+        function openEvoView() { habEvoOpen = true; renderCurrentTabContent(); window.scrollTo(0, 0); }
+        function closeEvoView() { habEvoOpen = false; renderCurrentTabContent(); }
+        function evoIsVideo(f) { return (f.type || '').startsWith('video/') || /\.(mp4|mov|webm|m4v|3gp)$/i.test(f.name || ''); }
+        function renderHabEvo(container) {
+            const list = evoData().slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id).localeCompare(String(a.id)));
+            const nF = list.reduce((s, g) => s + (g.files || []).length, 0);
+            const thumb = (g, f) => evoIsVideo(f)
+                ? `<div class="relative aspect-square rounded-xl bg-slate-800 overflow-hidden cursor-pointer" onclick="openStoredFile('${f.id}')"><video data-evo="${f.id}" class="w-full h-full object-cover" muted playsinline preload="metadata"></video><span class="absolute inset-0 flex items-center justify-center text-white text-2xl drop-shadow"><i class="fa-solid fa-circle-play"></i></span>
+                    <button onclick="event.stopPropagation();evoRemoveFile('${g.id}','${f.id}')" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-[10px]"><i class="fa-solid fa-xmark"></i></button></div>`
+                : `<div class="relative aspect-square rounded-xl bg-slate-100 dark:bg-slate-700 overflow-hidden cursor-pointer" onclick="openStoredFile('${f.id}')"><img data-evo="${f.id}" class="w-full h-full object-cover" alt="">
+                    <button onclick="event.stopPropagation();evoRemoveFile('${g.id}','${f.id}')" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-[10px]"><i class="fa-solid fa-xmark"></i></button></div>`;
+            container.innerHTML = `<div class="space-y-6 max-w-7xl mx-auto">
+                <div class="bg-gradient-to-r from-teal-700 to-teal-600 rounded-3xl p-5 text-white flex flex-wrap items-center justify-between gap-3">
+                    <div><button onclick="closeEvoView()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 mb-2"><i class="fa-solid fa-arrow-left mr-1"></i>Voltar para Habitação</button>
+                    <h2 class="text-xl font-bold flex items-center gap-2"><i class="fa-solid fa-camera-retro"></i>Evolução da obra</h2>
+                    <p class="text-xs opacity-80">${list.length} registro(s) · ${nF} arquivo(s)</p></div>
+                    <button onclick="openEvoModal()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg text-sm"><i class="fa-solid fa-plus mr-1"></i>Novo registro</button>
+                </div>
+                ${list.length ? list.map(g => `
+                <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <div class="flex items-start justify-between gap-2 mb-3">
+                        <div class="min-w-0"><h3 class="font-bold text-slate-800 dark:text-white"><i class="fa-regular fa-calendar mr-1.5 text-teal-600"></i>${g.date ? fmtBR(g.date) : 'Sem data'}${g.title ? ' · ' + esc(g.title) : ''}</h3>
+                        ${g.obs ? `<p class="text-xs text-slate-500 mt-1 whitespace-pre-line">${esc(g.obs)}</p>` : ''}</div>
+                        <div class="flex gap-1 shrink-0">
+                            <button onclick="evoAddFiles('${g.id}')" class="px-2.5 py-1.5 bg-teal-50 dark:bg-slate-700 text-teal-700 dark:text-teal-300 rounded-lg text-xs font-bold"><i class="fa-solid fa-plus mr-1"></i>Fotos/vídeos</button>
+                            <button onclick="openEvoModal('${g.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteEvo('${g.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                    ${(g.files || []).length ? `<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">${g.files.map(f => thumb(g, f)).join('')}</div>` : '<p class="text-xs text-slate-400">Nenhuma foto ou vídeo neste registro.</p>'}
+                </div>`).join('') : '<div class="bg-white dark:bg-slate-800 rounded-3xl p-10 text-center text-slate-400 text-sm">Nenhum registro ainda. Toque em "Novo registro" para guardar fotos e vídeos da evolução, agrupados por data.</div>'}
+            </div>`;
+            container.querySelectorAll('[data-evo]').forEach(async el => {
+                const id = el.dataset.evo;
+                try {
+                    if (!_evoUrls[id]) { const b = await getFile(id); if (!b) return; _evoUrls[id] = URL.createObjectURL(b); }
+                    el.src = _evoUrls[id];
+                } catch (e) {}
+            });
+        }
+        function openEvoModal(id = null) {
+            const g = id ? evoData().find(x => x.id === id) : null;
+            const v = g || { date: localDateStr(), title: '', obs: '' };
+            showModal(g ? 'Editar registro' : 'Novo registro de evolução', `
+                <form onsubmit="saveEvo(event, ${id ? `'${id}'` : 'null'})" class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="${LBL}">Data</label><input id="ev-date" type="date" required value="${esc(v.date)}" class="${INP}"></div>
+                        <div><label class="${LBL}">Título (opcional)</label><input id="ev-title" value="${esc(v.title || '')}" class="${INP}" placeholder="Ex.: Reboco da sala"></div>
+                    </div>
+                    <div><label class="${LBL}">Observação</label><textarea id="ev-obs" rows="3" class="${INP}">${esc(v.obs || '')}</textarea></div>
+                    <div><label class="${LBL}">Fotos e vídeos</label><input id="ev-files" type="file" multiple accept="image/*,video/*" class="text-sm w-full"></div>
+                    <div class="flex justify-end space-x-2 pt-1"><button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Cancelar</button><button type="submit" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-teal-600 text-white shadow">Salvar</button></div>
+                </form>`);
+        }
+        async function saveEvo(e, id) {
+            e.preventDefault();
+            const g = i => document.getElementById(i).value.trim();
+            const inp = document.getElementById('ev-files');
+            const metas = await storeFiles(inp.files);
+            let r = id ? evoData().find(x => x.id === id) : null;
+            if (!r) { r = { id: uid(), files: [] }; evoData().push(r); }
+            r.date = g('ev-date'); r.title = g('ev-title'); r.obs = g('ev-obs');
+            r.files = (r.files || []).concat(metas);
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Salvo!', 'success');
+        }
+        function evoAddFiles(id) {
+            const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = 'image/*,video/*';
+            inp.onchange = async () => {
+                const metas = await storeFiles(inp.files);
+                const r = evoData().find(x => x.id === id);
+                if (r && metas.length) { r.files = (r.files || []).concat(metas); saveAppData(); renderCurrentTabContent(); showToast(metas.length + ' arquivo(s) adicionado(s).', 'success'); }
+            };
+            inp.click();
+        }
+        function evoRemoveFile(gid, fid) {
+            if (!confirm('Remover este arquivo?')) return;
+            const r = evoData().find(x => x.id === gid); if (!r) return;
+            r.files = (r.files || []).filter(f => f.id !== fid);
+            deleteStoredFile(fid); saveAppData(); renderCurrentTabContent();
+        }
+        function deleteEvo(id) {
+            if (!confirm('Excluir este registro e todas as fotos/vídeos dele?')) return;
+            const r = evoData().find(x => x.id === id);
+            (r && r.files || []).forEach(f => deleteStoredFile(f.id));
+            appData.habitacao.evolucao = evoData().filter(x => x.id !== id);
+            saveAppData(); renderCurrentTabContent();
+        }
+
         function openCasaView() { habCasaOpen = true; renderCurrentTabContent(); window.scrollTo(0, 0); }
         function closeCasaView() { habCasaOpen = false; renderCurrentTabContent(); }
         function casaSet(k, v) { if (k === 'view') { casaView = v; try { localStorage.setItem('isis_casa_view', v); } catch (e) {} } else if (k === 'q') casaQ = v; else if (k === 'st') casaSt = v; else if (k === 'comp') casaComp = v; renderCurrentTabContent(); }
