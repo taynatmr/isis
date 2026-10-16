@@ -464,13 +464,23 @@
                 cloudRemoveAttachment(id);
             } catch (e) { console.error(e); }
         }
+        // Copia os bytes do arquivo para um Blob próprio (evita Blob "vazio" vindo do IndexedDB/arquivos temporários do celular)
+        async function materialize(blob) {
+            try {
+                const buf = await blob.arrayBuffer();
+                if (!buf || buf.byteLength === 0) return null;
+                return new Blob([buf], { type: blob.type || '' });
+            } catch (e) { return null; }
+        }
         async function storeFiles(fileList) {
             const metas = [];
             for (const file of Array.from(fileList || [])) {
                 const id = uid();
                 if (file.size > MAX_FILE) { showToast(`"${file.name}" tem mais de 50 MB e não foi anexado.`, 'error'); continue; }
                 try {
-                    await putFile(id, file);
+                    const real = await materialize(file);
+                    if (!real) { showToast(`"${file.name}" não pôde ser lido (arquivo vazio ou indisponível) e não foi anexado.`, 'error'); continue; }
+                    await putFile(id, real);
                     queueUpload(id); cloudUploadPending();
                     metas.push({ id, name: file.name, size: file.size, type: file.type || '', date: localDateStr() });
                 } catch (e) {
@@ -6289,18 +6299,26 @@
             return [...new Set(ids)];
         }
         function queueUpload(id) { const a = pendingUploads(); if (!a.includes(id)) { a.push(id); setPendingUploads(a); } }
+        let _badAtt = 0;
         async function cloudUploadPending() {
             if (!sb || !cloudSession || !CUR_UID) return;
+            _badAtt = 0;
             for (const id of pendingUploads().slice()) {
                 try {
                     const blob = await getFileLocal(id);
-                    if (blob && blob.size !== 0) {   // arquivo vazio (0 bytes) não pode ser enviado: é ignorado
-                        const { error } = await sb.storage.from(BUCKET).upload(upPath(id), blob, { upsert: true, contentType: blob.type || 'application/octet-stream' });
+                    const real = (blob && blob.size !== 0) ? await materialize(blob) : null;   // vazio/ilegível não pode ser enviado: é ignorado
+                    if (real) {
+                        const { error } = await sb.storage.from(BUCKET).upload(upPath(id), real, { upsert: true, contentType: real.type || 'application/octet-stream' });
                         if (error) throw error;
-                    }
+                    } else if (blob) { console.warn('Anexo ilegível/vazio ignorado:', id); _badAtt++; }
                     setPendingUploads(pendingUploads().filter(x => x !== id));
                 } catch (e) {
                     console.warn('Anexo', id, e);
+                    if (/No content provided/i.test(String((e && (e.message || e.error)) || ''))) {
+                        // o servidor recebeu o arquivo vazio: não adianta tentar de novo; não trava a sincronização
+                        setPendingUploads(pendingUploads().filter(x => x !== id)); _badAtt++;
+                        continue;
+                    }
                     if (/EntityTooLarge|exceeded the maximum|too large|413/i.test(String((e && (e.message || e.error)) || '') + ' ' + ((e && (e.statusCode || e.status)) || ''))) {
                         // arquivo maior que o limite do Storage: não trava os outros; fica só neste aparelho
                         setPendingUploads(pendingUploads().filter(x => x !== id));
@@ -6309,6 +6327,11 @@
                     }
                     cloudErr = cloudMsg(e); cloudBanner(); cloudScheduleRetryUp(); break;
                 }
+            }
+            if (_badAtt) {
+                showToast(_badAtt + ' anexo(s) não puderam ser lidos neste aparelho (vazios ou indisponíveis) e foram ignorados. Anexe de novo se precisar.', 'warning');
+                if (/No content provided/i.test(cloudErr || '')) { cloudErr = ''; cloudBanner(); }
+                _badAtt = 0;
             }
         }
         let _upRetry = null;
