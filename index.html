@@ -4804,6 +4804,7 @@
                     <p class="text-[11px] text-slate-400 mb-4">Em Finanças aparece apenas "Cartão de Crédito" com o valor final desta fatura.</p>
                     ${Object.keys(byCat).length ? `<div class="flex flex-wrap gap-2 mb-4">${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="px-2.5 py-1 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"><b>${esc(k)}</b> R$ ${money(v)}</span>`).join('')}</div>` : ''}
                     ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhum lançamento nesta fatura.</p></div>` : `
+                    ${card.shared ? cardPayersSummary(entries) : ''}
                     <div id="card-sel-bar">${cardSelBar()}</div>
                     <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
@@ -4813,7 +4814,7 @@
                         ${entries.map(e => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
                             <td class="p-3"><input type="checkbox" class="card-sel" data-amt="${Number(e.amount) || 0}" onchange="cardSelUpdate()"></td>
                             <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}</td>
-                            <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}</td>
+                            <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}${(e.pagoPor || []).length ? `<div class="mt-1 flex flex-wrap gap-1">${e.pagoPor.map(p => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">${esc(p.name)} R$ ${money(p.amount)}</span>`).join('')}</div>` : ''}</td>
                             <td class="p-3"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(e.category)}</span></td>
                             <td class="p-3">${e.installment ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${e.installment.n}/${e.installment.total}</span>` : '<span class="text-slate-300">—</span>'}</td>
                             <td class="p-3 text-slate-500 text-xs max-w-[220px] truncate" title="${esc(e.obs || '')}">${esc(e.obs || '')}</td>
@@ -4827,6 +4828,16 @@
                     </table></div>`}
                 </div>
             </div>`;
+        }
+        function cardPayersSummary(entries) {
+            const tot = {}; let none = 0;
+            entries.forEach(e => {
+                const s = Number(e.amount) < 0 ? -1 : 1;
+                if (!(e.pagoPor || []).length) { none += Number(e.amount) || 0; return; }
+                e.pagoPor.forEach(p => { tot[p.name] = (tot[p.name] || 0) + s * (Number(p.amount) || 0); });
+            });
+            const chips = Object.entries(tot).map(([n, v]) => `<span class="px-2.5 py-1 rounded-lg text-xs bg-teal-50 dark:bg-teal-950/40 border border-teal-100 dark:border-teal-900"><b>${esc(n)}</b> pagou R$ ${money(v)}</span>`).join('');
+            return `<div class="flex flex-wrap items-center gap-2 mb-4"><span class="text-[11px] font-bold uppercase text-slate-400"><i class="fa-solid fa-user-group mr-1"></i>Fatura compartilhada</span>${chips}${Math.abs(none) > 0.004 ? `<span class="px-2.5 py-1 rounded-lg text-xs bg-amber-50 text-amber-700 border border-amber-100">sem informar quem pagou: R$ ${money(none)}</span>` : ''}</div>`;
         }
         function cardSelBar() {
             return `<p class="text-[11px] text-slate-400 mb-3"><i class="fa-regular fa-square-check mr-1"></i>Marque os lançamentos na lista para ver a soma.</p>`;
@@ -4866,6 +4877,7 @@
         // --- Cartão: cadastro ---
         function openCardModal(id = null) {
             const c = id ? cardById(id) : { name: '', number: '', agency: '', account: '', closingDay: '', dueDay: '', limit: '' };
+            window._cdNames = (c.sharedNames && c.sharedNames.length ? c.sharedNames : ['Tayná', 'Samuel']).slice();
             showModal(id ? 'Editar cartão' : 'Novo cartão', `
                 <form onsubmit="saveCard(event, '${id || ''}')" class="space-y-4">
                     <div><label class="${LBL}">Nome do cartão</label><input id="cd-name" required value="${esc(c.name)}" placeholder="Ex: Nubank, Itaú Platinum" class="${INP}"></div>
@@ -4879,13 +4891,29 @@
                         <div><label class="${LBL}">Dia vencimento</label><input type="number" min="1" max="31" id="cd-due" required value="${c.dueDay}" class="${INP}"></div>
                         <div><label class="${LBL}">Limite (R$)</label><input type="number" step="0.01" min="0" id="cd-limit" value="${c.limit}" class="${INP}"></div>
                     </div>
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                        <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><input type="checkbox" id="cd-shared" ${c.shared ? 'checked' : ''} onchange="cdSharedToggle()"> Compartilhada</label>
+                        <div id="cd-shared-box" class="${c.shared ? '' : 'hidden'} mt-3">
+                            <p class="text-[11px] text-slate-400 mb-2">Quem usa este cartão. Ao lançar uma despesa, o sistema pergunta quem pagou.</p>
+                            <div id="cd-names" class="space-y-1.5">${window._cdNames.map(cdNameRow).join('')}</div>
+                            <button type="button" onclick="cdAddName()" class="mt-2 text-xs font-bold text-teal-600"><i class="fa-solid fa-plus mr-1"></i>Incluir nome</button>
+                        </div>
+                    </div>
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar cartão</button>
                 </form>`);
         }
+        function cdNameRow(n) {
+            return `<div class="cd-nrow flex items-center gap-2"><input class="cd-n ${INP}" value="${esc(n || '')}" placeholder="Nome"><button type="button" onclick="this.closest('.cd-nrow').remove()" class="text-slate-400 hover:text-rose-600 px-2"><i class="fa-solid fa-xmark"></i></button></div>`;
+        }
+        function cdAddName() { document.getElementById('cd-names').insertAdjacentHTML('beforeend', cdNameRow('')); }
+        function cdSharedToggle() { document.getElementById('cd-shared-box').classList.toggle('hidden', !document.getElementById('cd-shared').checked); }
         function saveCard(e, id) {
             e.preventDefault();
             const v = k => document.getElementById(k).value.trim();
             const data = { name: v('cd-name'), number: v('cd-number'), agency: v('cd-agency'), account: v('cd-account'), closingDay: Number(v('cd-close')), dueDay: Number(v('cd-due')), limit: Number(v('cd-limit')) || 0 };
+            data.shared = document.getElementById('cd-shared').checked;
+            data.sharedNames = Array.from(document.querySelectorAll('#cd-names .cd-n')).map(i => i.value.trim()).filter((n, i, a) => n && a.indexOf(n) === i);
+            if (data.shared && data.sharedNames.length < 2) { showToast('Informe ao menos 2 nomes para a conta compartilhada.', 'error'); return; }
             if (id) Object.assign(cardById(id), data);
             else { const c = Object.assign({ id: uid() }, data); appData.cartao.cards.push(c); cardSelectedId = c.id; cardInvMonth = ''; }
             cardCommit('Cartão salvo!');
@@ -4938,11 +4966,11 @@
             const en = id ? C.entries.find(x => x.id === id) : null;
             const card = cardById(en ? en.cardId : cardSelectedId) || C.cards[0];
             const e = en || { name: '', amount: '', date: localDateStr(), invoice: cardInvoiceKey(card, localDateStr()), category: C.categories[0] || 'Outros', obs: '' };
-            window._invTouched = !!id;
+            window._invTouched = !!id; window._ceEdit = en;
             const sib = en && en.installment ? C.entries.filter(x => x.installment && x.installment.group === en.installment.group).length : 0;
             showModal(id ? 'Editar lançamento' : 'Novo lançamento no cartão', `
                 <form onsubmit="saveCardEntry(event, '${id || ''}')" class="space-y-4">
-                    ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ce-card" onchange="cardAutoInvoice()" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ce-card" value="${card.id}">`}
+                    ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ce-card" onchange="cardAutoInvoice();cePayerRender()" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ce-card" value="${card.id}">`}
                     <div><label class="${LBL}">Nome</label><input id="ce-name" required value="${esc(e.name)}" placeholder="Ex: Posto Shell" class="${INP}"></div>
                     <div><label class="${LBL}">Tipo do lançamento</label>
                         <select id="ce-kind" class="${INP}">
@@ -4950,20 +4978,52 @@
                             <option value="credito" ${Number(e.amount) < 0 ? 'selected' : ''}>Estorno / desconto / crédito (abate da fatura)</option>
                         </select></div>
                     <div class="grid grid-cols-2 gap-4">
-                        <div><label class="${LBL}">Valor (R$)</label><input type="number" step="0.01" min="0" id="ce-amount" required value="${e.amount === '' ? '' : Math.abs(Number(e.amount))}" class="${INP}"></div>
+                        <div><label class="${LBL}">Valor (R$)</label><input type="number" step="0.01" min="0" id="ce-amount" oninput="cePayerNote()" required value="${e.amount === '' ? '' : Math.abs(Number(e.amount))}" class="${INP}"></div>
                         ${id ? `<div><label class="${LBL}">Parcela</label><div class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-sm text-slate-500">${en.installment ? `${en.installment.n} de ${en.installment.total}` : 'À vista'}</div></div>` : `
-                        <div><label class="${LBL}">Parcelas (opcional)</label><input type="number" min="1" max="60" id="ce-inst" placeholder="À vista" class="${INP}"></div>`}
+                        <div><label class="${LBL}">Parcelas (opcional)</label><input type="number" min="1" max="60" id="ce-inst" oninput="cePayerNote()" placeholder="À vista" class="${INP}"></div>`}
                     </div>
-                    ${id ? '' : `<div id="ce-mode-wrap" class="-mt-2"><label class="${LBL}">Se parcelado, o valor informado é</label><select id="ce-mode" class="${INP}"><option value="total">Valor total (divide entre as parcelas)</option><option value="each">Valor de cada parcela</option></select></div>`}
+                    ${id ? '' : `<div id="ce-mode-wrap" class="-mt-2"><label class="${LBL}">Se parcelado, o valor informado é</label><select id="ce-mode" onchange="cePayerNote()" class="${INP}"><option value="total">Valor total (divide entre as parcelas)</option><option value="each">Valor de cada parcela</option></select></div>`}
                     <div class="grid grid-cols-2 gap-4">
                         <div><label class="${LBL}">Data da compra</label><input type="date" id="ce-date" required value="${e.date}" onchange="cardAutoInvoice()" class="${INP}"></div>
                         <div><label class="${LBL}">Fatura (mês)</label><input type="month" id="ce-inv" required value="${e.invoice}" oninput="window._invTouched=true" class="${INP}"></div>
                     </div>
+                    <div id="ce-payer-box"></div>
                     <div><label class="${LBL}">Categoria</label>${catSelectHtml(e.category)}</div>
                     <div><label class="${LBL}">Observação</label><textarea id="ce-obs" rows="2" class="${INP}">${esc(e.obs || '')}</textarea></div>
                     ${sib > 1 ? `<label class="flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" id="ce-all"> Aplicar nome, categoria e observação às outras ${sib - 1} parcelas</label>` : ''}
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>`);
+            cePayerRender();
+        }
+        function cePerValue() {
+            const g = k => document.getElementById(k), amt = Math.abs(Number(g('ce-amount').value) || 0), inst = g('ce-inst'), n = inst ? Math.max(1, parseInt(inst.value) || 1) : 1;
+            if (n === 1) return amt;
+            const cents = Math.round(amt * 100);
+            return (g('ce-mode') && g('ce-mode').value === 'each' ? cents : Math.floor(cents / n)) / 100;
+        }
+        function cePayerRender() {
+            const box = document.getElementById('ce-payer-box'); if (!box) return;
+            const card = cardById(document.getElementById('ce-card').value);
+            if (!card || !card.shared || !(card.sharedNames || []).length) { box.innerHTML = ''; return; }
+            const names = card.sharedNames, en = window._ceEdit, pp = (en && en.pagoPor) || [];
+            const single = pp.length === 1 ? pp[0].name : (pp.length > 1 ? '__split__' : '');
+            box.innerHTML = `<div class="p-3 rounded-2xl bg-teal-50 dark:bg-teal-950/30 border border-teal-100 dark:border-teal-900 space-y-2">
+                <label class="${LBL}">Quem pagou?</label>
+                <select id="ce-payer" required onchange="cePayerChange()" class="${INP}"><option value="" disabled ${single ? '' : 'selected'}>Selecione…</option>
+                    ${names.map(n => `<option value="${esc(n)}" ${single === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+                    <option value="__split__" ${single === '__split__' ? 'selected' : ''}>Dividido (informar o valor de cada um)</option></select>
+                <div id="ce-split" class="${single === '__split__' ? '' : 'hidden'} space-y-1.5">
+                    ${names.map(n => { const f = pp.find(x => x.name === n); return `<div class="flex items-center gap-2"><span class="text-sm flex-1 truncate">${esc(n)}</span><input type="number" step="0.01" min="0" data-name="${esc(n)}" class="ce-pp ${INP} !w-32" value="${f ? f.amount : ''}" oninput="cePayerNote()" placeholder="0,00"></div>`; }).join('')}
+                    <p id="ce-pp-note" class="text-xs"></p>
+                </div></div>`;
+            cePayerNote();
+        }
+        function cePayerChange() { const s = document.getElementById('ce-payer').value === '__split__'; document.getElementById('ce-split').classList.toggle('hidden', !s); cePayerNote(); }
+        function cePayerNote() {
+            const note = document.getElementById('ce-pp-note'); if (!note) return;
+            const per = cePerValue(), sum = Array.from(document.querySelectorAll('.ce-pp')).reduce((s, i) => s + (Number(i.value) || 0), 0), left = Math.round((per - sum) * 100) / 100;
+            note.className = 'text-xs ' + (left < 0 ? 'text-rose-600 font-bold' : 'text-slate-500');
+            note.textContent = left < 0 ? `A soma (R$ ${money(sum)}) passa o valor da parcela (R$ ${money(per)}) em R$ ${money(-left)}.` : `Soma R$ ${money(sum)} de R$ ${money(per)} (parcela) · resta R$ ${money(left)}`;
         }
         function cardAutoInvoice() {
             if (window._invTouched) return;
@@ -4981,20 +5041,30 @@
             const base = { cardId: g('ce-card').value, name: g('ce-name').value.trim(), date: g('ce-date').value, invoice: g('ce-inv').value, category, obs: g('ce-obs').value.trim() };
             const sgn = g('ce-kind').value === 'credito' ? -1 : 1;
             const amount = sgn * Math.abs(Number(g('ce-amount').value) || 0);
+            const payCard = cardById(base.cardId), payer = g('ce-payer') ? g('ce-payer').value : null;
+            let splits = null;
+            if (payCard && payCard.shared && payer === '__split__') {
+                splits = Array.from(document.querySelectorAll('.ce-pp')).map(i => ({ name: i.dataset.name, amount: Math.round((Number(i.value) || 0) * 100) / 100 })).filter(x => x.amount > 0);
+                const sum = splits.reduce((s, x) => s + x.amount, 0), per = cePerValue();
+                if (!splits.length) { showToast('Informe o valor pago por cada pessoa.', 'error'); return; }
+                if (sum > per + 0.001) { showToast(`A soma (R$ ${money(sum)}) passa o valor da parcela (R$ ${money(per)}).`, 'error'); return; }
+            }
+            const payFor = amt => !(payCard && payCard.shared) ? undefined : (splits ? splits.map(x => Object.assign({}, x)) : (payer ? [{ name: payer, amount: Math.abs(amt) }] : undefined));
             if (id) {
                 const en = C.entries.find(x => x.id === id);
                 Object.assign(en, base, { amount });
+                if (payCard && payCard.shared) en.pagoPor = payFor(amount); else delete en.pagoPor;
                 const all = g('ce-all');
                 if (all && all.checked && en.installment) C.entries.forEach(x => { if (x !== en && x.installment && x.installment.group === en.installment.group) Object.assign(x, { name: base.name, category: base.category, obs: base.obs, cardId: base.cardId }); });
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(g('ce-inst').value) || 1));
-                if (n === 1) C.entries.push(Object.assign({ id: uid(), amount }, base));
+                if (n === 1) C.entries.push(Object.assign({ id: uid(), amount, pagoPor: payFor(amount) }, base));
                 else {
                     const group = uid(), each = g('ce-mode').value === 'each';
                     const totalCents = Math.round(Math.abs(amount) * 100), per = Math.floor(totalCents / n);
                     for (let i = 0; i < n; i++) {
                         const cents = each ? totalCents : (i === n - 1 ? totalCents - per * (n - 1) : per);
-                        C.entries.push(Object.assign({}, base, { id: uid(), amount: sgn * cents / 100, date: addMonthsToDate(base.date, i), invoice: ymAdd(base.invoice, i), installment: { group, n: i + 1, total: n } }));
+                        C.entries.push(Object.assign({}, base, { id: uid(), amount: sgn * cents / 100, pagoPor: payFor(cents / 100), date: addMonthsToDate(base.date, i), invoice: ymAdd(base.invoice, i), installment: { group, n: i + 1, total: n } }));
                     }
                 }
                 cardSelectedId = base.cardId; cardInvMonth = base.invoice;
