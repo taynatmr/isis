@@ -2,7 +2,7 @@
 <html lang="pt-BR" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#9C7020">
     <meta name="mobile-web-app-capable" content="yes">
@@ -145,6 +145,13 @@
         }
         @media (min-width: 768px) { #sidebar.-translate-x-full { transform: none !important; } }
     </style>
+<style>html, body { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; } input, select, textarea { touch-action: manipulation; }</style>
+<script>
+(function () {   // bloqueia zoom por pinça (o toque duplo é bloqueado por touch-action no CSS)
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (ev) { document.addEventListener(ev, function (e) { e.preventDefault(); }, { passive: false }); });
+    document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+})();
+</script>
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="isisGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD54A"/><stop offset=".55" stop-color="#FFB800"/><stop offset="1" stop-color="#E89B00"/></linearGradient></defs></svg>
@@ -5267,18 +5274,33 @@
             const rows = [];
             appData.financeiro.transactions.forEach(t => {
                 if (t.type !== 'despesa' || t.cardInvoice) return; // fatura já é contada pelos lançamentos do cartão
-                rows.push({ cat: (t.category || 'Sem categoria').trim(), amount: Number(t.amount) || 0, date: t.date || '', src: 'fin' });
+                rows.push({ cat: (t.category || 'Sem categoria').trim(), amount: Number(t.amount) || 0, date: t.date || '', src: 'fin', desc: t.desc || '', st: finSt(t) });
             });
-            appData.cartao.entries.forEach(e => rows.push({ cat: (e.category || 'Outros').trim(), amount: Number(e.amount) || 0, date: e.date || '', src: 'card' }));
+            appData.cartao.entries.forEach(e => rows.push({ cat: (e.category || 'Outros').trim(), amount: Number(e.amount) || 0, date: e.date || '', src: 'card', desc: e.name || '', card: (cardById(e.cardId) || {}).name || '', inst: e.installment }));
             const filt = rows.filter(r => catRankPeriod === 'all' || (catRankPeriod === 'month' && r.date.startsWith(ym)) || (catRankPeriod === 'year' && r.date.startsWith(yr)));
             const map = {};
             filt.forEach(r => {
                 const k = normKey(r.cat);
-                const o = map[k] || (map[k] = { name: r.cat, total: 0, count: 0, card: 0 });
+                const o = map[k] || (map[k] = { name: r.cat, total: 0, count: 0, card: 0, items: [] });
+                o.items.push(r);
                 o.total += r.amount; o.count++; if (r.src === 'card') o.card += r.amount;
             });
             const hid = new Set(catHidden());
             return Object.entries(map).filter(([k]) => includeHidden || !hid.has(k)).map(([k, v]) => Object.assign({ key: k, hidden: hid.has(k) }, v)).sort((a, b) => b.total - a.total);
+        }
+        function catRankDetail(enc) {
+            const k = decodeURIComponent(enc), c = categoryRanking(true).find(x => x.key === k); if (!c) return;
+            const items = c.items.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.amount - a.amount);
+            const per = catRankPeriod === 'month' ? 'este mês' : catRankPeriod === 'year' ? 'este ano' : 'todo o período';
+            showModal(esc(c.name), `
+                <p class="text-xs text-slate-400 mb-3">${items.length} lançamento(s) · ${per} · total <b class="text-rose-600">R$ ${money(c.total)}</b></p>
+                <div class="space-y-1.5 max-h-[60vh] overflow-y-auto">${items.map(r => `
+                    <div class="flex items-start justify-between gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40 text-sm">
+                        <div class="min-w-0"><p class="font-semibold text-slate-800 dark:text-white truncate">${esc(r.desc || '(sem descrição)')}</p>
+                        <p class="text-[11px] text-slate-400">${r.date ? fmtBR(r.date) : 'sem data'} · ${r.src === 'card' ? '<i class="fa-solid fa-credit-card mr-0.5"></i>' + esc(r.card || 'Cartão') + (r.inst ? ' · ' + r.inst.n + '/' + r.inst.total : '') : '<i class="fa-solid fa-wallet mr-0.5"></i>Financeiro' + (r.st === 'pendente' ? ' · pendente' : '')}</p></div>
+                        <b class="whitespace-nowrap ${r.amount < 0 ? 'text-emerald-600' : 'text-rose-600'}">${r.amount < 0 ? '− ' : ''}R$ ${money(Math.abs(r.amount))}</b>
+                    </div>`).join('')}</div>
+                <div class="flex justify-end mt-4"><button onclick="closeModal()" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-700">Fechar</button></div>`);
         }
         function catHideToggle(k, hide) {
             const a = catHidden().filter(x => x !== k); if (hide) a.push(k);
@@ -5304,7 +5326,7 @@
             if (!list.length) return '<p class="text-sm text-slate-400 text-center py-8">Nenhuma categoria encontrada.</p>';
             const max = ranked[0].total || 1, grand = ranked.reduce((s, c) => s + c.total, 0) || 1;
             return `<div class="space-y-3">${list.map(c => `
-                <div>
+                <div onclick="catRankDetail('${encodeURIComponent(c.key)}')" class="cursor-pointer rounded-xl -mx-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-700/40" title="Toque para ver os lançamentos">
                     <div class="flex justify-between items-baseline text-sm">
                         <span class="font-semibold text-slate-800 dark:text-white truncate"><span class="inline-block w-6 text-xs font-bold ${c.pos <= 3 ? 'text-amber-500' : 'text-slate-400'}">#${c.pos}</span>${esc(c.name)}</span>
                         <span class="font-bold text-rose-600 whitespace-nowrap ml-2">R$ ${money(c.total)}</span>
