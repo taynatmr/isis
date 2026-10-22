@@ -200,6 +200,10 @@
                     <i class="fa-solid fa-wallet w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Financeiro</span>
                 </a>
+                <a href="#" onclick="switchTab('planejamento')" id="nav-planejamento" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-compass-drafting w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
+                    <span>Planejamento</span>
+                </a>
                 <a href="#" onclick="switchTab('cartao')" id="nav-cartao" class="nav-item flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group hover:bg-side-900/80 text-slate-300 hover:text-white">
                     <i class="fa-solid fa-credit-card w-5 text-center text-teal-400 group-hover:scale-110 transition-transform"></i>
                     <span>Cartão de Crédito</span>
@@ -708,7 +712,8 @@
             const lists = [d.financeiro && d.financeiro.transactions, d.agenda, d.lembretes, d.contatos, d.hobbies, d.atalhos, d.metas,
                            h.contributions, h.budgets, h.suppliers, h.docFolders, d.saude && d.saude.meds,
                            d.saude && d.saude.exams, d.saude && d.saude.vacinas, d.saude && d.saude.treinos, d.saude && d.saude.peso, d.receitas, d.docsPessoais && d.docsPessoais.folders, d.docsPessoais && d.docsPessoais.files,
-                           d.aniversarios, d.notas, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups];
+                           d.aniversarios, d.notas, d.cartao && d.cartao.cards, d.cartao && d.cartao.entries, h.budgetGroups,
+                           d.plano && d.plano.budgets, d.plano && d.plano.recs, d.plano && d.plano.goals, d.plano && d.plano.assets, d.plano && d.plano.invests, d.plano && d.plano.debts];
             let n = lists.reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
             n += Object.keys((d.saude && d.saude.waterLog) || {}).length;
             n += Object.keys((d.saude && d.saude.medLog) || {}).length;
@@ -977,6 +982,7 @@
                 dashboard: 'Resumo',
                 saude: 'Saúde & Bem-estar',
                 financeiro: 'Controle Financeiro',
+                planejamento: 'Planejamento Financeiro',
                 cartao: 'Cartão de Crédito',
                 contas: 'Cartão (Débito e Poupança)',
                 notas: 'Notas',
@@ -1043,6 +1049,7 @@
                 case 'dashboard': renderDashboard(container); break;
                 case 'saude': renderSaude(container); break;
                 case 'financeiro': renderFinanceiro(container); break;
+                case 'planejamento': renderPlanejamento(container); break;
                 case 'cartao': renderCartao(container); break;
                 case 'contas': renderContas(container); break;
                 case 'notas': renderNotas(container); break;
@@ -3220,6 +3227,10 @@
                                 <i class="fa-solid fa-house-chimney"></i>
                                 <span>DESPESAS DA CASA</span>
                             </button>
+                            <button onclick="plTab='dividas';switchTab('planejamento')" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
+                                <i class="fa-solid fa-hand-holding-dollar"></i>
+                                <span>DÍVIDAS</span>
+                            </button>
                             <button onclick="openEvoView()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-camera-retro"></i>
                                 <span>EVOLUÇÃO</span>
@@ -4282,6 +4293,11 @@
                         </div>
                     </div>
                     ${!id ? `<p id="fin-inst-preview" class="text-xs text-slate-500 -mt-2 hidden"></p>` : ''}
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
+                        <div><label class="${LBL}">De quem</label><select id="fin-owner" onchange="finWhoUi()" class="${INP}">${PL_OWNERS().map(([k, l]) => `<option value="${k}" ${(t.owner || '') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+                        <div id="fin-payer-wrap" class="${(t.owner || '') === '' ? '' : 'hidden'}"><label class="${LBL}">Quem pagou</label><select id="fin-payer" class="${INP}"><option value="">—</option>${plano().people.map(p => `<option value="${p.id}" ${t.payer === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+                        <div><label class="${LBL}">Dedutível no IR</label><select id="fin-ded" class="${INP}"><option value="">Não</option>${Object.entries(PL_IR).map(([k, l]) => `<option value="${k}" ${t.dedutivel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+                    </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Anexos (recibo, nota, comprovante)</label>
                         <input type="file" id="fin-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
@@ -4316,6 +4332,14 @@
             el.innerHTML = `<i class="fa-solid fa-layer-group mr-1"></i>${n}x de R$ ${money(Math.floor(amount * 100 / n) / 100)} — uma por mês. A 1ª parcela recebe o status escolhido; as demais ficam como <b>Pendente</b>.`;
         }
 
+        function finWhoUi() { const o = document.getElementById('fin-owner').value; document.getElementById('fin-payer-wrap').classList.toggle('hidden', o !== ''); }
+        function finApplyExtra(o) {
+            const ow = document.getElementById('fin-owner'), pa = document.getElementById('fin-payer'), de = document.getElementById('fin-ded'); if (!ow) return o;
+            if (ow.value) o.owner = ow.value; else delete o.owner;
+            if (!ow.value && pa && pa.value) o.payer = pa.value; else delete o.payer;
+            if (de && de.value) o.dedutivel = de.value; else delete o.dedutivel;
+            return o;
+        }
         async function saveFinance(e, id) {
             e.preventDefault();
             const type = document.getElementById('fin-type').value;
@@ -4341,25 +4365,26 @@
                     const toRemove = Array.from(document.querySelectorAll('.fin-remove-att:checked')).map(c => c.value);
                     toRemove.forEach(rid => deleteStoredFile(rid));
                     tr.attachments = (tr.attachments || []).filter(a => !toRemove.includes(a.id)).concat(newAtts);
+                    finApplyExtra(tr);
                 }
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(document.getElementById('fin-installments').value) || 1));
                 if (n === 1) {
-                    appData.financeiro.transactions.push(Object.assign({ id: uid(), type, status, desc, amount, category, date, accId, toAccId, attachments: newAtts }, habitacional ? { habitacional: true, habPerson } : {}));
+                    appData.financeiro.transactions.push(finApplyExtra(Object.assign({ id: uid(), type, status, desc, amount, category, date, accId, toAccId, attachments: newAtts }, habitacional ? { habitacional: true, habPerson } : {})));
                 } else {
                     const totalCents = Math.round(Number(amount) * 100);
                     const base = Math.floor(totalCents / n);
                     const group = uid();
                     for (let i = 0; i < n; i++) {
                         const cents = i === n - 1 ? totalCents - base * (n - 1) : base;
-                        appData.financeiro.transactions.push(Object.assign({
+                        appData.financeiro.transactions.push(finApplyExtra(Object.assign({
                             id: uid(), type, desc, category, accId, toAccId,
                             amount: (cents / 100).toFixed(2),
                             date: addMonthsToDate(date, i),
                             status: i === 0 ? status : 'pendente',
                             installment: { group, n: i + 1, total: n },
                             attachments: i === 0 ? newAtts : []
-                        }, habitacional ? { habitacional: true, habPerson } : {}));
+                        }, habitacional ? { habitacional: true, habPerson } : {})));
                     }
                 }
             }
@@ -4940,6 +4965,7 @@
                         <div><label class="${LBL}">Dia vencimento</label><input type="number" min="1" max="31" id="cd-due" required value="${c.dueDay}" class="${INP}"></div>
                         <div><label class="${LBL}">Limite (R$)</label><input type="number" step="0.01" min="0" id="cd-limit" value="${c.limit}" class="${INP}"></div>
                     </div>
+                    <div><label class="${LBL}">Titular (para as visões do casal)</label><select id="cd-owner" class="${INP}">${PL_OWNERS().map(([k, l]) => `<option value="${k}" ${(c.owner || '') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
                     <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
                         <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><input type="checkbox" id="cd-shared" ${c.shared ? 'checked' : ''} onchange="cdSharedToggle()"> Compartilhada</label>
                         <div id="cd-shared-box" class="${c.shared ? '' : 'hidden'} mt-3">
@@ -4960,7 +4986,7 @@
             e.preventDefault();
             const v = k => document.getElementById(k).value.trim();
             const data = { name: v('cd-name'), number: v('cd-number'), agency: v('cd-agency'), account: v('cd-account'), closingDay: Number(v('cd-close')), dueDay: Number(v('cd-due')), limit: Number(v('cd-limit')) || 0 };
-            data.shared = document.getElementById('cd-shared').checked;
+            data.shared = document.getElementById('cd-shared').checked; data.owner = document.getElementById('cd-owner').value;
             data.sharedNames = Array.from(document.querySelectorAll('#cd-names .cd-n')).map(i => i.value.trim()).filter((n, i, a) => n && a.indexOf(n) === i);
             if (data.shared && data.sharedNames.length < 2) { showToast('Informe ao menos 2 nomes para a conta compartilhada.', 'error'); return; }
             if (id) Object.assign(cardById(id), data);
@@ -6121,7 +6147,7 @@
 
         // ========== AVISOS AO ABRIR (faturas em atraso, contas e lembretes) ==========
         function avisosCalc() {
-            const hoje = localDateStr(), A = { faturasAtr: [], faturasProx: [], contasAtr: [], contasHoje: [], lemAtr: [], lemHoje: [] };
+            const hoje = localDateStr(), A = { faturasAtr: [], faturasProx: [], contasAtr: [], contasHoje: [], contasProx: [], lemAtr: [], lemHoje: [], orc: [] }, RD = Math.max(0, Number(plano().remindDays) || 0);
             const diff = ds => Math.round((new Date(ds + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000);
             (appData.financeiro.transactions || []).forEach(t => {
                 if ((t.status || 'pago') !== 'pendente' || t.type === 'receita' || t.type === 'transferencia') return;
@@ -6129,10 +6155,10 @@
                     const c = cardById(t.cardInvoice.cardId), due = c ? cardDueDate(c, t.cardInvoice.inv) : t.date;
                     if (!due) return;
                     const it = { id: t.id, nome: (c ? c.name : 'Cartão') + ' · fatura ' + fmtYM(t.cardInvoice.inv), valor: Number(t.amount) || 0, data: due, dias: diff(due) };
-                    if (it.dias < 0) A.faturasAtr.push(it); else if (it.dias <= 3) A.faturasProx.push(it);
+                    if (it.dias < 0) A.faturasAtr.push(it); else if (it.dias <= Math.max(3, RD)) A.faturasProx.push(it);
                 } else if (t.date) {
                     const it = { id: t.id, nome: t.desc || t.category || 'Conta', valor: Number(t.amount) || 0, data: t.date, dias: diff(t.date) };
-                    if (it.dias < 0) A.contasAtr.push(it); else if (it.dias === 0) A.contasHoje.push(it);
+                    if (it.dias < 0) A.contasAtr.push(it); else if (it.dias === 0) A.contasHoje.push(it); else if (it.dias <= RD) A.contasProx.push(it);
                 }
             });
             (appData.lembretes || []).forEach(l => {
@@ -6140,10 +6166,11 @@
                 const it = { id: l.id, nome: l.title || 'Lembrete', data: l.date, dias: diff(l.date) };
                 if (it.dias < 0) A.lemAtr.push(it); else if (it.dias === 0) A.lemHoje.push(it);
             });
+            try { plBudgetStatus(localDateStr().slice(0, 7), true).forEach(x => { if (x.pct >= 80) A.orc.push({ id: x.b.id, nome: x.b.category + ' — ' + Math.round(x.pct) + '% do limite', valor: x.spent, data: '', dias: 0 }); }); } catch (e) {}
             Object.values(A).forEach(a => a.sort((x, y) => x.data < y.data ? -1 : 1));
             return A;
         }
-        function avisosCount() { try { const A = avisosCalc(); return A.faturasAtr.length + A.faturasProx.length + A.contasAtr.length + A.contasHoje.length + A.lemAtr.length + A.lemHoje.length; } catch (e) { return 0; } }
+        function avisosCount() { try { const A = avisosCalc(); return A.faturasAtr.length + A.faturasProx.length + A.contasAtr.length + A.contasHoje.length + A.contasProx.length + A.lemAtr.length + A.lemHoje.length + A.orc.length; } catch (e) { return 0; } }
         function avisosOff() { try { return localStorage.getItem('isis_avisos_off') === '1'; } catch (e) { return false; } }
         function avisosSetOff(v) { try { localStorage.setItem('isis_avisos_off', v ? '1' : '0'); } catch (e) {} }
         function openAvisos(manual) {
@@ -6151,7 +6178,7 @@
             if (!n && !manual) return;
             const sec = (titulo, icone, cor, itens, mostrarValor, fn) => !itens.length ? '' : `
                 <div class="mb-3"><p class="text-[11px] font-bold uppercase ${cor} mb-1"><i class="fa-solid ${icone} mr-1"></i>${titulo} (${itens.length})</p>
-                ${itens.slice(0, 6).map(i => `<button onclick="${fn}" class="w-full text-left flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-3 text-sm py-1.5 border-b border-slate-100 dark:border-slate-700"><span class="sm:truncate text-slate-700 dark:text-slate-200">${esc(i.nome)}</span><span class="sm:shrink-0 text-xs text-slate-400">${mostrarValor ? 'R$ ' + money(i.valor) + ' · ' : ''}${fmtBR(i.data)}${i.dias < 0 ? ' · ' + Math.abs(i.dias) + 'd atraso' : i.dias > 0 ? ' · em ' + i.dias + 'd' : ' · hoje'}</span></button>`).join('')}
+                ${itens.slice(0, 6).map(i => `<button onclick="${fn}" class="w-full text-left flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-3 text-sm py-1.5 border-b border-slate-100 dark:border-slate-700"><span class="sm:truncate text-slate-700 dark:text-slate-200">${esc(i.nome)}</span><span class="sm:shrink-0 text-xs text-slate-400">${mostrarValor ? 'R$ ' + money(i.valor) + ' · ' : ''}${i.data ? fmtBR(i.data) + (i.dias < 0 ? ' · ' + Math.abs(i.dias) + 'd atraso' : i.dias > 0 ? ' · em ' + i.dias + 'd' : ' · hoje') : 'neste mês'}</span></button>`).join('')}
                 ${itens.length > 6 ? `<p class="text-[11px] text-slate-400 mt-1">+${itens.length - 6} outros</p>` : ''}</div>`;
             const totFat = A.faturasAtr.reduce((s, i) => s + i.valor, 0), totCon = A.contasAtr.reduce((s, i) => s + i.valor, 0);
             const body = !n ? '<p class="text-sm text-slate-500 text-center py-6"><i class="fa-solid fa-circle-check text-emerald-500 text-3xl block mb-2"></i>Tudo em dia! Nenhuma fatura, conta ou lembrete atrasado.</p>' :
@@ -6159,6 +6186,8 @@
                 sec('Faturas a vencer (3 dias)', 'fa-credit-card', 'text-amber-600', A.faturasProx, true, "closeModal();switchTab('cartao')") +
                 sec('Contas em atraso', 'fa-file-invoice-dollar', 'text-rose-600', A.contasAtr, true, "closeModal();switchTab('financeiro')") +
                 sec('Contas que vencem hoje', 'fa-file-invoice-dollar', 'text-amber-600', A.contasHoje, true, "closeModal();switchTab('financeiro')") +
+                sec('Contas a vencer (' + Math.max(0, Number(plano().remindDays) || 0) + ' dia(s))', 'fa-file-invoice-dollar', 'text-amber-600', A.contasProx, true, "closeModal();switchTab('planejamento');plTab='vencimentos'") +
+                sec('Orçamento acima de 80%', 'fa-bullseye', 'text-amber-600', A.orc, true, "closeModal();plTab='orcamento';switchTab('planejamento')") +
                 sec('Lembretes atrasados', 'fa-bell', 'text-rose-600', A.lemAtr, false, "closeModal();switchTab('lembretes')") +
                 sec('Lembretes de hoje', 'fa-bell', 'text-teal-600', A.lemHoje, false, "closeModal();switchTab('lembretes')") +
                 ((totFat || totCon) ? `<p class="text-xs text-slate-500 mt-1">Em atraso: <b class="text-rose-600">R$ ${money(totFat + totCon)}</b></p>` : '');
@@ -6984,6 +7013,7 @@
                 if (f.acc && t.accId !== f.acc && t.toAccId !== f.acc) return false;
                 if (f.cat && (t.category || '') !== f.cat) return false;
                 if (f.type && t.type !== f.type) return false;
+                if (f.owner && (t.owner || '') !== (f.owner === 'casa' ? '' : f.owner)) return false;
                 if (f.hab && !(t.habitacional || isHabId(t.accId) || (t.type === 'transferencia' && isHabId(t.toAccId)))) return false;
                 const a = Number(t.amount) || 0;
                 if (f.min !== '' && a < Number(f.min)) return false;
@@ -7417,11 +7447,13 @@
                                 <button onclick="finSet('hab', !finF.hab)" title="${finF.hab ? 'Mostrando só movimentações Habitacional (toque para ver tudo)' : 'Ver só movimentações Habitacional'}" class="w-9 h-9 rounded-xl flex items-center justify-center ${finF.hab ? 'bg-amber-500 text-white shadow' : 'bg-slate-100 dark:bg-slate-700 text-amber-600'}"><i class="fa-solid fa-hammer"></i></button>
                                 <button onclick="openAnalise()" class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5"><i class="fa-solid fa-chart-line"></i><span>Análise</span></button>
                                 <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
+                                <button onclick="openExtratoImport()" class="bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5"><i class="fa-solid fa-file-import"></i><span>Extrato</span></button>
                             </div>
                         </div>
                         ${finFilterOpen ? `<div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-2">
                             <select onchange="finSet('acc',this.value)" class="${S}"><option value="">Todos os bancos/cartões</option>${contasData().map(a => o(a.id, accLabel(a), finF.acc)).join('')}</select>
                             <select onchange="finSet('cat',this.value)" class="${S}"><option value="">Todas as categorias</option>${cats.map(c => o(c, c, finF.cat)).join('')}</select>
+                            <select onchange="finSet('owner',this.value)" class="${S}"><option value="">De quem: todos</option>${[['casa', 'Casa (conjunta)'], ['p1', plano().people[0].name], ['p2', plano().people[1].name]].map(([k, l]) => o(k, l, finF.owner || '')).join('')}</select>
                             <select onchange="finSet('type',this.value)" class="${S}">${o('', 'Receitas e despesas', finF.type)}${o('receita', 'Só receitas', finF.type)}${o('despesa', 'Só despesas', finF.type)}${o('transferencia', 'Só transferências', finF.type)}</select>
                             <select onchange="changeFinanceStatusFilter(this.value)" class="${S}">${o('todos', 'Todos os status', financeFilterStatus)}${o('pago', 'Pagos', financeFilterStatus)}${o('recebido', 'Recebidos', financeFilterStatus)}${o('pendente', 'Pendentes', financeFilterStatus)}</select>
                             <input type="number" step="0.01" min="0" placeholder="Valor mín." value="${finF.min}" onchange="finSet('min',this.value)" class="${S} w-28">
@@ -7895,6 +7927,634 @@
                 }
             });
         }
+        // =====================================================================
+        // PLANEJAMENTO: orçamento, fluxo projetado, recorrentes, vencimentos
+        // =====================================================================
+        let plTab = 'orcamento', plMonth = localDateStr().slice(0, 7), plDay = '', plAnoIR = String(new Date().getFullYear()), plCmpMode = 'mes';
+        let plVista = (() => { try { return localStorage.getItem('isis_pl_vista') || 'todos'; } catch (e) { return 'todos'; } })();
+        const PL_CARD = 'bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-slate-700';
+        const PL_BTN = 'bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow';
+        const PL_BTN2 = 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold';
+        const R$ = v => 'R$ ' + money(Number(v) || 0);
+        function plano() {
+            const P = appData.plano || (appData.plano = {});
+            if (!Array.isArray(P.people) || P.people.length < 2) P.people = [{ id: 'p1', name: 'Tayná', renda: '' }, { id: 'p2', name: 'Samuel', renda: '' }];
+            ['budgets', 'recs', 'goals', 'assets', 'snaps', 'invests', 'debts', 'acertos'].forEach(k => { if (!Array.isArray(P[k])) P[k] = []; });
+            if (!P.catClass || typeof P.catClass !== 'object') P.catClass = {};
+            if (!P.split) P.split = 'meio';
+            if (P.remindDays === undefined) P.remindDays = 3;
+            return P;
+        }
+        function plPersonName(id) { const p = plano().people.find(x => x.id === id); return p ? p.name : (id === 'casa' || !id ? 'Casa' : id); }
+        function plVisible(owner) { if (plVista === 'todos') return true; return (owner || 'casa') === plVista; }
+        function plSetVista(v) { plVista = v; try { localStorage.setItem('isis_pl_vista', v); } catch (e) {} renderCurrentTabContent(); }
+        function plCurYM() { return localDateStr().slice(0, 7); }
+
+        // linhas de movimentação "de caixa" (sem transferências, sem fatura duplicada, sem contas Habitacional)
+        function plRows(ym, ignoreVista) {
+            const rows = [];
+            appData.financeiro.transactions.forEach(t => {
+                if (t.type === 'transferencia' || t.cardInvoice || isHabId(t.accId)) return;
+                if (ym && !(t.date || '').startsWith(ym)) return;
+                rows.push({ id: t.id, type: t.type, amount: Number(t.amount) || 0, category: (t.category || 'Sem categoria').trim(), date: t.date || '', desc: t.desc || '', owner: t.owner || '', payer: t.payer || '', src: 'fin', st: finSt(t), tx: t });
+            });
+            appData.cartao.entries.forEach(e => {
+                if (ym && !(e.date || '').startsWith(ym)) return;
+                const c = cardById(e.cardId);
+                rows.push({ id: e.id, type: 'despesa', amount: Number(e.amount) || 0, category: (e.category || 'Outros').trim(), date: e.date || '', desc: e.name || '', owner: c && c.shared ? 'casa' : ((c && c.owner) || ''), src: 'card', st: 'pago', entry: e, card: c });
+            });
+            return ignoreVista ? rows : rows.filter(r => plVisible(r.owner));
+        }
+        function plSpentMap(ym, ignoreVista) {
+            const m = {};
+            plRows(ym, ignoreVista).forEach(r => { if (r.type !== 'despesa') return; const k = normKey(r.category); m[k] = (m[k] || 0) + r.amount; });
+            return m;
+        }
+        function plAllCats() {
+            const s = new Set();
+            appData.financeiro.transactions.forEach(t => { if (t.category && !t.cardInvoice) s.add(t.category.trim()); });
+            appData.cartao.entries.forEach(e => { if (e.category) s.add(e.category.trim()); });
+            (appData.cartao.categories || []).forEach(c => s.add(c));
+            plano().budgets.forEach(b => s.add(b.category));
+            return [...s].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        }
+
+        // ---------- casca da tela ----------
+        const PL_TABS = [
+            ['orcamento', 'Orçamento', 'fa-bullseye'], ['fluxo', 'Fluxo projetado', 'fa-chart-line'], ['recorrentes', 'Recorrentes', 'fa-repeat'], ['vencimentos', 'Vencimentos', 'fa-calendar-days'],
+            ['metas', 'Metas', 'fa-flag-checkered'], ['patrimonio', 'Patrimônio', 'fa-landmark'], ['investimentos', 'Investimentos', 'fa-seedling'], ['dividas', 'Dívidas', 'fa-hand-holding-dollar'],
+            ['casal', 'Casal', 'fa-user-group'], ['analise', 'Análise', 'fa-chart-pie'], ['ir', 'Imposto de Renda', 'fa-file-invoice']
+        ];
+        function plSetTab(t) { plTab = t; plDay = ''; renderCurrentTabContent(); window.scrollTo(0, 0); }
+        function plNavMonth(d) { plMonth = ymAdd(plMonth, d); plDay = ''; renderCurrentTabContent(); }
+        function renderPlanejamento(container) {
+            const P = plano();
+            const vistas = [['todos', 'Todos'], ['p1', P.people[0].name], ['p2', P.people[1].name], ['casa', 'Casa']];
+            const fns = { orcamento: plRenderOrcamento, fluxo: plRenderFluxo, recorrentes: plRenderRecs, vencimentos: plRenderVenc, metas: plRenderMetas, patrimonio: plRenderPatrimonio, investimentos: plRenderInvest, dividas: plRenderDividas, casal: plRenderCasal, analise: plRenderAnalise, ir: plRenderIR };
+            let body = '';
+            try { body = (fns[plTab] || plRenderOrcamento)(); } catch (e) { console.error(e); body = '<p class="text-sm text-rose-600">Erro ao montar esta tela: ' + esc(e.message) + '</p>'; }
+            container.innerHTML = `<div class="space-y-4 max-w-7xl mx-auto">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 max-w-full">${PL_TABS.map(([k, l, ic]) => `<button onclick="plSetTab('${k}')" class="shrink-0 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 ${plTab === k ? 'bg-teal-600 text-white shadow' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700'}"><i class="fa-solid ${ic}"></i>${l}</button>`).join('')}</div>
+                    <div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-bold" title="Ver só os lançamentos de cada pessoa ou da casa">${vistas.map(([k, l]) => `<button onclick="plSetVista('${k}')" class="px-3 py-1.5 ${plVista === k ? 'bg-amber-500 text-teal-950' : 'bg-white dark:bg-slate-800 text-slate-500'}">${esc(l)}</button>`).join('')}</div>
+                </div>
+                ${body}</div>`;
+        }
+        function plMonthNav() {
+            return `<div class="flex items-center gap-2"><button onclick="plNavMonth(-1)" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-left text-xs"></i></button>
+                <span class="font-bold text-sm text-slate-800 dark:text-white min-w-[130px] text-center">${fmtYM(plMonth)}</span>
+                <button onclick="plNavMonth(1)" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-right text-xs"></i></button></div>`;
+        }
+        function plBar(pct, over80) {
+            const c = pct >= 100 ? 'bg-rose-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500';
+            return `<div class="h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"><div class="h-full ${c}" style="width:${Math.min(100, Math.max(2, pct))}%"></div></div>`;
+        }
+
+        // ---------- formulário genérico ----------
+        const PL_OWNERS = () => [['', 'Casa (conjunta)'], ['p1', plano().people[0].name], ['p2', plano().people[1].name]];
+        const PL_FORMS = {
+            budgets: { title: 'Orçamento por categoria', fields: [['category', 'Categoria', 'text', { list: 'pl-cats', req: 1 }], ['limit', 'Limite mensal (R$)', 'num', { req: 1 }]] },
+            recs: { title: 'Conta recorrente / assinatura', fields: [
+                ['name', 'Nome', 'text', { req: 1, ph: 'Ex.: Netflix, Academia, Seguro do carro' }], ['amount', 'Valor (R$)', 'num', { req: 1 }],
+                ['kind', 'Tipo', 'select', { opts: [['despesa', 'Despesa'], ['receita', 'Receita']] }], ['tipo', 'Classificação', 'select', { opts: [['assinatura', 'Assinatura / serviço'], ['fixa', 'Conta fixa'], ['seguro', 'Seguro / plano'], ['outra', 'Outra']] }],
+                ['freq', 'Frequência', 'select', { opts: [['mensal', 'Todo mês'], ['anual', 'Uma vez por ano']] }], ['day', 'Dia do vencimento', 'num', { ph: '1 a 31' }],
+                ['month', 'Mês (se anual, 1 a 12)', 'num', {}], ['category', 'Categoria', 'text', { list: 'pl-cats' }],
+                ['owner', 'De quem', 'select', { opts: PL_OWNERS }], ['start', 'Começa em (opcional)', 'date', {}], ['end', 'Termina em (opcional)', 'date', {}] ] },
+            goals: { title: 'Meta de economia', fields: [['name', 'Nome da meta', 'text', { req: 1, ph: 'Reserva de emergência, viagem, troca de carro' }], ['target', 'Valor-alvo (R$)', 'num', { req: 1 }], ['deadline', 'Prazo (data)', 'date', { req: 1 }], ['initial', 'Já guardado (R$)', 'num', {}]] },
+            assets: { title: 'Bem / patrimônio', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Apartamento, carro, conta em outro banco' }], ['kind', 'Tipo', 'select', { opts: [['imovel', 'Imóvel'], ['carro', 'Carro / veículo'], ['conta', 'Conta / dinheiro'], ['outro', 'Outro bem']] }], ['value', 'Valor atual (R$)', 'num', { req: 1 }]] },
+            invests: { title: 'Aplicação', fields: [['name', 'Nome', 'text', { req: 1, ph: 'CDB Banco X 110% CDI' }], ['inst', 'Instituição', 'text', {}],
+                ['tipo', 'Tipo', 'select', { opts: [['CDB', 'CDB / RDB'], ['LCI/LCA', 'LCI / LCA'], ['Tesouro', 'Tesouro Direto'], ['Fundo', 'Fundo'], ['Acoes', 'Ações / FIIs'], ['Poupanca', 'Poupança'], ['Outro', 'Outro']] }],
+                ['pct', 'Contratado (% do CDI)', 'num', { ph: 'Ex.: 110' }], ['saldo', 'Saldo atual (R$)', 'num', { req: 1 }], ['saldoDate', 'Saldo conferido em', 'date', {}]] },
+            debts: { title: 'Dívida / financiamento', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Financiamento do carro, empréstimo' }], ['saldo', 'Saldo devedor (R$)', 'num', { req: 1 }], ['parcelas', 'Parcelas restantes', 'num', { req: 1 }], ['parcela', 'Valor da parcela (R$)', 'num', { req: 1 }], ['taxa', 'Juros ao mês (%) — vazio = calcular', 'num', {}]] }
+        };
+        function plOpen(kind, id, preset) {
+            const F = PL_FORMS[kind], list = plano()[kind], cur = id ? list.find(x => x.id === id) : null;
+            const v = Object.assign({}, preset || {}, cur || {});
+            if (kind === 'recs' && !cur) { v.kind = v.kind || 'despesa'; v.freq = v.freq || 'mensal'; v.day = v.day || 5; v.tipo = v.tipo || 'assinatura'; }
+            if (kind === 'invests' && !cur) v.saldoDate = localDateStr();
+            const inp = ([k, l, t, o]) => {
+                const val = v[k] === undefined || v[k] === null ? '' : v[k];
+                let h;
+                if (t === 'select') h = `<select id="plf-${k}" class="${INP}">${(typeof o.opts === 'function' ? o.opts() : o.opts).map(([a, b]) => `<option value="${esc(a)}" ${String(val) === String(a) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
+                else h = `<input id="plf-${k}" type="${t === 'num' ? 'text' : t}" ${t === 'num' ? 'inputmode="decimal"' : ''} ${o.list ? `list="${o.list}"` : ''} ${o.req ? 'required' : ''} placeholder="${esc(o.ph || '')}" value="${esc(val)}" class="${INP}">`;
+                return `<div><label class="${LBL}">${l}</label>${h}</div>`;
+            };
+            let extra = '';
+            if (kind === 'invests' && !cur) extra = `<div class="grid grid-cols-2 gap-3"><div><label class="${LBL}">Valor aplicado (R$)</label><input id="plf-aporte" inputmode="decimal" class="${INP}" placeholder="Quanto você colocou"></div><div><label class="${LBL}">Data da aplicação</label><input id="plf-aporteDate" type="date" value="${localDateStr()}" class="${INP}"></div></div>`;
+            showModal(F.title, `<datalist id="pl-cats">${plAllCats().map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+                <form onsubmit="plSave(event,'${kind}','${id || ''}')" class="space-y-3"><div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${F.fields.map(inp).join('')}</div>${extra}
+                <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button></form>`);
+        }
+        function plSave(e, kind, id) {
+            e.preventDefault();
+            const F = PL_FORMS[kind], list = plano()[kind], o = {};
+            F.fields.forEach(([k, l, t]) => { const el = document.getElementById('plf-' + k); o[k] = t === 'num' ? (el.value.trim() === '' ? '' : recNum(el.value)) : el.value.trim(); });
+            if (id) Object.assign(list.find(x => x.id === id), o);
+            else {
+                const n = Object.assign({ id: uid() }, o);
+                if (kind === 'goals') { n.aportes = []; }
+                if (kind === 'invests') { const a = recNum(document.getElementById('plf-aporte').value); n.aportes = a > 0 ? [{ id: uid(), date: document.getElementById('plf-aporteDate').value || localDateStr(), amount: a }] : []; }
+                list.push(n);
+            }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Salvo!', 'success');
+        }
+        function plDel(kind, id) { if (!confirm('Excluir este item?')) return; const P = plano(); P[kind] = P[kind].filter(x => x.id !== id); saveAppData(); renderCurrentTabContent(); }
+        const plEditBtns = (kind, id) => `<button onclick="plOpen('${kind}','${id}')" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button> <button onclick="plDel('${kind}','${id}')" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>`;
+
+        // ---------- 1) Orçamento por categoria ----------
+        function plBudgetStatus(ym, ignoreVista) {
+            const sp = plSpentMap(ym, ignoreVista);
+            return plano().budgets.map(b => { const s = sp[normKey(b.category)] || 0, lim = Number(b.limit) || 0; return { b, spent: s, pct: lim > 0 ? s / lim * 100 : 0, lim }; });
+        }
+        function plRenderOrcamento() {
+            const st = plBudgetStatus(plMonth), sp = plSpentMap(plMonth), used = new Set(plano().budgets.map(b => normKey(b.category)));
+            const totLim = st.reduce((s, x) => s + x.lim, 0), totSp = st.reduce((s, x) => s + x.spent, 0);
+            const sem = Object.entries(sp).filter(([k, v]) => !used.has(k) && v > 0).sort((a, b) => b[1] - a[1]).slice(0, 6);
+            const nameOf = k => { const r = plRows(plMonth).find(x => normKey(x.category) === k); return r ? r.category : k; };
+            return `<div class="${PL_CARD}">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-bullseye text-teal-500"></i>Orçamento por categoria</h3>
+                    <div class="flex items-center gap-3">${plMonthNav()}<button onclick="plOpen('budgets')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Novo limite</button></div></div>
+                ${st.length ? `<p class="text-xs text-slate-500 mb-4">Limite total <b>${R$(totLim)}</b> · gasto <b class="${totSp > totLim ? 'text-rose-600' : 'text-slate-800 dark:text-white'}">${R$(totSp)}</b> (${totLim ? Math.round(totSp / totLim * 100) : 0}%)</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${st.sort((a, b) => b.pct - a.pct).map(({ b, spent, pct, lim }) => `
+                    <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border ${pct >= 100 ? 'border-rose-300' : pct >= 80 ? 'border-amber-300' : 'border-slate-100 dark:border-slate-700'}">
+                        <div class="flex justify-between items-start gap-2 mb-2"><div class="min-w-0"><p class="font-bold text-sm text-slate-800 dark:text-white truncate">${esc(b.category)}</p>
+                            <p class="text-xs text-slate-500">${R$(spent)} de ${R$(lim)}</p></div>${plEditBtns('budgets', b.id)}</div>
+                        ${plBar(pct)}
+                        <p class="text-[11px] mt-1.5 ${pct >= 100 ? 'text-rose-600 font-bold' : pct >= 80 ? 'text-amber-600 font-bold' : 'text-slate-400'}">${pct >= 100 ? '<i class="fa-solid fa-triangle-exclamation mr-1"></i>Estourou em ' + R$(spent - lim) : pct >= 80 ? '<i class="fa-solid fa-triangle-exclamation mr-1"></i>Atenção: ' + Math.round(pct) + '% do limite — restam ' + R$(lim - spent) : Math.round(pct) + '% · restam ' + R$(lim - spent)}</p>
+                    </div>`).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nenhum limite definido. Toque em "Novo limite" (ex.: Mercado R$ 1.500, Lazer R$ 400, Assinaturas R$ 200).</p>'}
+                ${sem.length ? `<div class="mt-5"><p class="text-[11px] font-bold uppercase text-slate-400 mb-2">Gastos neste mês sem limite</p><div class="flex flex-wrap gap-2">${sem.map(([k, v]) => `<button onclick="plOpen('budgets',null,{category:'${esc(nameOf(k)).replace(/'/g, "\\'")}'})" class="px-3 py-1.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"><b>${esc(nameOf(k))}</b> ${R$(v)} <i class="fa-solid fa-plus ml-1 text-teal-600"></i></button>`).join('')}</div></div>` : ''}
+            </div>`;
+        }
+
+        // ---------- 3) Recorrentes ----------
+        function plRecDue(rec, ym) {
+            if (rec.active === false) return null;
+            if (rec.start && ym < rec.start.slice(0, 7)) return null;
+            if (rec.end && ym > rec.end.slice(0, 7)) return null;
+            if (rec.freq === 'anual' && Number(rec.month) !== Number(ym.slice(5))) return null;
+            const [y, m] = ym.split('-').map(Number), last = new Date(y, m, 0).getDate();
+            return `${ym}-${pad2(Math.min(Math.max(1, Number(rec.day) || 1), last))}`;
+        }
+        function plRecMaterialized(rec, ym) {
+            const k = normKey(rec.name);
+            return appData.financeiro.transactions.some(t => (t.date || '').startsWith(ym) && (t.recId === rec.id || (k && normKey(t.desc).includes(k))))
+                || (!!k && appData.cartao.entries.some(e => e.invoice === ym && normKey(e.name).includes(k)));   // já está numa fatura de cartão
+        }
+        function plRecYear(r) { const v = Number(r.amount) || 0; return r.freq === 'anual' ? v : v * 12; }
+        function plRecLancar(id, ym) {
+            const r = plano().recs.find(x => x.id === id); if (!r) return;
+            const d = plRecDue(r, ym) || `${ym}-${pad2(Number(r.day) || 1)}`;
+            const t = { id: uid(), type: r.kind === 'receita' ? 'receita' : 'despesa', status: 'pendente', desc: r.name, amount: Number(r.amount).toFixed(2), category: r.category || (r.tipo === 'assinatura' ? 'Assinatura' : 'Contas fixas'), date: d, accId: '', toAccId: '', attachments: [], recId: r.id };
+            if (r.owner) t.owner = r.owner;
+            appData.financeiro.transactions.push(t); saveAppData(); renderCurrentTabContent(); showToast('Lançado como pendente no Financeiro.', 'success');
+        }
+        function plRecToggle(id) { const r = plano().recs.find(x => x.id === id); if (r) { r.active = r.active === false; saveAppData(); renderCurrentTabContent(); } }
+        function plRecSuggest() {
+            // descrições que aparecem em 3+ meses diferentes (últimos 6) e ainda não estão nos recorrentes
+            const cur = plCurYM(), from = ymAdd(cur, -6), map = {};
+            appData.financeiro.transactions.forEach(t => {
+                if (t.type !== 'despesa' || t.cardInvoice || t.installment || !t.desc || (t.date || '').slice(0, 7) < from) return;
+                const k = normKey(t.desc); const o = map[k] || (map[k] = { name: t.desc, months: new Set(), vals: [], cat: t.category }); o.months.add(t.date.slice(0, 7)); o.vals.push(Number(t.amount) || 0);
+            });
+            appData.cartao.entries.forEach(e => {
+                if (e.installment || !e.name || (e.date || '').slice(0, 7) < from) return;
+                const k = normKey(e.name); const o = map[k] || (map[k] = { name: e.name, months: new Set(), vals: [], cat: e.category }); o.months.add(e.date.slice(0, 7)); o.vals.push(Number(e.amount) || 0);
+            });
+            const have = plano().recs.map(r => normKey(r.name));
+            return Object.values(map).filter(o => o.months.size >= 3 && !have.some(h => h && (normKey(o.name).includes(h) || h.includes(normKey(o.name))))).map(o => ({ name: o.name, amount: o.vals[o.vals.length - 1], cat: o.cat, n: o.months.size })).slice(0, 8);
+        }
+        function plRenderRecs() {
+            const P = plano(), recs = P.recs.filter(r => plVisible(r.owner || '')), act = recs.filter(r => r.active !== false);
+            const desp = act.filter(r => r.kind !== 'receita'), subs = desp.filter(r => r.tipo === 'assinatura');
+            const totMes = desp.reduce((s, r) => s + (r.freq === 'anual' ? (Number(r.amount) || 0) / 12 : Number(r.amount) || 0), 0), totAno = desp.reduce((s, r) => s + plRecYear(r), 0), subAno = subs.reduce((s, r) => s + plRecYear(r), 0);
+            const sug = plRecSuggest(), cur = plCurYM();
+            const row = r => { const mat = plRecDue(r, cur) ? plRecMaterialized(r, cur) : true; return `<div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 ${r.active === false ? 'opacity-50' : ''}">
+                <div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-sm text-slate-800 dark:text-white truncate">${esc(r.name)} ${r.kind === 'receita' ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">receita</span>' : ''}</p>
+                    <p class="text-xs text-slate-500">${r.freq === 'anual' ? 'Anual · mês ' + (r.month || '?') : 'Todo mês'} · dia ${r.day || '—'} · ${esc(r.category || r.tipo)}${r.owner ? ' · ' + esc(plPersonName(r.owner)) : ''}</p></div>
+                    <div class="text-right shrink-0"><p class="font-bold text-sm ${r.kind === 'receita' ? 'text-emerald-600' : 'text-rose-600'}">${R$(r.amount)}</p><p class="text-[10px] text-slate-400">${R$(plRecYear(r))}/ano</p></div></div>
+                <div class="flex flex-wrap gap-1.5 mt-2">${!mat ? `<button onclick="plRecLancar('${r.id}','${cur}')" class="${PL_BTN2} !text-teal-700"><i class="fa-solid fa-plus mr-1"></i>Lançar este mês</button>` : ''}
+                    <button onclick="plRecToggle('${r.id}')" class="${PL_BTN2}">${r.active === false ? 'Reativar' : 'Pausar'}</button>${plEditBtns('recs', r.id)}</div></div>`; };
+            return `<div class="${PL_CARD}">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-repeat text-teal-500"></i>Contas recorrentes e assinaturas</h3><button onclick="plOpen('recs')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Nova</button></div>
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Por mês</p><p class="font-bold text-slate-800 dark:text-white">${R$(totMes)}</p></div>
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Por ano</p><p class="font-bold text-rose-600">${R$(totAno)}</p></div>
+                    <div class="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900"><p class="text-[10px] uppercase font-bold text-amber-700">Assinaturas/ano</p><p class="font-bold text-amber-700">${R$(subAno)}</p></div></div>
+                ${subs.length ? `<p class="text-sm text-amber-800 dark:text-amber-300 mb-4"><i class="fa-solid fa-lightbulb mr-1"></i>Você gasta <b>${R$(subAno)} por ano</b> em ${subs.length} assinatura(s). Vale revisar quais ainda usam?</p>` : ''}
+                ${recs.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${recs.map(row).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nada cadastrado. Inclua streaming, academia, seguros, aluguel, salário…</p>'}
+                ${sug.length ? `<div class="mt-5"><p class="text-[11px] font-bold uppercase text-slate-400 mb-2">Parecem recorrentes (apareceram em 3+ meses)</p><div class="flex flex-wrap gap-2">${sug.map(s => `<button onclick="plOpen('recs',null,{name:'${esc(s.name).replace(/'/g, "\\'")}',amount:${Math.abs(Number(s.amount)) || 0},category:'${esc(s.cat || '').replace(/'/g, "\\'")}'})" class="px-3 py-1.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"><b>${esc(s.name)}</b> ${R$(s.amount)} <i class="fa-solid fa-plus ml-1 text-teal-600"></i></button>`).join('')}</div></div>` : ''}
+            </div>`;
+        }
+
+        // ---------- 2) Fluxo de caixa projetado ----------
+        let plFluxoN = 6;
+        function plFlow(n) {
+            const cur = plCurYM(), today = localDateStr(), P = plano();
+            let bal = 0; if (plVista === 'todos') contasData().forEach(a => { if (!a.noSum) bal += contaSaldoDash(a.id); });
+            const months = []; for (let i = 0; i < n; i++) months.push(ymAdd(cur, i));
+            const out = months.map(m => ({ ym: m, ent: 0, sai: 0, items: [] }));
+            appData.financeiro.transactions.forEach(t => {
+                if (finSt(t) !== 'pendente' || isHabId(t.accId) || !plVisible(t.owner || '')) return;
+                const e = finEffect(t, null); if (!e.r && !e.d) return;
+                let m = (t.date || cur).slice(0, 7); if (m < cur) m = cur;
+                const o = out.find(x => x.ym === m); if (!o) return;
+                o.ent += e.r; o.sai += e.d; o.items.push({ desc: t.desc || t.category, val: e.r - e.d, date: t.date, card: !!t.cardInvoice });
+            });
+            P.recs.forEach(rec => months.forEach(m => {
+                const d = plRecDue(rec, m); if (!d || (m === cur && d < today) || plRecMaterialized(rec, m) || !plVisible(rec.owner || '')) return;
+                const o = out.find(x => x.ym === m), v = Number(rec.amount) || 0;
+                if (rec.kind === 'receita') o.ent += v; else o.sai += v;
+                o.items.push({ desc: rec.name + ' (recorrente)', val: rec.kind === 'receita' ? v : -v, date: d });
+            }));
+            let run = bal; out.forEach(o => { o.net = o.ent - o.sai; run += o.net; o.fim = run; });
+            return { bal, out };
+        }
+        function plRenderFluxo() {
+            const { bal, out } = plFlow(plFluxoN), tight = out.find(o => o.fim < 0) || out.reduce((a, b) => (b.fim < a.fim ? b : a), out[0]);
+            const neg = out.some(o => o.fim < 0), maxAbs = Math.max(1, ...out.map(o => Math.abs(o.fim)));
+            return `<div class="${PL_CARD}">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-chart-line text-teal-500"></i>Fluxo de caixa projetado</h3>
+                    <div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-bold">${[3, 4, 6].map(n => `<button onclick="plFluxoN=${n};renderCurrentTabContent()" class="px-3 py-1.5 ${plFluxoN === n ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}">${n} meses</button>`).join('')}</div></div>
+                <p class="text-xs text-slate-500 mb-4">${plVista === 'todos' ? `Saldo atual das contas (débito e poupança): <b>${R$(bal)}</b>. ` : 'Mostrando só a variação (o saldo das contas é geral). '}Soma lançamentos pendentes (inclui faturas e parcelas futuras do cartão) e contas recorrentes ainda não lançadas.</p>
+                <div class="p-3 rounded-2xl mb-4 text-sm ${neg ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200' : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200'}">
+                    <i class="fa-solid ${neg ? 'fa-triangle-exclamation' : 'fa-circle-check'} mr-1"></i>${neg ? `<b>${fmtYM(tight.ym)}</b> deve fechar no vermelho (${R$(tight.fim)}). Dá tempo de ajustar.` : `Nenhum mês fica negativo. O mais apertado é <b>${fmtYM(tight.ym)}</b>, fechando em ${R$(tight.fim)}.`}</div>
+                <div class="flex items-end gap-2 h-36 mb-4">${out.map(o => `<div class="flex-1 flex flex-col items-center justify-end h-full min-w-0"><span class="text-[10px] ${o.fim < 0 ? 'text-rose-600' : 'text-slate-500'} font-bold truncate max-w-full">${money(o.fim)}</span>
+                    <div class="w-full rounded-t-lg ${o.fim < 0 ? 'bg-rose-400' : o.ym === tight.ym ? 'bg-amber-400' : 'bg-teal-500'}" style="height:${Math.max(4, Math.abs(o.fim) / maxAbs * 100)}%"></div><span class="text-[10px] text-slate-400 mt-1">${fmtYM(o.ym).slice(0, 3)}</span></div>`).join('')}</div>
+                <div class="overflow-x-auto"><table class="w-full text-xs text-left whitespace-nowrap"><thead class="text-[10px] uppercase text-slate-400"><tr><th class="py-2 pr-2">Mês</th><th class="py-2 pl-2 text-right">Entradas</th><th class="py-2 pl-2 text-right">Saídas</th><th class="py-2 pl-2 text-right">Resultado</th><th class="py-2 pl-2 text-right">Saldo final</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">${out.map(o => `<tr class="${o.fim < 0 ? 'bg-rose-50/60 dark:bg-rose-950/20' : ''}"><td class="py-2 pr-2 font-semibold">${fmtYM(o.ym).replace(/^(\S{3})\S*/,"$1")}</td><td class="py-2 pl-2 text-right text-emerald-600">${R$(o.ent)}</td><td class="py-2 pl-2 text-right text-rose-600">${R$(o.sai)}</td><td class="py-2 pl-2 text-right ${o.net < 0 ? 'text-rose-600' : ''}">${R$(o.net)}</td><td class="py-2 pl-2 text-right font-bold ${o.fim < 0 ? 'text-rose-600' : ''}">${R$(o.fim)}</td></tr>`).join('')}</tbody></table></div>
+            </div>`;
+        }
+
+        // ---------- 4) Calendário de vencimentos ----------
+        function plDayItems(ds) {
+            const items = [], cur = plCurYM();
+            appData.financeiro.transactions.forEach(t => {
+                if (t.type === 'transferencia' || t.date !== ds || isHabId(t.accId) || !plVisible(t.owner || '')) return;
+                items.push({ desc: t.desc || t.category, val: Number(t.amount) || 0, kind: t.type, pend: finSt(t) === 'pendente', card: !!t.cardInvoice, id: t.id });
+            });
+            plano().recs.forEach(r => { const m = ds.slice(0, 7), d = plRecDue(r, m); if (d !== ds || plRecMaterialized(r, m) || !plVisible(r.owner || '')) return; items.push({ desc: r.name + ' (recorrente)', val: Number(r.amount) || 0, kind: r.kind === 'receita' ? 'receita' : 'despesa', pend: true, rec: r.id }); });
+            plano().goals.forEach(g => { if (g.deadline === ds) items.push({ desc: 'Prazo da meta: ' + g.name, val: 0, kind: 'meta', pend: true }); });
+            return items;
+        }
+        function plRenderVenc() {
+            const P = plano(), today = localDateStr(), [y, m] = plMonth.split('-').map(Number), start = new Date(y, m - 1, 1).getDay(), dim = new Date(y, m, 0).getDate();
+            let cells = ''; for (let i = 0; i < start; i++) cells += '<div></div>';
+            for (let d = 1; d <= dim; d++) {
+                const ds = `${plMonth}-${pad2(d)}`, it = plDayItems(ds), pend = it.filter(x => x.pend && x.kind !== 'meta'), rec = pend.some(x => x.kind === 'receita'), des = pend.some(x => x.kind === 'despesa');
+                const late = ds < today && des;
+                cells += `<button onclick="plDay='${ds}';renderCurrentTabContent()" class="aspect-square rounded-lg text-xs flex flex-col items-center justify-center ${plDay === ds ? 'ring-2 ring-teal-600' : ''} ${ds === today ? 'bg-teal-50 dark:bg-teal-950/40 font-bold' : 'bg-slate-50 dark:bg-slate-700/40'} ${late ? 'text-rose-600 font-bold' : 'text-slate-600 dark:text-slate-300'}">${d}<span class="flex gap-0.5 mt-0.5 h-1.5">${des ? '<i class="w-1.5 h-1.5 rounded-full bg-rose-500"></i>' : ''}${rec ? '<i class="w-1.5 h-1.5 rounded-full bg-emerald-500"></i>' : ''}${it.length && !pend.length ? '<i class="w-1.5 h-1.5 rounded-full bg-slate-300"></i>' : ''}</span></button>`;
+            }
+            const dayList = plDay ? plDayItems(plDay) : [];
+            // próximos 30 dias
+            const up = []; for (let i = 0; i < 31; i++) { const dt = new Date(); dt.setDate(dt.getDate() + i); const ds = localDateStr(dt); plDayItems(ds).forEach(x => { if (x.pend && x.kind !== 'meta' && x.kind === 'despesa') up.push(Object.assign({ date: ds }, x)); }); }
+            const line = x => `<div class="flex justify-between gap-3 text-sm py-1.5 border-b border-slate-100 dark:border-slate-700"><span class="truncate ${x.pend ? '' : 'line-through text-slate-400'}">${x.card ? '<i class="fa-solid fa-credit-card text-indigo-500 mr-1"></i>' : ''}${esc(x.desc)}</span><b class="whitespace-nowrap ${x.kind === 'receita' ? 'text-emerald-600' : x.kind === 'meta' ? 'text-slate-400' : 'text-rose-600'}">${x.kind === 'meta' ? '' : (x.kind === 'receita' ? '+ ' : '- ') + R$(x.val)}</b></div>`;
+            return `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="${PL_CARD}"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-calendar-days text-teal-500"></i>Vencimentos</h3>${plMonthNav()}</div>
+                    <div class="grid grid-cols-7 gap-1 text-center text-[10px] text-slate-400 font-bold mb-1">${['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(x => `<div>${x}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1">${cells}</div>
+                    <p class="text-[11px] text-slate-400 mt-2"><i class="inline-block w-2 h-2 rounded-full bg-rose-500"></i> a pagar · <i class="inline-block w-2 h-2 rounded-full bg-emerald-500"></i> a receber · <i class="inline-block w-2 h-2 rounded-full bg-slate-300"></i> já quitado. Vermelho = em atraso.</p>
+                    ${plDay ? `<div class="mt-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-xs font-bold text-slate-500 mb-1">${fmtBR(plDay)}</p>${dayList.length ? dayList.map(line).join('') : '<p class="text-xs text-slate-400">Nada neste dia.</p>'}</div>` : ''}</div>
+                <div class="${PL_CARD}"><h3 class="font-bold text-lg text-slate-800 dark:text-white mb-3 flex items-center gap-2"><i class="fa-solid fa-hourglass-half text-amber-500"></i>Próximos 30 dias</h3>
+                    ${up.length ? up.map(x => `<div class="flex justify-between gap-3 text-sm py-1.5 border-b border-slate-100 dark:border-slate-700"><span class="truncate"><span class="text-xs text-slate-400 mr-2">${fmtBR(x.date).slice(0, 5)}</span>${x.card ? '<i class="fa-solid fa-credit-card text-indigo-500 mr-1"></i>' : ''}${esc(x.desc)}</span><b class="text-rose-600 whitespace-nowrap">${R$(x.val)}</b></div>`).join('') + `<p class="text-xs text-slate-500 mt-3">Total a pagar: <b class="text-rose-600">${R$(up.reduce((s, x) => s + x.val, 0))}</b></p>` : '<p class="text-sm text-slate-400 py-6 text-center">Nada a vencer nos próximos 30 dias.</p>'}
+                    <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 flex items-center gap-2 flex-wrap">Avisar com <input type="number" min="0" max="30" value="${P.remindDays}" onchange="plano().remindDays=Math.max(0,Math.min(30,parseInt(this.value)||0));saveAppData()" class="w-16 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-center"> dia(s) de antecedência (aparece nos Avisos ao abrir o app).</div></div>
+            </div>`;
+        }
+
+        // ---------- 5) Metas de economia ----------
+        function plGoalSaved(g) { return (Number(g.initial) || 0) + (g.aportes || []).reduce((s, a) => s + (Number(a.amount) || 0), 0); }
+        function plMonthsLeft(deadline) {
+            if (!deadline) return 0;
+            const t = localDateStr(), a = new Date(t + 'T00:00:00'), b = new Date(deadline + 'T00:00:00');
+            return Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + (b.getDate() >= a.getDate() ? 0 : -1) + 1);
+        }
+        function plAporteGoal(id) {
+            const g = plano().goals.find(x => x.id === id); if (!g) return;
+            showModal('Guardar na meta · ' + esc(g.name), `<form onsubmit="plAporteSave(event,'${id}')" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3"><div><label class="${LBL}">Valor (R$)</label><input id="pg-v" inputmode="decimal" required class="${INP}"></div><div><label class="${LBL}">Data</label><input id="pg-d" type="date" value="${localDateStr()}" class="${INP}"></div></div>
+                <p class="text-[11px] text-slate-400">Use valor negativo para retirar.</p><button class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button></form>`);
+        }
+        function plAporteSave(e, id) {
+            e.preventDefault(); const g = plano().goals.find(x => x.id === id), v = recNum(document.getElementById('pg-v').value); if (!g || !v) return;
+            g.aportes = g.aportes || []; g.aportes.push({ id: uid(), date: document.getElementById('pg-d').value || localDateStr(), amount: v });
+            saveAppData(); closeModal(); renderCurrentTabContent();
+        }
+        function plAporteDel(gid, aid) { const g = plano().goals.find(x => x.id === gid); if (!g) return; g.aportes = g.aportes.filter(a => a.id !== aid); saveAppData(); renderCurrentTabContent(); }
+        function plRenderMetas() {
+            const gs = plano().goals;
+            return `<div class="${PL_CARD}"><div class="flex flex-wrap items-center justify-between gap-3 mb-4"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-flag-checkered text-teal-500"></i>Metas de economia</h3><button onclick="plOpen('goals')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Nova meta</button></div>
+                ${gs.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${gs.map(g => {
+                    const saved = plGoalSaved(g), tgt = Number(g.target) || 0, pct = tgt > 0 ? saved / tgt * 100 : 0, ml = plMonthsLeft(g.deadline), falta = Math.max(0, tgt - saved), per = ml > 0 ? falta / ml : falta;
+                    return `<div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                        <div class="flex justify-between items-start gap-2 mb-2"><div class="min-w-0"><p class="font-bold text-slate-800 dark:text-white truncate">${esc(g.name)}</p><p class="text-xs text-slate-500">${R$(saved)} de ${R$(tgt)} · prazo ${g.deadline ? fmtBR(g.deadline) : '—'}</p></div>${plEditBtns('goals', g.id)}</div>
+                        <div class="h-3 rounded-full bg-slate-200 dark:bg-slate-600 overflow-hidden"><div class="h-full bg-teal-500" style="width:${Math.min(100, Math.max(2, pct))}%"></div></div>
+                        <p class="text-[11px] text-slate-500 mt-1">${Math.round(pct)}% ${pct >= 100 ? '— meta batida! 🎉' : ''}</p>
+                        ${pct < 100 ? `<p class="text-sm mt-2">${ml > 0 ? `Guardar <b class="text-teal-700 dark:text-teal-300">${R$(per)}</b> por mês durante ${ml} mês(es).` : '<span class="text-rose-600 font-bold">Prazo vencido — faltam ' + R$(falta) + '.</span>'}</p>` : ''}
+                        <div class="flex flex-wrap gap-1.5 mt-2"><button onclick="plAporteGoal('${g.id}')" class="${PL_BTN2} !text-teal-700"><i class="fa-solid fa-piggy-bank mr-1"></i>Guardar</button></div>
+                        ${(g.aportes || []).length ? `<div class="mt-2 max-h-24 overflow-y-auto text-[11px] text-slate-500 space-y-0.5">${g.aportes.slice().reverse().map(a => `<div class="flex justify-between"><span>${fmtBR(a.date)}</span><span>${R$(a.amount)} <button onclick="plAporteDel('${g.id}','${a.id}')" class="text-slate-300 hover:text-rose-600 ml-1"><i class="fa-solid fa-xmark"></i></button></span></div>`).join('')}</div>` : ''}
+                    </div>`; }).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nenhuma meta. Crie uma reserva de emergência, uma viagem, a troca do carro…</p>'}</div>`;
+        }
+
+        // ---------- 7) Investimentos (% do CDI) ----------
+        function plCdi() { try { const v = anLoad().cdi; const n = v ? parseFloat(String(v).replace('%', '').replace(',', '.')) : NaN; return isFinite(n) && n > 0 ? n : 14.9; } catch (e) { return 14.9; } }
+        function plInvStats(iv) {
+            const ap = (iv.aportes || []).filter(a => Number(a.amount) > 0), tot = ap.reduce((s, a) => s + Number(a.amount), 0), saldo = Number(iv.saldo) || 0;
+            if (!tot) return { tot: 0, saldo, rend: 0, pct: null, cdiPct: null, days: 0 };
+            const today = new Date(localDateStr() + 'T00:00:00').getTime(), avg = ap.reduce((s, a) => s + new Date(a.date + 'T00:00:00').getTime() * Number(a.amount), 0) / tot;
+            const ref = iv.saldoDate ? new Date(iv.saldoDate + 'T00:00:00').getTime() : today;
+            const days = Math.max(1, Math.round((ref - avg) / 86400000)), rent = saldo / tot - 1, cdiPer = Math.pow(1 + plCdi() / 100, days / 365) - 1;
+            return { tot, saldo, rend: saldo - tot, pct: rent * 100, cdiPct: cdiPer > 0 && days >= 20 ? rent / cdiPer * 100 : null, days };
+        }
+        function plInvAporte(id) {
+            const iv = plano().invests.find(x => x.id === id); if (!iv) return;
+            showModal('Novo aporte · ' + esc(iv.name), `<form onsubmit="plInvAporteSave(event,'${id}')" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3"><div><label class="${LBL}">Valor aplicado (R$)</label><input id="pi-v" inputmode="decimal" required class="${INP}"></div><div><label class="${LBL}">Data</label><input id="pi-d" type="date" value="${localDateStr()}" class="${INP}"></div></div>
+                <div><label class="${LBL}">Novo saldo da aplicação (R$) — opcional</label><input id="pi-s" inputmode="decimal" class="${INP}" placeholder="Se vazio, soma o aporte ao saldo atual"></div>
+                <button class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button></form>`);
+        }
+        function plInvAporteSave(e, id) {
+            e.preventDefault(); const iv = plano().invests.find(x => x.id === id), v = recNum(document.getElementById('pi-v').value); if (!iv || v <= 0) return;
+            iv.aportes = iv.aportes || []; iv.aportes.push({ id: uid(), date: document.getElementById('pi-d').value || localDateStr(), amount: v });
+            const s = document.getElementById('pi-s').value.trim(); iv.saldo = s ? recNum(s) : (Number(iv.saldo) || 0) + v; iv.saldoDate = localDateStr();
+            saveAppData(); closeModal(); renderCurrentTabContent();
+        }
+        function plInvAporteDel(iid, aid) { const iv = plano().invests.find(x => x.id === iid); if (!iv) return; iv.aportes = iv.aportes.filter(a => a.id !== aid); saveAppData(); renderCurrentTabContent(); }
+        function plInvTotal() { return plano().invests.reduce((s, i) => s + (Number(i.saldo) || 0), 0); }
+        function plRenderInvest() {
+            const iv = plano().invests, tot = plInvTotal(), apl = iv.reduce((s, i) => s + plInvStats(i).tot, 0);
+            return `<div class="${PL_CARD}"><div class="flex flex-wrap items-center justify-between gap-3 mb-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-seedling text-teal-500"></i>Investimentos</h3><button onclick="plOpen('invests')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Nova aplicação</button></div>
+                <div class="grid grid-cols-3 gap-2 mb-4"><div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Saldo total</p><p class="font-bold text-slate-800 dark:text-white">${R$(tot)}</p></div>
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Aplicado</p><p class="font-bold text-slate-800 dark:text-white">${R$(apl)}</p></div>
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Rendimento</p><p class="font-bold ${tot - apl >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${R$(apl ? tot - apl : 0)}</p></div></div>
+                ${iv.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${iv.map(i => { const s = plInvStats(i); return `<div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                    <div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-slate-800 dark:text-white truncate">${esc(i.name)}</p><p class="text-xs text-slate-500">${esc(i.tipo || '')}${i.inst ? ' · ' + esc(i.inst) : ''}${Number(i.pct) ? ' · contratado ' + i.pct + '% do CDI' : ''}</p></div>${plEditBtns('invests', i.id)}</div>
+                    <p class="text-xl font-bold mt-2 text-slate-800 dark:text-white">${R$(i.saldo)}</p>
+                    <div class="grid grid-cols-3 gap-2 mt-2 text-xs"><div><p class="text-slate-400">Aplicado</p><b>${R$(s.tot)}</b></div><div><p class="text-slate-400">Rendeu</p><b class="${s.rend >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${s.tot ? R$(s.rend) + ' (' + s.pct.toFixed(2).replace('.', ',') + '%)' : '—'}</b></div><div><p class="text-slate-400">% do CDI</p><b class="text-teal-700 dark:text-teal-300">${s.cdiPct !== null ? s.cdiPct.toFixed(0) + '%' : '—'}</b></div></div>
+                    <div class="flex flex-wrap gap-1.5 mt-2"><button onclick="plInvAporte('${i.id}')" class="${PL_BTN2} !text-teal-700"><i class="fa-solid fa-plus mr-1"></i>Aporte / atualizar saldo</button></div>
+                    ${(i.aportes || []).length ? `<div class="mt-2 max-h-20 overflow-y-auto text-[11px] text-slate-500 space-y-0.5">${i.aportes.slice().reverse().map(a => `<div class="flex justify-between"><span>${fmtBR(a.date)}</span><span>${R$(a.amount)} <button onclick="plInvAporteDel('${i.id}','${a.id}')" class="text-slate-300 hover:text-rose-600 ml-1"><i class="fa-solid fa-xmark"></i></button></span></div>`).join('')}</div>` : ''}
+                </div>`; }).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nenhuma aplicação cadastrada.</p>'}
+                <p class="text-[11px] text-slate-400 mt-4">O "% do CDI" é uma estimativa: compara o que a aplicação rendeu desde os aportes (data média ponderada) com o CDI de <b>${String(plCdi()).replace('.', ',')}% a.a.</b> (o mesmo da tela Análise do Financeiro; ajuste lá). Não considera IR nem taxas, e só aparece depois de 20 dias.</p></div>`;
+        }
+
+        // ---------- 8) Dívidas e financiamentos ----------
+        function plDebtRate(d) {
+            const t = Number(d.taxa); if (t > 0) return t / 100;
+            const pv = Number(d.saldo) || 0, pmt = Number(d.parcela) || 0, n = Math.round(Number(d.parcelas) || 0);
+            if (!pv || !pmt || !n || pmt * n <= pv) return 0;
+            let lo = 0, hi = 1; for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2, f = pmt * (1 - Math.pow(1 + m, -n)) / m; if (f > pv) lo = m; else hi = m; } return (lo + hi) / 2;
+        }
+        // k = daqui a quantos meses (0 = já), modo 'prazo' ou 'parcela'
+        function plDebtSim(d, extra, k, modo) {
+            const i = plDebtRate(d), pmt = Number(d.parcela) || 0, n = Math.round(Number(d.parcelas) || 0);
+            let bal = Number(d.saldo) || 0, paid = 0, months = 0;
+            const base = pmt * n;
+            for (let m = 0; m < k && m < n; m++) { const jur = bal * i; bal = bal + jur - pmt; paid += pmt; months++; if (bal <= 0) break; }
+            const ex = Math.min(extra, Math.max(0, bal)); bal = Math.max(0, bal - ex); paid += ex;
+            const restN = n - months;
+            let newN = restN, newP = pmt;
+            if (bal <= 0.005) { newN = 0; newP = 0; }
+            else if (modo === 'parcela') { newP = i > 0 ? bal * i / (1 - Math.pow(1 + i, -restN)) : bal / restN; paid += newP * restN; }
+            else { let b = bal, c = 0; while (b > 0.005 && c < 1200) { b = b * (1 + i) - pmt; paid += pmt; c++; if (b < 0) { paid += b; } } newN = c; }
+            return { rate: i, economia: Math.max(0, base - paid), pago: paid, novaParcela: newP, restantes: modo === 'parcela' ? restN : newN, orig: restN, base };
+        }
+        function plSimDebt(id) {
+            const d = plano().debts.find(x => x.id === id); if (!d) return;
+            showModal('Simular amortização · ' + esc(d.name), `<div class="space-y-3">
+                <p class="text-xs text-slate-500">Juros considerados: <b>${(plDebtRate(d) * 100).toFixed(2).replace('.', ',')}% ao mês</b>${Number(d.taxa) > 0 ? '' : ' (calculado a partir da parcela)'}.</p>
+                <div class="grid grid-cols-2 gap-3"><div><label class="${LBL}">Valor a amortizar (R$)</label><input id="ps-v" inputmode="decimal" oninput="plSimCalc('${id}')" class="${INP}" placeholder="10000"></div><div><label class="${LBL}">Daqui a quantos meses</label><input id="ps-k" inputmode="numeric" value="0" oninput="plSimCalc('${id}')" class="${INP}"></div></div>
+                <div><label class="${LBL}">Depois de amortizar</label><select id="ps-m" onchange="plSimCalc('${id}')" class="${INP}"><option value="prazo">Reduzir o prazo (mantém a parcela)</option><option value="parcela">Reduzir a parcela (mantém o prazo)</option></select></div>
+                <div id="ps-out" class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 text-sm text-slate-500">Informe um valor para ver a economia.</div></div>`);
+        }
+        function plSimCalc(id) {
+            const d = plano().debts.find(x => x.id === id), out = document.getElementById('ps-out'); if (!d || !out) return;
+            const v = recNum(document.getElementById('ps-v').value), k = Math.max(0, parseInt(document.getElementById('ps-k').value) || 0), m = document.getElementById('ps-m').value;
+            if (v <= 0) { out.textContent = 'Informe um valor para ver a economia.'; return; }
+            const s = plDebtSim(d, v, k, m);
+            out.innerHTML = `<p>Sem amortizar, você pagaria ao todo <b>${R$(s.base)}</b> até o fim.</p><p class="mt-1">Amortizando ${R$(v)} ${k ? 'daqui a ' + k + ' mês(es)' : 'agora'}: pagaria <b>${R$(s.pago)}</b> (já contando o valor amortizado).</p>
+                <p class="mt-2 text-base ${s.economia > 0 ? 'text-emerald-600' : 'text-slate-600'} font-bold">Economia de juros: ${R$(s.economia)}</p>
+                <p class="text-xs mt-1">${m === 'prazo' ? `Prazo cai de ${s.orig} para ${s.restantes} parcela(s) restantes.` : `Parcela cai de ${R$(d.parcela)} para ${R$(s.novaParcela)}.`}</p>`;
+        }
+        function plDebtTotal() { return plano().debts.reduce((s, d) => s + (Number(d.saldo) || 0), 0); }
+        function plRenderDividas() {
+            const ds = plano().debts, tot = plDebtTotal();
+            return `<div class="${PL_CARD}"><div class="flex flex-wrap items-center justify-between gap-3 mb-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-hand-holding-dollar text-teal-500"></i>Dívidas e financiamentos</h3><button onclick="plOpen('debts')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Nova dívida</button></div>
+                <p class="text-xs text-slate-500 mb-4">Saldo devedor total: <b class="text-rose-600">${R$(tot)}</b> · parcelas por mês: <b>${R$(ds.reduce((s, d) => s + (Number(d.parcela) || 0), 0))}</b></p>
+                ${ds.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${ds.map(d => { const total = (Number(d.parcela) || 0) * (Number(d.parcelas) || 0), jur = Math.max(0, total - (Number(d.saldo) || 0)); return `<div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                    <div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-slate-800 dark:text-white truncate">${esc(d.name)}</p><p class="text-xs text-slate-500">${d.parcelas} parcela(s) de ${R$(d.parcela)} · juros ${(plDebtRate(d) * 100).toFixed(2).replace('.', ',')}% a.m.</p></div>${plEditBtns('debts', d.id)}</div>
+                    <p class="text-xl font-bold mt-2 text-rose-600">${R$(d.saldo)}</p><p class="text-xs text-slate-500">Falta pagar ${R$(total)} no total, sendo ${R$(jur)} de juros.</p>
+                    <button onclick="plSimDebt('${d.id}')" class="${PL_BTN2} mt-2 !text-teal-700"><i class="fa-solid fa-calculator mr-1"></i>Simular amortização</button></div>`; }).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nenhuma dívida cadastrada.</p>'}</div>`;
+        }
+
+        // ---------- 6) Patrimônio líquido ----------
+        function plNetNow() {
+            let contas = 0; contasData().forEach(a => { contas += contaSaldoDash(a.id); });
+            const inv = plInvTotal(), bens = plano().assets.reduce((s, a) => s + (Number(a.value) || 0), 0), dv = plDebtTotal();
+            let fat = 0; appData.cartao.cards.forEach(c => { const keys = new Set(appData.cartao.entries.filter(e => e.cardId === c.id).map(e => e.invoice)); keys.forEach(k => { const t = cardInvoiceTx(c.id, k); if (!(t && t.status === 'pago')) fat += Math.max(0, cardInvoiceTotal(c.id, k)); }); });
+            const ativos = contas + inv + bens, dividas = dv + fat;
+            return { contas, inv, bens, dv, fat, ativos, dividas, net: ativos - dividas };
+        }
+        function plSnap() {
+            const P = plano(), ym = plCurYM(), n = plNetNow(), cur = P.snaps.find(s => s.ym === ym);
+            if (cur && !cur.manual) { if (cur.net === n.net && cur.ativos === n.ativos && cur.dividas === n.dividas) return; Object.assign(cur, { ativos: n.ativos, dividas: n.dividas, net: n.net }); }
+            else if (!cur) P.snaps.push({ id: ym, ym, ativos: n.ativos, dividas: n.dividas, net: n.net });
+            else return;
+            saveAppData();
+        }
+        function plSnapAdd() {
+            showModal('Registrar mês anterior', `<form onsubmit="plSnapSave(event)" class="space-y-3"><p class="text-xs text-slate-500">Para o gráfico começar antes de hoje, informe o patrimônio de um mês passado.</p>
+                <div class="grid grid-cols-3 gap-2"><div><label class="${LBL}">Mês</label><input id="sn-ym" type="month" required class="${INP}"></div><div><label class="${LBL}">Ativos</label><input id="sn-a" inputmode="decimal" required class="${INP}"></div><div><label class="${LBL}">Dívidas</label><input id="sn-d" inputmode="decimal" class="${INP}" placeholder="0"></div></div>
+                <button class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button></form>`);
+        }
+        function plSnapSave(e) {
+            e.preventDefault(); const P = plano(), ym = document.getElementById('sn-ym').value, a = recNum(document.getElementById('sn-a').value), d = recNum(document.getElementById('sn-d').value); if (!ym) return;
+            P.snaps = P.snaps.filter(s => s.ym !== ym); P.snaps.push({ id: ym, ym, ativos: a, dividas: d, net: a - d, manual: true });
+            saveAppData(); closeModal(); renderCurrentTabContent();
+        }
+        function plSnapDel(ym) { const P = plano(); P.snaps = P.snaps.filter(s => s.ym !== ym); saveAppData(); renderCurrentTabContent(); }
+        function plRenderPatrimonio() {
+            plSnap();
+            const P = plano(), n = plNetNow(), sn = P.snaps.slice().sort((a, b) => a.ym.localeCompare(b.ym));
+            let chart = '';
+            if (sn.length >= 2) {
+                const W = 600, H = 190, pad = 28, vals = sn.map(s => s.net), mn = Math.min(0, ...vals), mx = Math.max(1, ...vals), x = i => pad + i * (W - 2 * pad) / (sn.length - 1), y = v => H - pad - (v - mn) / (mx - mn || 1) * (H - 2 * pad);
+                chart = `<svg viewBox="0 0 ${W} ${H}" class="w-full h-48"><line x1="${pad}" y1="${y(0)}" x2="${W - pad}" y2="${y(0)}" stroke="#cbd5e1" stroke-dasharray="4"/>
+                    <polyline fill="none" stroke="#0d9488" stroke-width="3" points="${sn.map((s, i) => x(i) + ',' + y(s.net)).join(' ')}"/>
+                    ${sn.map((s, i) => `<circle cx="${x(i)}" cy="${y(s.net)}" r="4" fill="#0d9488"/><text x="${x(i)}" y="${H - 8}" font-size="10" text-anchor="middle" fill="#94a3b8">${s.ym.slice(5)}/${s.ym.slice(2, 4)}</text>`).join('')}</svg>`;
+            } else chart = '<p class="text-xs text-slate-400 py-6 text-center">O gráfico se forma mês a mês: o app guarda o patrimônio a cada mês em que você abre esta tela. Você também pode registrar meses anteriores.</p>';
+            const first = sn[0], delta = first && sn.length > 1 ? n.net - first.net : null;
+            const line = (l, v, c) => `<div class="flex justify-between text-sm py-1.5 border-b border-slate-100 dark:border-slate-700"><span>${l}</span><b class="${c || ''}">${R$(v)}</b></div>`;
+            return `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="${PL_CARD}"><h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 flex items-center gap-2"><i class="fa-solid fa-landmark text-teal-500"></i>Patrimônio líquido</h3>
+                    <p class="text-3xl font-extrabold ${n.net >= 0 ? 'text-teal-700 dark:text-teal-300' : 'text-rose-600'}">${R$(n.net)}</p>
+                    ${delta !== null ? `<p class="text-xs ${delta >= 0 ? 'text-emerald-600' : 'text-rose-600'} font-bold mb-2">${delta >= 0 ? '▲' : '▼'} ${R$(Math.abs(delta))} desde ${fmtYM(first.ym)}</p>` : '<p class="mb-2"></p>'}
+                    <p class="text-[11px] font-bold uppercase text-emerald-700 mt-2">O que vocês têm</p>${line('Contas (débito e poupança)', n.contas)}${line('Investimentos', n.inv)}${line('Bens (imóvel, carro, outros)', n.bens)}
+                    <p class="text-[11px] font-bold uppercase text-rose-700 mt-3">O que devem</p>${line('Dívidas e financiamentos', n.dv, 'text-rose-600')}${line('Faturas de cartão em aberto', n.fat, 'text-rose-600')}</div>
+                <div class="${PL_CARD}"><div class="flex items-center justify-between mb-2"><h3 class="font-bold text-slate-800 dark:text-white">Evolução mês a mês</h3><button onclick="plSnapAdd()" class="${PL_BTN2}">+ mês anterior</button></div>${chart}
+                    ${sn.length ? `<div class="mt-2 max-h-28 overflow-y-auto text-xs text-slate-500 space-y-0.5">${sn.slice().reverse().map(s => `<div class="flex justify-between"><span>${fmtYM(s.ym)}${s.manual ? ' (manual)' : ''}</span><span><b>${R$(s.net)}</b> ${s.ym !== plCurYM() ? `<button onclick="plSnapDel('${s.ym}')" class="text-slate-300 hover:text-rose-600 ml-1"><i class="fa-solid fa-xmark"></i></button>` : ''}</span></div>`).join('')}</div>` : ''}</div>
+                <div class="${PL_CARD} lg:col-span-2"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-slate-800 dark:text-white">Bens e outros valores</h3><button onclick="plOpen('assets')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Novo bem</button></div>
+                    ${P.assets.length ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-2">${P.assets.map(a => `<div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-semibold text-sm truncate">${esc(a.name)}</p><p class="text-xs text-slate-500">${R$(a.value)}</p></div>${plEditBtns('assets', a.id)}</div>`).join('')}</div>` : '<p class="text-sm text-slate-400">Cadastre imóvel, carro etc. Contas, investimentos e dívidas entram sozinhos das outras abas.</p>'}</div></div>`;
+        }
+
+        // ---------- 9) Casal: divisão de despesas e acerto de contas ----------
+        function plSplitRatios() {
+            const P = plano(), [a, b] = P.people, ra = recNum(a.renda), rb = recNum(b.renda);
+            if (P.split === 'renda' && ra + rb > 0) return [ra / (ra + rb), rb / (ra + rb)];
+            return [0.5, 0.5];
+        }
+        function plAcerto(ym) {
+            const P = plano(), [a, b] = P.people, [ra, rb] = plSplitRatios();
+            const rows = plRows(ym, true).filter(r => r.type === 'despesa' && (r.owner || 'casa') === 'casa');
+            let T = 0, pa = 0, pb = 0, sem = 0; const items = [];
+            const byName = n => { const k = normKey(n); return normKey(a.name) === k ? 'a' : normKey(b.name) === k ? 'b' : ''; };
+            rows.forEach(r => {
+                T += r.amount; let who = [];
+                if (r.src === 'fin') { who = r.payer === a.id ? [['a', r.amount]] : r.payer === b.id ? [['b', r.amount]] : []; }
+                else (r.entry.pagoPor || []).forEach(p => { const w = byName(p.name); if (w) who.push([w, Number(p.amount) || 0]); });
+                const sum = who.reduce((s, x) => s + x[1], 0);
+                who.forEach(([w, v]) => { if (w === 'a') pa += v; else pb += v; });
+                if (sum < r.amount - 0.005) sem += r.amount - sum;
+                items.push({ r, who, sum });
+            });
+            let netA = pa - T * ra, netB = pb - T * rb;
+            P.acertos.filter(x => (x.date || '').startsWith(ym)).forEach(x => {   // acertos já feitos
+                const v = Number(x.amount) || 0; if (x.from === a.id) { netA += v; netB -= v; } else { netB += v; netA -= v; }
+            });
+            return { T, pa, pb, sem, netA, netB, ra, rb, items };
+        }
+        function plAcertoOpen() {
+            const P = plano(), [a, b] = P.people, A = plAcerto(plMonth), from = A.netA < 0 ? a : b, to = A.netA < 0 ? b : a, v = Math.abs(A.netA < 0 ? A.netA : A.netB);
+            showModal('Registrar acerto de contas', `<form onsubmit="plAcertoSave(event)" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3"><div><label class="${LBL}">Quem pagou</label><select id="ac-from" class="${INP}"><option value="${a.id}" ${from === a ? 'selected' : ''}>${esc(a.name)}</option><option value="${b.id}" ${from === b ? 'selected' : ''}>${esc(b.name)}</option></select></div>
+                <div><label class="${LBL}">Valor (R$)</label><input id="ac-v" inputmode="decimal" value="${v > 0 ? v.toFixed(2).replace('.', ',') : ''}" required class="${INP}"></div></div>
+                <div><label class="${LBL}">Data</label><input id="ac-d" type="date" value="${localDateStr()}" class="${INP}"></div><button class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Registrar</button></form>`);
+        }
+        function plAcertoSave(e) {
+            e.preventDefault(); const P = plano(), from = document.getElementById('ac-from').value, to = P.people.find(p => p.id !== from).id, v = recNum(document.getElementById('ac-v').value); if (v <= 0) return;
+            const d = document.getElementById('ac-d').value || localDateStr();
+            P.acertos.push({ id: uid(), date: d, from, to, amount: v }); if (!d.startsWith(plMonth)) plMonth = d.slice(0, 7);
+            saveAppData(); closeModal(); renderCurrentTabContent();
+        }
+        function plPeopleSave() {
+            const P = plano(); P.people.forEach((p, i) => { p.name = document.getElementById('pp-n' + i).value.trim() || p.name; p.renda = document.getElementById('pp-r' + i).value.trim(); });
+            P.split = document.getElementById('pp-split').value; saveAppData(); renderCurrentTabContent();
+        }
+        function plRenderCasal() {
+            const P = plano(), [a, b] = P.people, A = plAcerto(plMonth), [ra, rb] = [A.ra, A.rb];
+            const who = A.netA > 0.005 ? `<b>${esc(b.name)}</b> deve <b class="text-rose-600">${R$(A.netA)}</b> a <b>${esc(a.name)}</b>` : A.netA < -0.005 ? `<b>${esc(a.name)}</b> deve <b class="text-rose-600">${R$(-A.netA)}</b> a <b>${esc(b.name)}</b>` : 'Tudo certo: ninguém deve nada.';
+            const acs = P.acertos.filter(x => (x.date || '').startsWith(plMonth));
+            const inp = 'px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            return `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="${PL_CARD}"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-scale-balanced text-teal-500"></i>Acerto de contas</h3>${plMonthNav()}</div>
+                    <p class="text-xs text-slate-500 mb-3">Considera as despesas da <b>Casa (conjunta)</b>, incluindo cartões compartilhados. Marque no lançamento "De quem" e "Quem pagou".</p>
+                    <div class="grid grid-cols-3 gap-2 mb-3 text-center"><div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase text-slate-400 font-bold">Despesas da casa</p><b class="text-sm">${R$(A.T)}</b></div>
+                        <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase text-slate-400 font-bold">${esc(a.name)} pagou</p><b class="text-sm">${R$(A.pa)}</b><p class="text-[10px] text-slate-400">cota ${Math.round(ra * 100)}% = ${R$(A.T * ra)}</p></div>
+                        <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase text-slate-400 font-bold">${esc(b.name)} pagou</p><b class="text-sm">${R$(A.pb)}</b><p class="text-[10px] text-slate-400">cota ${Math.round(rb * 100)}% = ${R$(A.T * rb)}</p></div></div>
+                    <div class="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 text-sm">${who}</div>
+                    ${A.sem > 0.005 ? `<p class="text-[11px] text-amber-700 mt-2"><i class="fa-solid fa-circle-info mr-1"></i>${R$(A.sem)} em despesas da casa sem "quem pagou" informado (não entram no acerto).</p>` : ''}
+                    <button onclick="plAcertoOpen()" class="${PL_BTN} mt-3"><i class="fa-solid fa-handshake mr-1"></i>Registrar acerto</button>
+                    ${acs.length ? `<div class="mt-3 text-xs text-slate-500 space-y-0.5">${acs.map(x => `<div class="flex justify-between"><span>${fmtBR(x.date)} · ${esc(plPersonName(x.from))} → ${esc(plPersonName(x.to))}</span><span><b>${R$(x.amount)}</b> <button onclick="plDel('acertos','${x.id}')" class="text-slate-300 hover:text-rose-600 ml-1"><i class="fa-solid fa-xmark"></i></button></span></div>`).join('')}</div>` : ''}</div>
+                <div class="${PL_CARD}"><h3 class="font-bold text-slate-800 dark:text-white mb-3">Como dividir</h3>
+                    <div class="grid grid-cols-2 gap-2 mb-2">${P.people.map((p, i) => `<div><label class="${LBL}">Nome</label><input id="pp-n${i}" value="${esc(p.name)}" class="${inp} w-full"><label class="${LBL} mt-1">Renda mensal (R$)</label><input id="pp-r${i}" inputmode="decimal" value="${esc(p.renda || '')}" class="${inp} w-full" placeholder="para divisão proporcional"></div>`).join('')}</div>
+                    <label class="${LBL}">Regra da divisão</label><select id="pp-split" class="${inp} w-full"><option value="meio" ${P.split === 'meio' ? 'selected' : ''}>Meio a meio (50% / 50%)</option><option value="renda" ${P.split === 'renda' ? 'selected' : ''}>Proporcional à renda</option></select>
+                    <button onclick="plPeopleSave()" class="${PL_BTN} mt-3">Salvar</button>
+                    <p class="text-[11px] text-slate-400 mt-3">Use o seletor <b>Todos / ${esc(a.name)} / ${esc(b.name)} / Casa</b> no alto da tela para ver cada visão separada, com o mesmo login.</p></div>
+                <div class="${PL_CARD} lg:col-span-2"><h3 class="font-bold text-slate-800 dark:text-white mb-3">Despesas da casa em ${fmtYM(plMonth)}</h3>
+                    ${A.items.length ? `<div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-[11px] uppercase text-slate-400"><tr><th class="py-1.5">Data</th><th>Descrição</th><th class="text-right">Valor</th><th>Quem pagou</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-700">${A.items.sort((x, y) => (y.r.date || '').localeCompare(x.r.date || '')).map(({ r, who }) => `<tr><td class="py-1.5 whitespace-nowrap">${fmtBR(r.date)}</td><td>${esc(r.desc)}${r.src === 'card' ? ' <i class="fa-solid fa-credit-card text-indigo-400 text-[10px]"></i>' : ''}</td><td class="text-right whitespace-nowrap">${R$(r.amount)}</td><td class="text-xs">${who.length ? who.map(([w, v]) => esc(w === 'a' ? a.name : b.name) + (who.length > 1 ? ' ' + R$(v) : '')).join(' + ') : '<span class="text-amber-600">não informado</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400 text-center py-6">Nenhuma despesa da casa neste mês.</p>'}</div></div>`;
+        }
+
+        // ---------- 10) Análise: comparativo, taxa de poupança, 50/30/20 ----------
+        const PL_GUESS = [[/mercad|supermerc|alimenta|aluguel|condom|luz|energia|agua|água|internet|telefon|saude|saúde|farmac|remed|plano de|escola|educa|transporte|combust|gasol|seguro|financ|habita|iptu|imposto/i, 'necessidade'], [/invest|poupan|reserva|previd|aplica/i, 'poupanca']];
+        function plClassOf(cat) { const P = plano(), k = normKey(cat); if (P.catClass[k]) return P.catClass[k]; const g = PL_GUESS.find(([re]) => re.test(cat)); return g ? g[1] : 'desejo'; }
+        function plSetClass(enc, v) { plano().catClass[normKey(decodeURIComponent(enc))] = v; saveAppData(); renderCurrentTabContent(); }
+        function plMonthTotals(ym) {
+            let rec = 0, des = 0; const cats = {};
+            plRows(ym).forEach(r => { if (r.type === 'receita') rec += r.amount; else { des += r.amount; cats[r.category] = (cats[r.category] || 0) + r.amount; } });
+            return { rec, des, cats, sobra: rec - des, taxa: rec > 0 ? (rec - des) / rec * 100 : null };
+        }
+        function plRenderAnalise() {
+            const cur = plMonth, prev = ymAdd(cur, -1), T = plMonthTotals(cur), tp = plMonthTotals(prev);
+            // comparativo
+            const hist = []; for (let i = 1; i <= 6; i++) hist.push(plMonthTotals(ymAdd(cur, -i)));
+            const catsAll = new Set([...Object.keys(T.cats), ...Object.keys(tp.cats)]); hist.forEach(h => Object.keys(h.cats).forEach(c => catsAll.add(c)));
+            const rowsC = [...catsAll].map(c => { const v = T.cats[c] || 0, p = tp.cats[c] || 0, avg = hist.reduce((s, h) => s + (h.cats[c] || 0), 0) / 6; return { c, v, p, avg }; }).filter(x => x.v || x.p || x.avg).sort((a, b) => b.v - a.v);
+            const dl = (v, b) => { if (!b && !v) return '<span class="text-slate-300">—</span>'; if (!b) return '<span class="text-amber-600 text-xs">novo</span>'; const d = (v - b) / b * 100; return `<span class="${d > 5 ? 'text-rose-600' : d < -5 ? 'text-emerald-600' : 'text-slate-500'} font-bold text-xs">${d > 0 ? '▲' : d < 0 ? '▼' : ''} ${Math.abs(d).toFixed(0)}%</span>`; };
+            // poupança 6 meses
+            const meses = []; for (let i = 5; i >= 0; i--) { const m = ymAdd(cur, -i); meses.push(Object.assign({ ym: m }, plMonthTotals(m))); }
+            // 50/30/20
+            let nec = 0, des2 = 0, poup = 0; const catList = Object.entries(T.cats).sort((a, b) => b[1] - a[1]);
+            catList.forEach(([c, v]) => { const k = plClassOf(c); if (k === 'necessidade') nec += v; else if (k === 'poupanca') poup += v; else des2 += v; });
+            poup += Math.max(0, T.sobra); const rendaBase = T.rec || 0;
+            const pc = v => rendaBase > 0 ? v / rendaBase * 100 : 0;
+            const bar = (l, v, ideal, cor) => `<div class="mb-3"><div class="flex justify-between text-sm"><span class="font-semibold">${l}</span><span><b>${pc(v).toFixed(0)}%</b> <span class="text-slate-400 text-xs">(ideal ${ideal}%) · ${R$(v)}</span></span></div><div class="relative h-3 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"><div class="h-full ${cor}" style="width:${Math.min(100, pc(v))}%"></div><div class="absolute top-0 bottom-0 w-0.5 bg-slate-800/60" style="left:${ideal}%"></div></div></div>`;
+            return `<div class="flex items-center justify-between gap-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white">Análise de ${fmtYM(cur)}</h3>${plMonthNav()}</div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="${PL_CARD}"><h4 class="font-bold text-slate-800 dark:text-white mb-1 flex items-center gap-2"><i class="fa-solid fa-piggy-bank text-teal-500"></i>Taxa de poupança</h4>
+                    <p class="text-4xl font-extrabold ${T.taxa === null ? 'text-slate-400' : T.taxa >= 20 ? 'text-emerald-600' : T.taxa >= 0 ? 'text-amber-600' : 'text-rose-600'}">${T.taxa === null ? '—' : T.taxa.toFixed(1).replace('.', ',') + '%'}</p>
+                    <p class="text-xs text-slate-500 mb-3">Receitas ${R$(T.rec)} − despesas ${R$(T.des)} = <b>${R$(T.sobra)}</b> ${T.taxa === null ? '(sem receitas lançadas no mês)' : 'da renda que sobrou'}. Referência: 20% ou mais.</p>
+                    <div class="flex items-end gap-1.5 h-24">${meses.map(m => `<div class="flex-1 flex flex-col items-center justify-end h-full"><span class="text-[9px] text-slate-500">${m.taxa === null ? '' : Math.round(m.taxa) + '%'}</span><div class="w-full rounded-t ${m.taxa === null ? 'bg-slate-200' : m.taxa < 0 ? 'bg-rose-400' : m.taxa >= 20 ? 'bg-emerald-500' : 'bg-amber-400'}" style="height:${m.taxa === null ? 4 : Math.max(4, Math.min(100, Math.abs(m.taxa)))}%"></div><span class="text-[9px] text-slate-400 mt-0.5">${fmtYM(m.ym).slice(0, 3)}</span></div>`).join('')}</div></div>
+                <div class="${PL_CARD}"><h4 class="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2"><i class="fa-solid fa-chart-pie text-teal-500"></i>Regra 50/30/20</h4>
+                    ${rendaBase > 0 ? bar('Necessidades', nec, 50, 'bg-sky-500') + bar('Desejos', des2, 30, 'bg-amber-500') + bar('Poupança / sobra', poup, 20, 'bg-emerald-500') : '<p class="text-sm text-slate-400">Lance as receitas do mês para comparar com o ideal.</p>'}
+                    ${catList.length ? `<details class="mt-2"><summary class="text-xs font-bold text-teal-700 cursor-pointer">Classificar categorias</summary><div class="mt-2 space-y-1">${catList.map(([c, v]) => `<div class="flex items-center justify-between gap-2 text-xs"><span class="truncate">${esc(c)} <span class="text-slate-400">${R$(v)}</span></span><select onchange="plSetClass('${encodeURIComponent(c)}',this.value)" class="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"><option value="necessidade" ${plClassOf(c) === 'necessidade' ? 'selected' : ''}>Necessidade</option><option value="desejo" ${plClassOf(c) === 'desejo' ? 'selected' : ''}>Desejo</option><option value="poupanca" ${plClassOf(c) === 'poupanca' ? 'selected' : ''}>Poupança</option></select></div>`).join('')}</div></details>` : ''}</div>
+                <div class="${PL_CARD} lg:col-span-2"><h4 class="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2"><i class="fa-solid fa-code-compare text-teal-500"></i>Comparativo por categoria</h4>
+                    ${rowsC.length ? `<div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-[11px] uppercase text-slate-400"><tr><th class="py-1.5">Categoria</th><th class="text-right">${fmtYM(cur).split(' ')[0].slice(0, 3)}</th><th class="text-right">${fmtYM(prev).split(' ')[0].slice(0, 3)}</th><th class="text-right">vs mês ant.</th><th class="text-right">Média 6m</th><th class="text-right">vs média</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">${rowsC.map(x => `<tr><td class="py-1.5 font-medium">${esc(x.c)}</td><td class="text-right">${R$(x.v)}</td><td class="text-right text-slate-500">${R$(x.p)}</td><td class="text-right">${dl(x.v, x.p)}</td><td class="text-right text-slate-500">${R$(x.avg)}</td><td class="text-right">${dl(x.v, x.avg)}</td></tr>`).join('')}
+                    <tr class="font-bold"><td class="py-1.5">Total de despesas</td><td class="text-right">${R$(T.des)}</td><td class="text-right">${R$(tp.des)}</td><td class="text-right">${dl(T.des, tp.des)}</td><td class="text-right">${R$(hist.reduce((s, h) => s + h.des, 0) / 6)}</td><td class="text-right">${dl(T.des, hist.reduce((s, h) => s + h.des, 0) / 6)}</td></tr></tbody></table></div>` : '<p class="text-sm text-slate-400 text-center py-6">Sem despesas para comparar.</p>'}
+                    <p class="text-[11px] text-slate-400 mt-2">Vermelho = gastou mais (acima de 5%); verde = gastou menos. A média considera os 6 meses anteriores ao mês escolhido.</p></div></div>`;
+        }
+
+        // ---------- 11) Imposto de Renda: despesas dedutíveis ----------
+        const PL_IR = { saude: 'Saúde', educacao: 'Educação', previdencia: 'Previdência (PGBL)', outros: 'Outras dedutíveis' };
+        function plRenderIR() {
+            const anos = new Set([plAnoIR]); appData.financeiro.transactions.forEach(t => { if (t.dedutivel && t.date) anos.add(t.date.slice(0, 4)); });
+            const list = appData.financeiro.transactions.filter(t => t.dedutivel && t.type === 'despesa' && (t.date || '').startsWith(plAnoIR) && plVisible(t.owner || '')).sort((a, b) => a.date.localeCompare(b.date));
+            const by = {}; list.forEach(t => { by[t.dedutivel] = (by[t.dedutivel] || 0) + (Number(t.amount) || 0); });
+            const tot = list.reduce((s, t) => s + (Number(t.amount) || 0), 0), semComp = list.filter(t => !(t.attachments || []).length).length;
+            return `<div class="${PL_CARD}"><div class="flex flex-wrap items-center justify-between gap-3 mb-4"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-file-invoice text-teal-500"></i>Despesas dedutíveis no Imposto de Renda</h3>
+                <div class="flex items-center gap-2"><select onchange="plAnoIR=this.value;renderCurrentTabContent()" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">${[...anos].sort().reverse().map(a => `<option ${a === plAnoIR ? 'selected' : ''}>${a}</option>`).join('')}</select><button onclick="plIRCsv()" class="${PL_BTN}"><i class="fa-solid fa-download mr-1"></i>Baixar resumo (CSV)</button></div></div>
+                <p class="text-xs text-slate-500 mb-4">Marque o campo <b>"Dedutível no IR"</b> ao lançar a despesa no Financeiro (saúde, educação, previdência). Anexe o recibo no próprio lançamento. Total ${plAnoIR}: <b>${R$(tot)}</b>.</p>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${Object.entries(PL_IR).map(([k, l]) => `<div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">${l}</p><p class="font-bold">${R$(by[k] || 0)}</p></div>`).join('')}</div>
+                ${semComp ? `<p class="text-xs text-amber-700 mb-3"><i class="fa-solid fa-paperclip mr-1"></i>${semComp} lançamento(s) sem comprovante anexado.</p>` : ''}
+                ${list.length ? `<div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-[11px] uppercase text-slate-400"><tr><th class="py-1.5">Data</th><th>Descrição</th><th>Tipo</th><th class="text-right">Valor</th><th class="text-center">Comprov.</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-700">${list.map(t => `<tr><td class="py-1.5 whitespace-nowrap">${fmtBR(t.date)}</td><td>${esc(t.desc)}</td><td class="text-xs">${PL_IR[t.dedutivel] || ''}</td><td class="text-right whitespace-nowrap">${R$(t.amount)}</td><td class="text-center">${(t.attachments || []).length ? '<i class="fa-solid fa-paperclip text-teal-600"></i> ' + t.attachments.length : '<span class="text-slate-300">—</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400 text-center py-6">Nenhuma despesa marcada como dedutível em ' + plAnoIR + '.</p>'}</div>`;
+        }
+        function plIRCsv() {
+            const list = appData.financeiro.transactions.filter(t => t.dedutivel && t.type === 'despesa' && (t.date || '').startsWith(plAnoIR)).sort((a, b) => a.date.localeCompare(b.date));
+            const q = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+            const lines = [['Data', 'Descrição', 'Tipo', 'Valor', 'Comprovantes'].map(q).join(';')].concat(list.map(t => [fmtBR(t.date), t.desc, PL_IR[t.dedutivel] || '', Number(t.amount).toFixed(2).replace('.', ','), (t.attachments || []).length].map(q).join(';')));
+            const by = {}; list.forEach(t => { by[t.dedutivel] = (by[t.dedutivel] || 0) + (Number(t.amount) || 0); });
+            lines.push('', ['Resumo', '', '', '', ''].map(q).join(';')); Object.entries(by).forEach(([k, v]) => lines.push([PL_IR[k] || k, '', '', v.toFixed(2).replace('.', ','), ''].map(q).join(';')));
+            const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = url; a.download = 'dedutiveis-IR-' + plAnoIR + '.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 4000);
+        }
+
+        // ---------- Importar extrato bancário (OFX / CSV) para o Financeiro ----------
+        let extRows = [];
+        function openExtratoImport() {
+            const cs = contasData();
+            showModal('Importar extrato bancário', `<p class="text-xs text-slate-500 mb-3">Envie o extrato em <b>OFX</b> ou <b>CSV</b>. Valores positivos viram receita e negativos viram despesa. Você revisa antes de importar.</p>
+                <label class="${LBL}">Cartão / conta do extrato</label><select id="ex-acc" class="${INP} mb-3"><option value="">— sem conta —</option>${cs.map(a => `<option value="${a.id}">${esc(accLabel(a))}</option>`).join('')}</select>
+                <input type="file" id="ex-file" accept=".ofx,.qfx,.csv,.txt" onchange="extratoRead(this)" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs"><p id="ex-msg" class="text-xs text-slate-400 mt-3"></p><div id="ex-list"></div>`);
+        }
+        async function extratoRead(input) {
+            const f = input.files[0]; if (!f) return; const msg = document.getElementById('ex-msg');
+            try {
+                const ext = f.name.split('.').pop().toLowerCase(), txt = await f.text();
+                const raw = (ext === 'ofx' || ext === 'qfx') ? parseOfx(txt) : parseCsvFatura(txt);
+                if (!raw.length) throw new Error('Não encontrei lançamentos neste arquivo.');
+                const known = {}; appData.financeiro.transactions.forEach(t => { if (t.desc && t.category) known[normKey(t.desc)] = t.category; });
+                const dup = new Set(appData.financeiro.transactions.map(t => t.date + '|' + (Number(t.amount) || 0).toFixed(2)));
+                extRows = raw.map((r, i) => ({ i, date: r.date, name: r.name, amount: Math.abs(r.signed), type: r.signed >= 0 ? 'receita' : 'despesa', cat: known[normKey(r.name)] || (r.signed >= 0 ? 'Receita' : 'Outros'), dup: dup.has(r.date + '|' + Math.abs(r.signed).toFixed(2)) }));
+                msg.textContent = extRows.length + ' lançamento(s) encontrado(s)' + (extRows.some(r => r.dup) ? ' — os que parecem repetidos vêm desmarcados.' : '.');
+                document.getElementById('ex-list').innerHTML = `<div class="max-h-[45vh] overflow-y-auto mt-2 space-y-1">${extRows.map(r => `<label class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-700/40 text-xs"><input type="checkbox" class="ex-ck" data-i="${r.i}" ${r.dup ? '' : 'checked'}><span class="w-14 text-slate-400">${fmtBR(r.date).slice(0, 5)}</span><span class="flex-1 truncate">${esc(r.name)}${r.dup ? ' <b class="text-amber-600">(repetido?)</b>' : ''}</span><b class="${r.type === 'receita' ? 'text-emerald-600' : 'text-rose-600'}">${r.type === 'receita' ? '+' : '-'}${money(r.amount)}</b></label>`).join('')}</div>
+                    <button onclick="extratoCommit()" class="w-full mt-3 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Importar selecionados</button>`;
+            } catch (e) { msg.className = 'text-xs text-rose-500 mt-3'; msg.textContent = e.message || 'Erro ao ler o arquivo.'; }
+        }
+        function extratoCommit() {
+            const acc = document.getElementById('ex-acc').value; let n = 0;
+            document.querySelectorAll('.ex-ck:checked').forEach(ck => {
+                const r = extRows[Number(ck.dataset.i)]; if (!r) return;
+                appData.financeiro.transactions.push({ id: uid(), type: r.type, status: r.type === 'receita' ? 'recebido' : 'pago', desc: r.name, amount: r.amount.toFixed(2), category: r.cat, date: r.date, accId: acc, toAccId: '', attachments: [] }); n++;
+            });
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast(n + ' lançamento(s) importado(s).', 'success');
+        }
+
         // ========== HABITAÇÃO › EVOLUÇÃO (fotos e vídeos agrupados por data) ==========
         function evoData() { const H = appData.habitacao; if (!Array.isArray(H.evolucao)) H.evolucao = []; return H.evolucao; }
         const _evoUrls = {};
