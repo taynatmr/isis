@@ -4893,7 +4893,7 @@
                         </tr></thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         ${entries.map(e => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
-                            <td class="p-3"><input type="checkbox" class="card-sel" data-amt="${Number(e.amount) || 0}" onchange="cardSelUpdate()"></td>
+                            <td class="p-3"><input type="checkbox" class="card-sel" data-id="${e.id}" data-amt="${Number(e.amount) || 0}" onchange="cardSelUpdate()"></td>
                             <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}${qn ? `<span class="block text-[10px] text-slate-400">fatura ${esc(fmtYM(e.invoice))}</span>` : ''}</td>
                             <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}${(e.pagoPor || []).length ? `<div class="mt-1 flex flex-wrap gap-1">${e.pagoPor.map(p => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">${esc(p.name)} R$ ${money(p.amount)}</span>`).join('')}</div>` : ''}</td>
                             <td class="p-3"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(e.category)}</span></td>
@@ -4931,7 +4931,8 @@
             bar.innerHTML = on.length ? `<div class="flex flex-wrap items-center gap-x-6 gap-y-1 p-3.5 mb-3 rounded-2xl bg-teal-50 dark:bg-teal-950/40 text-sm text-slate-700 dark:text-slate-200">
                 <b>${on.length} selecionado${on.length > 1 ? 's' : ''}</b>
                 <span>Soma: <b class="${sum >= 0 ? 'text-rose-600' : 'text-emerald-600'}">${sum < 0 ? '− ' : ''}R$ ${money(Math.abs(sum))}</b></span>
-                <button onclick="cardSelAll(false)" class="ml-auto text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button></div>` : cardSelBar();
+                <span class="ml-auto flex items-center gap-3"><button onclick="openBulkEdit('card')" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold shadow"><i class="fa-solid fa-pen-to-square mr-1"></i>Editar mais</button>
+                <button onclick="cardSelAll(false)" class="text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button></span></div>` : cardSelBar();
         }
         function cardSelAll(on) { document.querySelectorAll('.card-sel').forEach(b => b.checked = on); cardSelUpdate(); }
         function cardSortBy(k) { if (cardSort.k === k) cardSort.dir *= -1; else cardSort = { k, dir: k === 'amount' ? -1 : 1 }; renderCurrentTabContent(); }
@@ -7598,8 +7599,70 @@
                 <span>Receitas: <b class="text-emerald-600">R$ ${money(r)}</b></span>
                 <span>Despesas: <b class="text-rose-600">R$ ${money(d)}</b></span>
                 <span>Soma (receitas − despesas): <b class="${net >= 0 ? 'text-teal-600' : 'text-rose-600'}">R$ ${money(net)}</b></span>
-                <button onclick="finSelClear()" class="ml-auto text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button>
+                <span class="ml-auto flex items-center gap-3"><button onclick="openBulkEdit('fin')" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold shadow"><i class="fa-solid fa-pen-to-square mr-1"></i>Editar mais</button>
+                <button onclick="finSelClear()" class="text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button></span>
             </div>`;
+        }
+        // ---- Editar mais: altera campos de todos os itens selecionados ----
+        function bulkRow(k, label, html) {
+            return `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40"><label class="flex items-center gap-2 text-[11px] font-bold uppercase text-slate-500 mb-1.5"><input type="checkbox" id="bk-on-${k}"> ${label}</label><div oninput="document.getElementById('bk-on-${k}').checked=true" onchange="document.getElementById('bk-on-${k}').checked=true">${html}</div></div>`;
+        }
+        function openBulkEdit(kind) {
+            let ids;
+            if (kind === 'fin') ids = finFiltered().filter(t => finSel.has(t.id)).map(t => t.id);
+            else ids = Array.from(document.querySelectorAll('.card-sel:checked')).map(b => b.dataset.id);
+            if (ids.length < 1) { showToast('Selecione ao menos um item.', 'warning'); return; }
+            window._bulk = { kind, ids };
+            const owners = `<option value="">Casa (conjunta)</option>${plano().people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}`;
+            const ded = `<option value="">Não</option>${Object.entries(PL_IR).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}`;
+            const cats = kind === 'card' ? appData.cartao.categories.concat(catAllNames().filter(c => !appData.cartao.categories.includes(c))) : catAllNames();
+            showModal(`Editar mais · ${ids.length} selecionado${ids.length > 1 ? 's' : ''}`, `
+                <p class="text-xs text-slate-500 mb-3">Mexa só nos campos que quer mudar (eles ficam marcados). O valor escolhido é aplicado em <b>todos</b> os selecionados.</p>
+                <datalist id="bk-cats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+                <form onsubmit="applyBulkEdit(event)" class="space-y-2.5">
+                    ${bulkRow('name', 'Nome', `<input id="bk-name" class="${INP}" placeholder="Novo nome">`)}
+                    ${bulkRow('cat', 'Categoria', `<input id="bk-cat" list="bk-cats" class="${INP}" placeholder="Nova categoria">`)}
+                    ${bulkRow('date', 'Data', `<input id="bk-date" type="date" class="${INP}">`)}
+                    ${bulkRow('owner', 'De quem', `<select id="bk-owner" class="${INP}">${owners}</select>`)}
+                    ${bulkRow('ded', 'Dedutível no IR', `<select id="bk-ded" class="${INP}">${ded}</select>`)}
+                    ${kind === 'fin' ? bulkRow('status', 'Situação', `<select id="bk-status" class="${INP}"><option value="pago">Pago / Recebido</option><option value="pendente">Pendente</option></select>`) : ''}
+                    <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Aplicar aos ${ids.length}</button>
+                </form>`);
+        }
+        function applyBulkEdit(ev) {
+            ev.preventDefault();
+            const B = window._bulk, on = k => { const c = document.getElementById('bk-on-' + k); return c && c.checked; }, v = k => document.getElementById('bk-' + k).value;
+            const f = { name: on('name') ? v('name').trim() : null, cat: on('cat') ? v('cat').trim() : null, date: on('date') ? v('date') : null, owner: on('owner') ? v('owner') : null, ded: on('ded') ? v('ded') : null, status: on('status') ? v('status') : null };
+            if (Object.values(f).every(x => x === null)) { showToast('Marque ou altere ao menos um campo.', 'warning'); return; }
+            if (f.name === '' || (f.date !== null && !f.date)) { showToast('Preencha o valor dos campos marcados.', 'warning'); return; }
+            if (f.cat !== null) { if (!f.cat) { showToast('Informe a categoria.', 'warning'); return; } f.cat = catResolveNew(f.cat); }
+            let n = 0;
+            if (B.kind === 'fin') {
+                appData.financeiro.transactions.forEach(t => {
+                    if (!B.ids.includes(t.id)) return;
+                    if (f.status !== null) t.status = f.status === 'pendente' ? 'pendente' : (t.type === 'receita' ? 'recebido' : 'pago');
+                    if (!t.cardInvoice) {
+                        if (f.name !== null) t.desc = f.name;
+                        if (f.cat !== null && t.type !== 'transferencia') t.category = f.cat;
+                        if (f.date !== null) t.date = f.date;
+                        if (f.owner !== null) { if (f.owner) t.owner = f.owner; else delete t.owner; if (f.owner) delete t.payer; }
+                        if (f.ded !== null) { if (f.ded) t.dedutivel = f.ded; else delete t.dedutivel; }
+                    }
+                    n++;
+                });
+                finSel.clear();
+            } else {
+                appData.cartao.entries.forEach(e => {
+                    if (!B.ids.includes(e.id)) return;
+                    if (f.name !== null) e.name = f.name;
+                    if (f.cat !== null) { e.category = f.cat; if (!appData.cartao.categories.some(c => normKey(c) === normKey(f.cat))) appData.cartao.categories.push(f.cat); }
+                    if (f.date !== null) { e.date = f.date; const c = cardById(e.cardId); if (c) e.invoice = cardInvoiceKey(c, f.date); }
+                    if (f.owner !== null) { e.owner = f.owner || 'casa'; }
+                    if (f.ded !== null) { if (f.ded && Number(e.amount) > 0) e.dedutivel = f.ded; else delete e.dedutivel; }
+                    n++;
+                });
+            }
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast(`${n} item(ns) alterado(s).`, 'success');
         }
         function finSelToggle(id, on) {
             if (on) finSel.add(id); else finSel.delete(id);
