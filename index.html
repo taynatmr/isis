@@ -256,7 +256,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 54</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 55</div>
             </div>
         </aside>
 
@@ -8282,7 +8282,9 @@
             invests: { title: 'Aplicação', fields: [['name', 'Nome', 'text', { req: 1, ph: 'CDB Banco X 110% CDI' }], ['inst', 'Instituição', 'text', {}],
                 ['tipo', 'Tipo', 'select', { opts: [['CDB', 'CDB / RDB'], ['LCI/LCA', 'LCI / LCA'], ['Tesouro', 'Tesouro Direto'], ['Fundo', 'Fundo'], ['Acoes', 'Ações / FIIs'], ['Poupanca', 'Poupança'], ['Outro', 'Outro']] }],
                 ['pct', 'Contratado (% do CDI)', 'num', { ph: 'Ex.: 110' }], ['saldo', 'Saldo atual (R$)', 'num', { req: 1 }], ['saldoDate', 'Saldo conferido em', 'date', {}]] },
-            debts: { title: 'Dívida / financiamento', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Financiamento do carro, empréstimo' }], ['original', 'Valor original da dívida (R$)', 'num', { ph: 'Quanto era no começo' }], ['saldo', 'Valor que falta pagar (R$)', 'num', { req: 1 }], ['parcelas', 'Parcelas restantes', 'num', { req: 1 }], ['parcela', 'Valor da parcela (R$)', 'num', { req: 1 }], ['taxa', 'Juros ao mês (%) — vazio = calcular', 'num', {}]] }
+            debts: { title: 'Dívida / financiamento', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Financiamento do carro, empréstimo' }], ['original', 'Valor original (R$)', 'num', { ph: 'Quanto era no começo' }], ['pago', 'Valor já pago (R$)', 'num', { ph: 'Se não souber o que falta' }], ['saldo', 'Valor que falta pagar (R$)', 'num', { ph: 'Ou deixe vazio: original − pago' }],
+                ['parcela', 'Valor da parcela (R$)', 'num', { req: 1 }], ['parcelasTotal', 'Quantidade de parcelas (total)', 'num', { ph: 'Ex.: 48' }], ['parcelas', 'Parcelas que faltam', 'num', { req: 1 }],
+                ['taxa', 'Juros ao mês (%) — vazio = calcular', 'num', {}]] }
         };
         function plOwnerName(k) { const o = PL_OWNERS().find(x => x[0] === (k || '')); return o ? (o[0] ? o[1] : 'Casa') : 'Casa'; }
         function plOpen(kind, id, preset) {
@@ -8290,6 +8292,8 @@
             const v = Object.assign({}, preset || {}, cur || {});
             if (kind === 'recs' && !cur) { v.kind = v.kind || 'despesa'; v.freq = v.freq || 'mensal'; v.day = v.day || 5; v.tipo = v.tipo || 'assinatura'; }
             if (kind === 'invests' && !cur) v.saldoDate = localDateStr();
+            if (kind === 'debts' && cur && Number(cur.original) > 0) v.pago = Math.max(0, Math.round((Number(cur.original) - (Number(cur.saldo) || 0)) * 100) / 100);
+            if (kind === 'debts' && cur && Number(cur.taxa) > 0) v.taxa = cur.taxa;
             const inp = ([k, l, t, o]) => {
                 const val = v[k] === undefined || v[k] === null ? '' : v[k];
                 let h;
@@ -8307,6 +8311,12 @@
             e.preventDefault();
             const F = PL_FORMS[kind], list = plano()[kind], o = {};
             F.fields.forEach(([k, l, t]) => { const el = document.getElementById('plf-' + k); o[k] = t === 'num' ? (el.value.trim() === '' ? '' : recNum(el.value)) : el.value.trim(); });
+            if (kind === 'debts') {
+                const cur1 = id ? list.find(x => x.id === id) : null, orig = Number(o.original) || 0, pg = o.pago === '' ? null : Number(o.pago), sd = o.saldo === '' ? null : Number(o.saldo);
+                if (sd === null) { if (orig > 0 && pg !== null) o.saldo = Math.max(0, Math.round((orig - pg) * 100) / 100); else { showToast('Informe o valor que falta pagar (ou o original e o já pago).', 'warning'); return; } }
+                else if (cur1 && orig > 0 && pg !== null) { const oldPg = Math.round(((Number(cur1.original) || 0) - (Number(cur1.saldo) || 0)) * 100) / 100; if (Math.abs(pg - oldPg) > 0.005 && Math.abs(sd - (Number(cur1.saldo) || 0)) < 0.005) o.saldo = Math.max(0, Math.round((orig - pg) * 100) / 100); }
+                delete o.pago;
+            }
             if (id) { const cur0 = list.find(x => x.id === id); Object.assign(cur0, o); if (kind === 'debts') delete cur0.taxaAuto; }
             else {
                 const n = Object.assign({ id: uid() }, o);
@@ -8656,8 +8666,9 @@
             return `<div class="${PL_CARD}"><div class="flex flex-wrap items-center justify-between gap-3 mb-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-hand-holding-dollar text-teal-500"></i>Dívidas e financiamentos</h3><button onclick="plOpen('debts')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Nova dívida</button></div>
                 <p class="text-xs text-slate-500 mb-4">Saldo devedor total: <b class="text-rose-600">${R$(tot)}</b> · parcelas por mês: <b>${R$(ds.reduce((s, d) => s + (Number(d.parcela) || 0), 0))}</b></p>
                 ${ds.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${ds.map(d => { const total = (Number(d.parcela) || 0) * (Number(d.parcelas) || 0), jur = Math.max(0, total - (Number(d.saldo) || 0)); return `<div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
-                    <div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-slate-800 dark:text-white truncate">${esc(d.name)}</p><p class="text-xs text-slate-500">${d.parcelas} parcela(s) de ${R$(d.parcela)} · juros ${(plDebtRate(d) * 100).toFixed(2).replace('.', ',')}% a.m.</p></div>${plEditBtns('debts', d.id)}</div>
-                    <p class="text-xl font-bold mt-2 ${Number(d.saldo) > 0 ? 'text-rose-600' : 'text-emerald-600'}">${R$(d.saldo)} <span class="text-[11px] font-semibold text-slate-400">falta pagar</span></p>
+                    <div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-slate-800 dark:text-white truncate">${esc(d.name)}</p></div>${plEditBtns('debts', d.id)}</div>
+                    ${(() => { const st = (l, v, c) => `<div class="p-2 rounded-xl bg-white dark:bg-slate-800/60 min-w-0"><p class="text-[10px] uppercase font-bold text-slate-400 truncate">${l}</p><p class="font-bold text-sm ${c || ''} break-words">${v}</p></div>`, orig = Number(d.original) || 0, tt = Number(d.parcelasTotal) || 0, rest = Number(d.parcelas) || 0;
+                        return `<div class="grid grid-cols-2 gap-2 mt-3">${st('Valor original', orig ? R$(orig) : '—')}${st('Valor pago', orig ? R$(Math.max(0, orig - (Number(d.saldo) || 0))) : '—', 'text-emerald-600')}${st('Falta pagar', R$(d.saldo), Number(d.saldo) > 0 ? 'text-rose-600' : 'text-emerald-600')}${st('Valor da parcela', R$(d.parcela))}${st('Parcelas', tt ? `${Math.max(0, tt - rest)} pagas de ${tt} <span class="block text-[11px] font-semibold text-slate-500">faltam ${rest}</span>` : `faltam ${rest}`)}${st('Juros ao mês', (plDebtRate(d) * 100).toFixed(2).replace('.', ',') + '%')}</div>`; })()}
                     ${Number(d.original) > 0 ? (() => { const pg = Math.max(0, Number(d.original) - (Number(d.saldo) || 0)), pc = Math.min(100, pg / Number(d.original) * 100); return `<div class="mt-2"><div class="flex justify-between text-[11px] text-slate-500 mb-1"><span>Original ${R$(d.original)}</span><span><b>${pc.toFixed(0)}%</b> quitado · ${R$(pg)}</span></div><div class="h-2.5 rounded-full bg-slate-200 dark:bg-slate-600 overflow-hidden"><div class="h-full bg-emerald-500" style="width:${pc}%"></div></div></div>`; })() : '<p class="text-[11px] text-amber-600 mt-1">Informe o valor original (editar) para ver o quanto já foi quitado.</p>'}
                     ${Number(d.saldo) > 0 ? `<p class="text-xs text-slate-500 mt-1.5">Falta pagar ${R$(total)} no total, sendo ${R$(jur)} de juros.</p>` : '<p class="text-xs text-emerald-600 font-bold mt-1.5"><i class="fa-solid fa-circle-check mr-1"></i>Dívida quitada!</p>'}
                     ${(d.pagos || []).length ? `<details class="mt-2"><summary class="text-[11px] font-bold text-teal-700 cursor-pointer">${d.pagos.length} pagamento(s) pelo Financeiro</summary><div class="mt-1 max-h-24 overflow-y-auto text-[11px] text-slate-500 space-y-0.5">${d.pagos.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => `<div class="flex justify-between"><span>${fmtBR(p.date)} · ${p.tipo === 'parcela' ? 'parcela' : 'amortização'}</span><b>${R$(p.amount)}</b></div>`).join('')}</div></details>` : ''}
