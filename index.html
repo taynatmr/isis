@@ -256,7 +256,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 53</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 54</div>
             </div>
         </aside>
 
@@ -7683,6 +7683,7 @@
                         + bulkRow('to', 'Conta de destino (transferências)', `<select id="bk-to" class="${INP}">${finAccOpts('', true)}</select>`)
                         + bulkRow('amount', 'Valor (R$) — igual em todos', `<input id="bk-amount" type="number" step="0.01" min="0" class="${INP}">`)
                         + bulkRow('payer', 'Quem pagou (despesas da Casa)', `<select id="bk-payer" class="${INP}"><option value="">—</option>${plano().people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>`)
+                        + ((plano().debts || []).length ? bulkRow('debt', 'Pagamento de dívida (despesas)', `<select id="bk-debt" class="${INP}"><option value="">Não é pagamento de dívida</option>${plano().debts.map(x => `<option value="${x.id}">${esc(x.name)} · falta ${R$(x.saldo)}</option>`).join('')}</select>`) : '')
                         + bulkRow('hab', 'Habitação (despesas)', `<select id="bk-hab" class="${INP}"><option value="">Não é de Habitação</option><option value="__none">Habitação sem nome (previsão)</option>${(appData.habitacao.people || []).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>`) : ''}
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Aplicar aos ${ids.length}</button>
                 </form>`);
@@ -7691,7 +7692,7 @@
             ev.preventDefault();
             const B = window._bulk, on = k => { const c = document.getElementById('bk-on-' + k); return c && c.checked; }, v = k => document.getElementById('bk-' + k).value;
             const f = { name: on('name') ? v('name').trim() : null, cat: on('cat') ? v('cat').trim() : null, date: on('date') ? v('date') : null, owner: on('owner') ? v('owner') : null, ded: on('ded') ? v('ded') : null, status: on('status') ? v('status') : null,
-                type: on('type') ? v('type') : null, acc: on('acc') ? v('acc') : null, to: on('to') ? v('to') : null, amount: on('amount') ? v('amount') : null, payer: on('payer') ? v('payer') : null, hab: on('hab') ? v('hab') : null };
+                type: on('type') ? v('type') : null, acc: on('acc') ? v('acc') : null, to: on('to') ? v('to') : null, amount: on('amount') ? v('amount') : null, payer: on('payer') ? v('payer') : null, hab: on('hab') ? v('hab') : null, debt: on('debt') ? v('debt') : null };
             if (f.amount !== null && !(Number(f.amount) >= 0 && f.amount !== '')) { showToast('Informe um valor válido.', 'warning'); return; }
             if (Object.values(f).every(x => x === null)) { showToast('Marque ou altere ao menos um campo.', 'warning'); return; }
             if (f.name === '' || (f.date !== null && !f.date)) { showToast('Preencha o valor dos campos marcados.', 'warning'); return; }
@@ -7712,6 +7713,7 @@
                         if (f.to !== null && t.type === 'transferencia') t.toAccId = f.to;
                         if (f.amount !== null) t.amount = Number(f.amount).toFixed(2);
                         if (f.payer !== null && !t.owner) { if (f.payer) t.payer = f.payer; else delete t.payer; }
+                        if (f.debt !== null) { if (f.debt && t.type === 'despesa') t.debtId = f.debt; else delete t.debtId; }
                         if (f.hab !== null && t.type === 'despesa') { if (f.hab === '') { delete t.habitacional; delete t.habPerson; } else { t.habitacional = true; t.habPerson = f.hab === '__none' ? '' : f.hab; } }
                         if (f.name !== null) t.desc = f.name;
                         if (f.cat !== null) t.category = f.cat;
