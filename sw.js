@@ -1,5 +1,5 @@
 // Service worker do ISIS: abre mesmo sem internet. Dados continuam no aparelho + nuvem (Supabase).
-const CACHE = 'isis-v61';
+const CACHE = 'isis-v62';
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html', './config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png']).catch(() => {}))); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
