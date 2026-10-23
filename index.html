@@ -256,6 +256,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 53</div>
             </div>
         </aside>
 
@@ -638,6 +639,7 @@
         function saveAppData() {
             try { syncHabTransfers(); } catch (e) { console.error(e); }
             try { casaSyncAll(); } catch (e) { console.error(e); }
+            try { plDebtReconcile(); } catch (e) { console.error(e); }
             try {
                 appData._savedAt = new Date().toISOString();
                 localStorage.setItem(dataKey(), JSON.stringify(appData));
@@ -4322,6 +4324,7 @@
                         <div id="fin-payer-wrap" class="${(t.owner || '') === '' ? '' : 'hidden'}"><label class="${LBL}">Quem pagou</label><select id="fin-payer" class="${INP}"><option value="">—</option>${plano().people.map(p => `<option value="${p.id}" ${t.payer === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
                         <div><label class="${LBL}">Dedutível no IR</label><select id="fin-ded" class="${INP}"><option value="">Não</option>${Object.entries(PL_IR).map(([k, l]) => `<option value="${k}" ${t.dedutivel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
                     </div>
+                    ${(plano().debts || []).length ? `<div id="fin-debt-wrap" class="${t.type === 'despesa' ? '' : 'hidden'}"><label class="${LBL}">Pagamento de dívida (abate da tabela de Dívidas)</label><select id="fin-debt" class="${INP}"><option value="">Não é pagamento de dívida</option>${plano().debts.map(x => `<option value="${x.id}" ${t.debtId === x.id ? 'selected' : ''}>${esc(x.name)} · falta ${R$(x.saldo)}</option>`).join('')}</select><p class="text-[11px] text-slate-400 mt-1">Quando o lançamento ficar <b>pago</b>, o saldo e as parcelas da dívida são ajustados sozinhos. Valor igual à parcela = parcela paga; outro valor = amortização.</p></div>` : ''}
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Anexos (recibo, nota, comprovante)</label>
                         <input type="file" id="fin-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
@@ -4379,6 +4382,7 @@
             if (ow.value) o.owner = ow.value; else delete o.owner;
             if (!ow.value && pa && pa.value) o.payer = pa.value; else delete o.payer;
             if (de && de.value) o.dedutivel = de.value; else delete o.dedutivel;
+            const db = document.getElementById('fin-debt'); if (db) { if (db.value && o.type === 'despesa') o.debtId = db.value; else delete o.debtId; }
             return o;
         }
         async function saveFinance(e, id) {
@@ -7081,6 +7085,7 @@
             ['fin-acc', 'fin-to'].forEach(i => { const el = document.getElementById(i); let v = el.value; if (ty !== 'transferencia' && i === 'fin-to') v = ''; el.innerHTML = finAccOpts(v, ty === 'transferencia'); });
             document.getElementById('fin-to-wrap').classList.toggle('hidden', ty !== 'transferencia');
             const hw = document.getElementById('fin-hab-wrap'); if (hw) hw.classList.toggle('hidden', ty !== 'despesa'); finHabAccUi();
+            const dw = document.getElementById('fin-debt-wrap'); if (dw) dw.classList.toggle('hidden', ty !== 'despesa');
             const rw = document.getElementById('fin-rec-wrap'); if (rw) { rw.classList.toggle('hidden', ty === 'transferencia'); if (ty === 'transferencia') { document.getElementById('fin-rec').checked = false; finRecUi(); } }
             document.getElementById('fin-acc-lbl').textContent = ty === 'transferencia' ? 'Conta de origem' : 'Cartão / Conta';
             const c = document.getElementById('fin-category');
@@ -8275,7 +8280,7 @@
             invests: { title: 'Aplicação', fields: [['name', 'Nome', 'text', { req: 1, ph: 'CDB Banco X 110% CDI' }], ['inst', 'Instituição', 'text', {}],
                 ['tipo', 'Tipo', 'select', { opts: [['CDB', 'CDB / RDB'], ['LCI/LCA', 'LCI / LCA'], ['Tesouro', 'Tesouro Direto'], ['Fundo', 'Fundo'], ['Acoes', 'Ações / FIIs'], ['Poupanca', 'Poupança'], ['Outro', 'Outro']] }],
                 ['pct', 'Contratado (% do CDI)', 'num', { ph: 'Ex.: 110' }], ['saldo', 'Saldo atual (R$)', 'num', { req: 1 }], ['saldoDate', 'Saldo conferido em', 'date', {}]] },
-            debts: { title: 'Dívida / financiamento', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Financiamento do carro, empréstimo' }], ['saldo', 'Saldo devedor (R$)', 'num', { req: 1 }], ['parcelas', 'Parcelas restantes', 'num', { req: 1 }], ['parcela', 'Valor da parcela (R$)', 'num', { req: 1 }], ['taxa', 'Juros ao mês (%) — vazio = calcular', 'num', {}]] }
+            debts: { title: 'Dívida / financiamento', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Financiamento do carro, empréstimo' }], ['original', 'Valor original da dívida (R$)', 'num', { ph: 'Quanto era no começo' }], ['saldo', 'Valor que falta pagar (R$)', 'num', { req: 1 }], ['parcelas', 'Parcelas restantes', 'num', { req: 1 }], ['parcela', 'Valor da parcela (R$)', 'num', { req: 1 }], ['taxa', 'Juros ao mês (%) — vazio = calcular', 'num', {}]] }
         };
         function plOwnerName(k) { const o = PL_OWNERS().find(x => x[0] === (k || '')); return o ? (o[0] ? o[1] : 'Casa') : 'Casa'; }
         function plOpen(kind, id, preset) {
@@ -8300,7 +8305,7 @@
             e.preventDefault();
             const F = PL_FORMS[kind], list = plano()[kind], o = {};
             F.fields.forEach(([k, l, t]) => { const el = document.getElementById('plf-' + k); o[k] = t === 'num' ? (el.value.trim() === '' ? '' : recNum(el.value)) : el.value.trim(); });
-            if (id) Object.assign(list.find(x => x.id === id), o);
+            if (id) { const cur0 = list.find(x => x.id === id); Object.assign(cur0, o); if (kind === 'debts') delete cur0.taxaAuto; }
             else {
                 const n = Object.assign({ id: uid() }, o);
                 if (kind === 'goals') { n.aportes = []; }
@@ -8581,6 +8586,7 @@
         // ---------- 8) Dívidas e financiamentos ----------
         function plDebtRate(d) {
             const t = Number(d.taxa); if (t > 0) return t / 100;
+            if (Number(d.taxaAuto) > 0) return Number(d.taxaAuto);
             const pv = Number(d.saldo) || 0, pmt = Number(d.parcela) || 0, n = Math.round(Number(d.parcelas) || 0);
             if (!pv || !pmt || !n || pmt * n <= pv) return 0;
             let lo = 0, hi = 1; for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2, f = pmt * (1 - Math.pow(1 + m, -n)) / m; if (f > pv) lo = m; else hi = m; } return (lo + hi) / 2;
@@ -8616,6 +8622,32 @@
                 <p class="mt-2 text-base ${s.economia > 0 ? 'text-emerald-600' : 'text-slate-600'} font-bold">Economia de juros: ${R$(s.economia)}</p>
                 <p class="text-xs mt-1">${m === 'prazo' ? `Prazo cai de ${s.orig} para ${s.restantes} parcela(s) restantes.` : `Parcela cai de ${R$(d.parcela)} para ${R$(s.novaParcela)}.`}</p>`;
         }
+        // ---- baixa automática: lançamentos do Financeiro ligados a uma dívida ajustam saldo e parcelas ----
+        function plDebtReconcile() {
+            const P = appData.plano; if (!P || !Array.isArray(P.debts) || !P.debts.length) return;
+            const txs = appData.financeiro.transactions, byId = {}; txs.forEach(t => { byId[t.id] = t; });
+            P.debts.forEach(d => {
+                if (!Array.isArray(d.pagos)) d.pagos = [];
+                // desfaz o que não vale mais (lançamento apagado, voltou para pendente, mudou de valor ou de dívida)
+                d.pagos = d.pagos.filter(p => {
+                    const t = byId[p.txId], ok = t && t.debtId === d.id && finSt(t) !== 'pendente' && Math.abs((Number(t.amount) || 0) - p.amount) < 0.005;
+                    if (!ok) { d.saldo = Math.round(((Number(d.saldo) || 0) - p.dSaldo) * 100) / 100; d.parcelas = (Number(d.parcelas) || 0) - p.dParcelas; }
+                    return ok;
+                });
+                // aplica os novos
+                txs.filter(t => t.debtId === d.id && t.type === 'despesa' && finSt(t) !== 'pendente' && !d.pagos.some(p => p.txId === t.id)).sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(t => {
+                    const a = Number(t.amount) || 0, saldo = Number(d.saldo) || 0, parc = Number(d.parcela) || 0, np = Number(d.parcelas) || 0;
+                    if (!(Number(d.taxa) > 0) && !(Number(d.taxaAuto) > 0)) { const r = plDebtRate(d); if (r > 0) d.taxaAuto = r; }
+                    let ns, nn, tipo;
+                    if (parc > 0 && Math.abs(a - parc) <= Math.max(1, parc * 0.02)) { const i = plDebtRate(d); ns = Math.max(0, saldo * (1 + i) - a); nn = Math.max(0, np - 1); tipo = 'parcela'; }
+                    else { ns = Math.max(0, saldo - a); nn = ns <= 0.005 ? 0 : Math.max(0, plDebtSim(d, a, 0, 'prazo').restantes); tipo = 'extra'; }
+                    if (ns <= 0.005) { ns = 0; nn = 0; }
+                    ns = Math.round(ns * 100) / 100;
+                    d.pagos.push({ txId: t.id, date: t.date, amount: a, tipo, dSaldo: Math.round((ns - saldo) * 100) / 100, dParcelas: nn - np });
+                    d.saldo = ns; d.parcelas = nn;
+                });
+            });
+        }
         function plDebtTotal() { return plano().debts.reduce((s, d) => s + (Number(d.saldo) || 0), 0); }
         function plRenderDividas() {
             const ds = plano().debts, tot = plDebtTotal();
@@ -8623,7 +8655,10 @@
                 <p class="text-xs text-slate-500 mb-4">Saldo devedor total: <b class="text-rose-600">${R$(tot)}</b> · parcelas por mês: <b>${R$(ds.reduce((s, d) => s + (Number(d.parcela) || 0), 0))}</b></p>
                 ${ds.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${ds.map(d => { const total = (Number(d.parcela) || 0) * (Number(d.parcelas) || 0), jur = Math.max(0, total - (Number(d.saldo) || 0)); return `<div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
                     <div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-slate-800 dark:text-white truncate">${esc(d.name)}</p><p class="text-xs text-slate-500">${d.parcelas} parcela(s) de ${R$(d.parcela)} · juros ${(plDebtRate(d) * 100).toFixed(2).replace('.', ',')}% a.m.</p></div>${plEditBtns('debts', d.id)}</div>
-                    <p class="text-xl font-bold mt-2 text-rose-600">${R$(d.saldo)}</p><p class="text-xs text-slate-500">Falta pagar ${R$(total)} no total, sendo ${R$(jur)} de juros.</p>
+                    <p class="text-xl font-bold mt-2 ${Number(d.saldo) > 0 ? 'text-rose-600' : 'text-emerald-600'}">${R$(d.saldo)} <span class="text-[11px] font-semibold text-slate-400">falta pagar</span></p>
+                    ${Number(d.original) > 0 ? (() => { const pg = Math.max(0, Number(d.original) - (Number(d.saldo) || 0)), pc = Math.min(100, pg / Number(d.original) * 100); return `<div class="mt-2"><div class="flex justify-between text-[11px] text-slate-500 mb-1"><span>Original ${R$(d.original)}</span><span><b>${pc.toFixed(0)}%</b> quitado · ${R$(pg)}</span></div><div class="h-2.5 rounded-full bg-slate-200 dark:bg-slate-600 overflow-hidden"><div class="h-full bg-emerald-500" style="width:${pc}%"></div></div></div>`; })() : '<p class="text-[11px] text-amber-600 mt-1">Informe o valor original (editar) para ver o quanto já foi quitado.</p>'}
+                    ${Number(d.saldo) > 0 ? `<p class="text-xs text-slate-500 mt-1.5">Falta pagar ${R$(total)} no total, sendo ${R$(jur)} de juros.</p>` : '<p class="text-xs text-emerald-600 font-bold mt-1.5"><i class="fa-solid fa-circle-check mr-1"></i>Dívida quitada!</p>'}
+                    ${(d.pagos || []).length ? `<details class="mt-2"><summary class="text-[11px] font-bold text-teal-700 cursor-pointer">${d.pagos.length} pagamento(s) pelo Financeiro</summary><div class="mt-1 max-h-24 overflow-y-auto text-[11px] text-slate-500 space-y-0.5">${d.pagos.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => `<div class="flex justify-between"><span>${fmtBR(p.date)} · ${p.tipo === 'parcela' ? 'parcela' : 'amortização'}</span><b>${R$(p.amount)}</b></div>`).join('')}</div></details>` : ''}
                     <button onclick="plSimDebt('${d.id}')" class="${PL_BTN2} mt-2 !text-teal-700"><i class="fa-solid fa-calculator mr-1"></i>Simular amortização</button></div>`; }).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nenhuma dívida cadastrada.</p>'}</div>`;
         }
 
