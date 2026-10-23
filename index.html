@@ -256,7 +256,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 58</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 61</div>
             </div>
         </aside>
 
@@ -8317,7 +8317,7 @@
                 else if (cur1 && orig > 0 && pg !== null) { const oldPg = Math.round(((Number(cur1.original) || 0) - (Number(cur1.saldo) || 0)) * 100) / 100; if (Math.abs(pg - oldPg) > 0.005 && Math.abs(sd - (Number(cur1.saldo) || 0)) < 0.005) o.saldo = Math.max(0, Math.round((orig - pg) * 100) / 100); }
                 delete o.pago;
             }
-            if (id) { const cur0 = list.find(x => x.id === id); Object.assign(cur0, o); if (kind === 'debts') delete cur0.taxaAuto; }
+            if (id) { const cur0 = list.find(x => x.id === id); Object.assign(cur0, o); if (kind === 'debts') { delete cur0.taxaAuto; if ((cur0.pagos || []).length) cur0.parcelasBase = (Number(cur0.parcelas) || 0) + plDebtPaidCount(cur0); } }
             else {
                 const n = Object.assign({ id: uid() }, o);
                 if (kind === 'goals') { n.aportes = []; }
@@ -8630,31 +8630,31 @@
                 <p class="text-xs mt-1">${m === 'prazo' ? `Prazo cai de ${s.orig} para ${s.restantes} parcela(s) restantes.` : `Parcela cai de ${R$(d.parcela)} para ${R$(s.novaParcela)}.`}</p>`;
         }
         // ---- baixa automática: lançamentos do Financeiro ligados a uma dívida ajustam saldo e parcelas ----
+        function plDebtPaidCount(d) { const parc = Number(d.parcela) || 0; if (!(parc > 0)) return 0; return Math.floor(((d.pagos || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) + 0.005) / parc + 1e-9); }
         function plDebtReconcile() {
             const P = appData.plano; if (!P || !Array.isArray(P.debts) || !P.debts.length) return;
             const txs = appData.financeiro.transactions, byId = {}; txs.forEach(t => { byId[t.id] = t; });
             P.debts.forEach(d => {
                 if (!Array.isArray(d.pagos)) d.pagos = [];
-                // desfaz o que não vale mais (lançamento apagado, voltou para pendente, mudou de valor ou de dívida)
+                let novo = false;
+                // desfaz o que não vale mais (lançamento apagado, voltou para pendente, mudou de valor ou de dívida, ou regra antiga)
                 d.pagos = d.pagos.filter(p => {
-                    const t = byId[p.txId], ok = p.v === 3 && t && t.debtId === d.id && finSt(t) !== 'pendente' && Math.abs((Number(t.amount) || 0) - p.amount) < 0.005;
-                    if (!ok) { d.saldo = Math.round(((Number(d.saldo) || 0) - p.dSaldo) * 100) / 100; d.parcelas = (Number(d.parcelas) || 0) - p.dParcelas; }
+                    const t = byId[p.txId], ok = p.v === 4 && t && t.debtId === d.id && finSt(t) !== 'pendente' && Math.abs((Number(t.amount) || 0) - p.amount) < 0.005;
+                    if (!ok) { d.saldo = Math.round(((Number(d.saldo) || 0) - p.dSaldo) * 100) / 100; d.parcelas = (Number(d.parcelas) || 0) - (p.dParcelas || 0); }
                     return ok;
                 });
-                // aplica os novos
+                // aplica os novos: o valor pago sempre diminui o que falta
                 txs.filter(t => t.debtId === d.id && t.type === 'despesa' && finSt(t) !== 'pendente' && !d.pagos.some(p => p.txId === t.id)).sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(t => {
-                    const a = Number(t.amount) || 0, saldo = Number(d.saldo) || 0, parc = Number(d.parcela) || 0, np = Number(d.parcelas) || 0;
-                            let ns, nn, tipo;
-                    // o valor pago sempre DIMINUI o que falta (saldo − pago) e as parcelas nunca aumentam; os juros % só entram na simulação
-                    ns = Math.max(0, saldo - a);
-                    // cada "parcela" inteira paga (valor ÷ parcela) tira 1 das parcelas que faltam: 2 parcelas pagas = 200 → faltam 2 a menos
-                    const k = parc > 0 ? Math.floor(a / parc + 0.02) : 0;
-                    nn = Math.max(0, np - k); tipo = parc > 0 && k >= 1 && Math.abs(a - k * parc) <= Math.max(1, k * parc * 0.02) ? 'parcela' : 'extra';
-                    if (ns <= 0.005) { ns = 0; nn = 0; }
-                    ns = Math.round(ns * 100) / 100;
-                    d.pagos.push({ v: 3, txId: t.id, date: t.date, amount: a, tipo, dSaldo: Math.round((ns - saldo) * 100) / 100, dParcelas: nn - np });
-                    d.saldo = ns; d.parcelas = nn;
+                    const a = Number(t.amount) || 0, saldo = Number(d.saldo) || 0, parc = Number(d.parcela) || 0;
+                    if (d.parcelasBase === undefined) d.parcelasBase = Number(d.parcelas) || 0;
+                    const ns = Math.round(Math.max(0, saldo - a) * 100) / 100;
+                    d.pagos.push({ v: 4, txId: t.id, date: t.date, amount: a, tipo: parc > 0 && a >= parc * 0.9 ? 'parcela' : 'parcial', dSaldo: Math.round((ns - saldo) * 100) / 100, dParcelas: 0 });
+                    d.saldo = ns; novo = true;
                 });
+                // parcelas que faltam = parcelas de antes dos pagamentos − (total pago ÷ valor da parcela); só diminui
+                if (!d.pagos.length) { if (d.parcelasBase !== undefined) { d.parcelas = d.parcelasBase; delete d.parcelasBase; } }
+                else { d.parcelas = (Number(d.saldo) || 0) <= 0.005 ? 0 : Math.max(0, (Number(d.parcelasBase) || 0) - plDebtPaidCount(d)); }
+                if (novo) { try { showToast(`${d.name}: faltam ${d.parcelas} parcela(s) · falta pagar R$ ${money(d.saldo)}`, 'success'); } catch (e) { } }
             });
         }
         function plDebtTotal() { return plano().debts.reduce((s, d) => s + (Number(d.saldo) || 0), 0); }
@@ -8668,7 +8668,7 @@
                         return `<div class="grid grid-cols-2 gap-2 mt-3">${st('Valor original', orig ? R$(orig) : '—')}${st('Valor pago', orig ? R$(Math.max(0, orig - (Number(d.saldo) || 0))) : '—', 'text-emerald-600')}${st('Falta pagar', R$(d.saldo), Number(d.saldo) > 0 ? 'text-rose-600' : 'text-emerald-600')}${st('Valor da parcela', R$(d.parcela))}${st('Parcelas', tt ? `${Math.max(0, tt - rest)} pagas de ${tt} <span class="block text-[11px] font-semibold text-slate-500">faltam ${rest}</span>` : `faltam ${rest}`)}${st('Juros ao mês', Number(d.taxa) > 0 ? String(d.taxa).replace('.', ',') + '%' : '—')}</div>`; })()}
                     ${Number(d.original) > 0 ? (() => { const pg = Math.max(0, Number(d.original) - (Number(d.saldo) || 0)), pc = Math.min(100, pg / Number(d.original) * 100); return `<div class="mt-2"><div class="flex justify-between text-[11px] text-slate-500 mb-1"><span>Original ${R$(d.original)}</span><span><b>${pc.toFixed(0)}%</b> quitado · ${R$(pg)}</span></div><div class="h-2.5 rounded-full bg-slate-200 dark:bg-slate-600 overflow-hidden"><div class="h-full bg-emerald-500" style="width:${pc}%"></div></div></div>`; })() : '<p class="text-[11px] text-amber-600 mt-1">Informe o valor original (editar) para ver o quanto já foi quitado.</p>'}
                     ${Number(d.saldo) > 0 ? `<p class="text-xs text-slate-500 mt-1.5">${Number(d.taxa) > 0 ? `Falta pagar ${R$(total)} no total em parcelas, sendo ${R$(jur)} acima do saldo (juros).` : `Faltam ${R$(total)} em parcelas (${d.parcelas} × ${R$(d.parcela)}).`}</p>` : '<p class="text-xs text-emerald-600 font-bold mt-1.5"><i class="fa-solid fa-circle-check mr-1"></i>Dívida quitada!</p>'}
-                    ${(d.pagos || []).length ? `<details class="mt-2"><summary class="text-[11px] font-bold text-teal-700 cursor-pointer">${d.pagos.length} pagamento(s) pelo Financeiro</summary><div class="mt-1 max-h-24 overflow-y-auto text-[11px] text-slate-500 space-y-0.5">${d.pagos.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => `<div class="flex justify-between"><span>${fmtBR(p.date)} · ${p.tipo === 'parcela' ? (p.dParcelas < -1 ? (-p.dParcelas) + ' parcelas' : 'parcela') : 'amortização'}</span><b>${R$(p.amount)}</b></div>`).join('')}</div></details>` : ''}
+                    ${(d.pagos || []).length ? `<details class="mt-2"><summary class="text-[11px] font-bold text-teal-700 cursor-pointer">${d.pagos.length} pagamento(s) pelo Financeiro</summary><div class="mt-1 max-h-24 overflow-y-auto text-[11px] text-slate-500 space-y-0.5">${d.pagos.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => `<div class="flex justify-between"><span>${fmtBR(p.date)} · ${p.tipo === 'parcela' ? 'parcela' : 'pagamento parcial'}</span><b>${R$(p.amount)}</b></div>`).join('')}</div></details>` : ''}
                     <button onclick="plSimDebt('${d.id}')" class="${PL_BTN2} mt-2 !text-teal-700"><i class="fa-solid fa-calculator mr-1"></i>Simular amortização</button></div>`; }).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nenhuma dívida cadastrada.</p>'}</div>`;
         }
 
