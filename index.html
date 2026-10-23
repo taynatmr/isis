@@ -386,7 +386,7 @@
         const BUDGET_STATUSES = ['Pendente', 'Aprovado', 'Rejeitado', 'Pago'];
         let obraSortKey = 'date', obraSortDir = 'desc';
         let budgetView = 'bloco', budgetSelectMode = false, budgetSelected = [], budgetGroupOpen = {};
-        let cardSelectedId = null, cardInvMonth = '';
+        let cardSelectedId = null, cardInvMonth = '', cardQ = '', _cardQT = null;
         let finF = { acc: '', cat: '', type: '', min: '', max: '', q: '', hab: false };
         let contaSel = null;
         let dashAcc = '', dashMode = 'saldo';
@@ -4254,10 +4254,10 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Descrição</label>
-                        <input type="text" id="fin-desc" value="${esc(t.desc)}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        <input type="text" id="fin-desc" value="${esc(t.desc)}" ${id ? '' : 'onchange="finDescSuggest()"'} required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                     </div>
                     ${finAccHtml(t)}
-                    <datalist id="fin-cat-list"><option value="Despesa da casa"></datalist>
+                    <datalist id="fin-cat-list"><option value="Despesa da casa">${catAllNames().map(c => `<option value="${esc(c)}">`).join('')}</datalist>
                     <div id="fin-hab-wrap" class="${t.type !== 'despesa' || t.cardInvoice ? 'hidden' : ''} rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-3">
                         <label class="flex items-center gap-2 text-sm font-bold text-amber-800 dark:text-amber-300 cursor-pointer"><input type="checkbox" id="fin-hab" ${t.habitacional ? 'checked' : ''} onchange="document.getElementById('fin-hab-person-wrap').classList.toggle('hidden', !this.checked)" class="rounded w-4 h-4"> <i class="fa-solid fa-hammer"></i> Habitacional</label>
                         <div id="fin-hab-person-wrap" class="${t.habitacional ? '' : 'hidden'} mt-2">
@@ -4275,7 +4275,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Categoria</label>
-                            <input type="text" id="fin-category" list="fin-cat-list" value="${esc(t.category)}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            <input type="text" id="fin-category" list="fin-cat-list" value="${esc(t.category)}" oninput="this.dataset.manual='1'" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -4292,7 +4292,8 @@
                             `}
                         </div>
                     </div>
-                    ${!id ? `<p id="fin-inst-preview" class="text-xs text-slate-500 -mt-2 hidden"></p>` : ''}
+                    ${!id ? `<div id="fin-instmode-wrap" class="hidden -mt-2"><label class="${LBL}">Como parcelar?</label><select id="fin-instmode" onchange="updateInstallmentPreview()" class="${INP}"><option value="dividir">Dividir o valor total nas parcelas (valor ÷ vezes)</option><option value="igual">Mesmo valor em cada parcela (valor × vezes)</option></select></div>
+                    <p id="fin-inst-preview" class="text-xs text-slate-500 -mt-2 hidden"></p>` : ''}
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
                         <div><label class="${LBL}">De quem</label><select id="fin-owner" onchange="finWhoUi()" class="${INP}">${PL_OWNERS().map(([k, l]) => `<option value="${k}" ${(t.owner || '') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
                         <div id="fin-payer-wrap" class="${(t.owner || '') === '' ? '' : 'hidden'}"><label class="${LBL}">Quem pagou</label><select id="fin-payer" class="${INP}"><option value="">—</option>${plano().people.map(p => `<option value="${p.id}" ${t.payer === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
@@ -4327,9 +4328,11 @@
             if (!el || !nEl) return;
             const n = Math.max(1, parseInt(nEl.value) || 1);
             const amount = Number(document.getElementById('fin-amount').value) || 0;
+            const mw = document.getElementById('fin-instmode-wrap'); if (mw) mw.classList.toggle('hidden', n <= 1);
             if (n <= 1 || !amount) { el.classList.add('hidden'); return; }
             el.classList.remove('hidden');
-            el.innerHTML = `<i class="fa-solid fa-layer-group mr-1"></i>${n}x de R$ ${money(Math.floor(amount * 100 / n) / 100)} — uma por mês. A 1ª parcela recebe o status escolhido; as demais ficam como <b>Pendente</b>.`;
+            const igual = (document.getElementById('fin-instmode') || {}).value === 'igual';
+            el.innerHTML = `<i class="fa-solid fa-layer-group mr-1"></i>${igual ? `${n}x de R$ ${money(amount)} (total R$ ${money(amount * n)})` : `${n}x de R$ ${money(Math.floor(amount * 100 / n) / 100)} (total R$ ${money(amount)})`} — uma por mês. A 1ª parcela recebe o status escolhido; as demais ficam como <b>Pendente</b>.`;
         }
 
         function finWhoUi() { const o = document.getElementById('fin-owner').value; document.getElementById('fin-payer-wrap').classList.toggle('hidden', o !== ''); }
@@ -4346,7 +4349,7 @@
             const status = document.getElementById('fin-status').value;
             const desc = document.getElementById('fin-desc').value;
             const amount = document.getElementById('fin-amount').value;
-            const category = document.getElementById('fin-category').value;
+            const category = catResolveNew(document.getElementById('fin-category').value);
             const date = document.getElementById('fin-date').value;
             const accId = document.getElementById('fin-acc').value;
             const toAccId = type === 'transferencia' ? document.getElementById('fin-to').value : '';
@@ -4372,7 +4375,8 @@
                 if (n === 1) {
                     appData.financeiro.transactions.push(finApplyExtra(Object.assign({ id: uid(), type, status, desc, amount, category, date, accId, toAccId, attachments: newAtts }, habitacional ? { habitacional: true, habPerson } : {})));
                 } else {
-                    const totalCents = Math.round(Number(amount) * 100);
+                    const igual = (document.getElementById('fin-instmode') || {}).value === 'igual';
+                    const totalCents = Math.round(Number(amount) * 100) * (igual ? n : 1);
                     const base = Math.floor(totalCents / n);
                     const group = uid();
                     for (let i = 0; i < n; i++) {
@@ -4810,8 +4814,9 @@
             const card = cardById(cardSelectedId);
             if (!cardInvMonth) cardInvMonth = cardInvoiceKey(card, localDateStr());
             const key = cardInvMonth;
-            const entries = cardEntriesFor(card.id, key).sort(cardCmp);
-            const total = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+            const invEntries = cardEntriesFor(card.id, key), qn = normKey(cardQ || '');
+            const entries = (qn ? C.entries.filter(e => e.cardId === card.id && normKey([e.name, e.category, e.obs, Math.abs(Number(e.amount) || 0).toFixed(2), Math.abs(Number(e.amount) || 0).toFixed(2).replace('.', ','), fmtBR(e.date), e.invoice].join(' ')).includes(qn)) : invEntries.slice()).sort(cardCmp);
+            const total = invEntries.reduce((s, e) => s + (Number(e.amount) || 0), 0), shownTotal = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
             const tx = cardInvoiceTx(card.id, key);
             const paid = tx && tx.status === 'pago';
             const keys = [...new Set(C.entries.filter(e => e.cardId === card.id).map(e => e.invoice))];
@@ -4875,9 +4880,11 @@
 
                 <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 flex items-center space-x-2"><i class="fa-solid fa-receipt text-teal-500"></i><span>Lançamentos da fatura</span></h3>
-                    <p class="text-[11px] text-slate-400 mb-4">Em Finanças aparece apenas "Cartão de Crédito" com o valor final desta fatura.</p>
+                    <p class="text-[11px] text-slate-400 mb-3">Em Finanças aparece apenas "Cartão de Crédito" com o valor final desta fatura.</p>
+                    <div class="relative mb-4"><i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i><input id="card-q" type="search" value="${esc(cardQ)}" oninput="cardSearch(this.value)" placeholder="Buscar em todas as faturas deste cartão (nome, categoria, valor, data)…" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        ${qn ? `<p class="text-[11px] text-teal-700 dark:text-teal-300 mt-1.5">${entries.length} resultado(s) em todas as faturas · soma R$ ${money(shownTotal)} · <button onclick="cardSearch('');document.getElementById('card-q').value=''" class="underline font-semibold">limpar busca</button></p>` : ''}</div>
                     ${Object.keys(byCat).length ? `<div class="flex flex-wrap gap-2 mb-4">${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="px-2.5 py-1 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"><b>${esc(k)}</b> R$ ${money(v)}</span>`).join('')}</div>` : ''}
-                    ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">Nenhum lançamento nesta fatura.</p></div>` : `
+                    ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">${qn ? 'Nada encontrado para essa busca.' : 'Nenhum lançamento nesta fatura.'}</p></div>` : `
                     ${card.shared ? cardPayersSummary(entries) : ''}
                     <div id="card-sel-bar">${cardSelBar()}</div>
                     <div class="overflow-x-auto"><table class="w-full text-left text-sm">
@@ -4887,7 +4894,7 @@
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         ${entries.map(e => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
                             <td class="p-3"><input type="checkbox" class="card-sel" data-amt="${Number(e.amount) || 0}" onchange="cardSelUpdate()"></td>
-                            <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}</td>
+                            <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}${qn ? `<span class="block text-[10px] text-slate-400">fatura ${esc(fmtYM(e.invoice))}</span>` : ''}</td>
                             <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}${(e.pagoPor || []).length ? `<div class="mt-1 flex flex-wrap gap-1">${e.pagoPor.map(p => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">${esc(p.name)} R$ ${money(p.amount)}</span>`).join('')}</div>` : ''}</td>
                             <td class="p-3"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(e.category)}</span></td>
                             <td class="p-3">${e.installment ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${e.installment.n}/${e.installment.total}</span>` : '<span class="text-slate-300">—</span>'}</td>
@@ -4898,7 +4905,7 @@
                                 <button onclick="deleteCardEntry('${e.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
                             </td></tr>`).join('')}
                         </tbody>
-                        <tfoot><tr><td colspan="6" class="p-3 text-right font-bold text-slate-500">Total da fatura</td><td class="p-3 font-extrabold text-rose-600">R$ ${money(total)}</td><td></td></tr></tfoot>
+                        <tfoot><tr><td colspan="6" class="p-3 text-right font-bold text-slate-500">${qn ? 'Total da busca' : 'Total da fatura'}</td><td class="p-3 font-extrabold text-rose-600">R$ ${money(shownTotal)}</td><td></td></tr></tfoot>
                     </table></div>`}
                 </div>
             </div>`;
@@ -4938,6 +4945,10 @@
             else r = t(a[k]).localeCompare(t(b[k]));
             if (r === 0) r = (a.date || '').localeCompare(b.date || '') || t(a.name).localeCompare(t(b.name));
             return r * cardSort.dir;
+        }
+        function cardSearch(v) {
+            cardQ = v; clearTimeout(_cardQT);
+            _cardQT = setTimeout(() => { renderCurrentTabContent(); const el = document.getElementById('card-q'); if (el && cardQ) { el.focus(); el.setSelectionRange(cardQ.length, cardQ.length); } }, 250);
         }
         function cardSelect(id) { cardSelectedId = id; cardInvMonth = ''; renderCurrentTabContent(); }
         function cardNavMonth(d) { cardInvMonth = ymAdd(cardInvMonth, d); renderCurrentTabContent(); }
@@ -5013,12 +5024,13 @@
                     <input id="new-cat" required placeholder="Nova categoria" class="${INP}">
                     <button class="bg-teal-600 text-white px-4 rounded-xl text-sm font-bold">Adicionar</button>
                 </form>
-                <p class="text-[11px] text-slate-400 mt-3">Remover uma categoria não altera lançamentos já feitos.</p>`);
+                <p class="text-[11px] text-slate-400 mt-3">Remover uma categoria não altera lançamentos já feitos.</p>
+                <button onclick="openCatMerge()" class="mt-3 w-full bg-slate-100 dark:bg-slate-700 py-2 rounded-xl text-xs font-bold"><i class="fa-solid fa-code-merge mr-1.5"></i>Unificar categorias parecidas</button>`);
         }
         function addCardCategory(e) {
             e.preventDefault();
             const n = document.getElementById('new-cat').value.trim();
-            if (n && !appData.cartao.categories.some(c => normKey(c) === normKey(n))) { appData.cartao.categories.push(n); saveAppData(); }
+            if (n) { const r = catResolveNew(n); if (!appData.cartao.categories.some(c => normKey(c) === normKey(r))) { appData.cartao.categories.push(r); saveAppData(); } }
             openCardCategories();
         }
         function removeCardCategory(n) {
@@ -5046,7 +5058,7 @@
             showModal(id ? 'Editar lançamento' : 'Novo lançamento no cartão', `
                 <form onsubmit="saveCardEntry(event, '${id || ''}')" class="space-y-4">
                     ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ce-card" onchange="cardAutoInvoice();cePayerRender()" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ce-card" value="${card.id}">`}
-                    <div><label class="${LBL}">Nome</label><input id="ce-name" required value="${esc(e.name)}" placeholder="Ex: Posto Shell" class="${INP}"></div>
+                    <div><label class="${LBL}">Nome</label><input id="ce-name" required value="${esc(e.name)}" ${id ? '' : 'onchange="ceNameSuggest()"'} placeholder="Ex: Posto Shell" class="${INP}"></div>
                     <div><label class="${LBL}">Tipo do lançamento</label>
                         <select id="ce-kind" class="${INP}">
                             <option value="compra" ${Number(e.amount) >= 0 || e.amount === '' ? 'selected' : ''}>Compra / despesa (soma na fatura)</option>
@@ -5064,11 +5076,17 @@
                     </div>
                     <div id="ce-payer-box"></div>
                     <div><label class="${LBL}">Categoria</label>${catSelectHtml(e.category)}</div>
+                    <div class="grid grid-cols-2 gap-4"><div><label class="${LBL}">De quem</label><select id="ce-owner" class="${INP}"><option value="">Padrão do cartão</option><option value="casa" ${e.owner === 'casa' ? 'selected' : ''}>Casa (conjunta)</option>${plano().people.map(p => `<option value="${p.id}" ${e.owner === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+                    <div><label class="${LBL}">Dedutível no IR</label><select id="ce-ded" class="${INP}"><option value="">Não</option>${Object.entries(PL_IR).map(([k, l]) => `<option value="${k}" ${e.dedutivel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
                     <div><label class="${LBL}">Observação</label><textarea id="ce-obs" rows="2" class="${INP}">${esc(e.obs || '')}</textarea></div>
                     ${sib > 1 ? `<label class="flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" id="ce-all"> Aplicar nome, categoria e observação às outras ${sib - 1} parcelas</label>` : ''}
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>`);
             cePayerRender();
+        }
+        function ceNameSuggest() {
+            const last = catLastUsed(document.getElementById('ce-name').value), sel = document.getElementById('ce-cat'); if (!last || !sel) return;
+            const ex = Array.from(sel.options).find(o => normKey(o.value) === normKey(last)); if (ex) sel.value = ex.value;
         }
         function cePerValue() {
             const g = k => document.getElementById(k), amt = Math.abs(Number(g('ce-amount').value) || 0), inst = g('ce-inst'), n = inst ? Math.max(1, parseInt(inst.value) || 1) : 1;
@@ -5110,10 +5128,12 @@
             const C = appData.cartao, g = k => document.getElementById(k);
             let category = g('ce-cat').value;
             if (category === '__new__') {
-                category = g('ce-newcat').value.trim() || 'Outros';
-                if (!C.categories.some(c => normKey(c) === normKey(category))) C.categories.push(category);
+                category = catResolveNew(g('ce-newcat').value.trim() || 'Outros');
+                const ex = C.categories.find(c => normKey(c) === normKey(category)); if (ex) category = ex; else C.categories.push(category);
             }
             const base = { cardId: g('ce-card').value, name: g('ce-name').value.trim(), date: g('ce-date').value, invoice: g('ce-inv').value, category, obs: g('ce-obs').value.trim() };
+            const ceOwner = g('ce-owner').value, ceDed = g('ce-ded').value;
+            const applyWho = x => { if (ceOwner) x.owner = ceOwner; else delete x.owner; if (ceDed && x.amount > 0) x.dedutivel = ceDed; else delete x.dedutivel; return x; };
             const sgn = g('ce-kind').value === 'credito' ? -1 : 1;
             const amount = sgn * Math.abs(Number(g('ce-amount').value) || 0);
             const payCard = cardById(base.cardId), payer = g('ce-payer') ? g('ce-payer').value : null;
@@ -5127,19 +5147,19 @@
             const payFor = amt => !(payCard && payCard.shared) ? undefined : (splits ? splits.map(x => Object.assign({}, x)) : (payer ? [{ name: payer, amount: Math.abs(amt) }] : undefined));
             if (id) {
                 const en = C.entries.find(x => x.id === id);
-                Object.assign(en, base, { amount });
+                Object.assign(en, base, { amount }); applyWho(en);
                 if (payCard && payCard.shared) en.pagoPor = payFor(amount); else delete en.pagoPor;
                 const all = g('ce-all');
                 if (all && all.checked && en.installment) C.entries.forEach(x => { if (x !== en && x.installment && x.installment.group === en.installment.group) Object.assign(x, { name: base.name, category: base.category, obs: base.obs, cardId: base.cardId }); });
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(g('ce-inst').value) || 1));
-                if (n === 1) C.entries.push(Object.assign({ id: uid(), amount, pagoPor: payFor(amount) }, base));
+                if (n === 1) C.entries.push(applyWho(Object.assign({ id: uid(), amount, pagoPor: payFor(amount) }, base)));
                 else {
                     const group = uid(), each = g('ce-mode').value === 'each';
                     const totalCents = Math.round(Math.abs(amount) * 100), per = Math.floor(totalCents / n);
                     for (let i = 0; i < n; i++) {
                         const cents = each ? totalCents : (i === n - 1 ? totalCents - per * (n - 1) : per);
-                        C.entries.push(Object.assign({}, base, { id: uid(), amount: sgn * cents / 100, pagoPor: payFor(cents / 100), date: addMonthsToDate(base.date, i), invoice: ymAdd(base.invoice, i), installment: { group, n: i + 1, total: n } }));
+                        C.entries.push(applyWho(Object.assign({}, base, { id: uid(), amount: sgn * cents / 100, pagoPor: payFor(cents / 100), date: addMonthsToDate(base.date, i), invoice: ymAdd(base.invoice, i), installment: { group, n: i + 1, total: n } })));
                     }
                 }
                 cardSelectedId = base.cardId; cardInvMonth = base.invoice;
@@ -5168,7 +5188,7 @@
         }
 
         // --- Cartão: importar fatura (PDF / OFX / CSV) ---
-        let cardImportRows = [], pdfWorkerReady = false;
+        let cardImportRows = [], pdfWorkerReady = false, cardImportMeta = { owner: 'p1', ded: '', card: '', inv: '' };
         function openCardImportModal() {
             showModal('Importar fatura', `
                 <p class="text-xs text-slate-500 mb-3">Envie o arquivo da fatura em <b>OFX</b>, <b>CSV</b> ou <b>PDF</b>. Você revisa os lançamentos antes de importar.</p>
@@ -5176,6 +5196,8 @@
                 <p id="ci-msg" class="text-xs text-slate-400 mt-3"></p>`);
         }
         function guessCardCategory(name) {
+            const last = catLastUsed(name);
+            if (last) return appData.cartao.categories.find(c => normKey(c) === normKey(last)) || last;
             const n = normKey(name);
             const rules = [['Gasolina', /posto|shell|ipiranga|petrobras|combust|gasolina|\bale\b/], ['Ração', /rac(ao|ões)|\bpet\b|petz|cobasi|agropec|veterin/], ['Assinatura', /netflix|spotify|disney|prime video|amazon prime|youtube|hbo|max\b|globoplay|apple\.com|google (one|play)|icloud|assinatura|deezer/], ['Presente', /presente|boticario|natura|floricultura|flores/]];
             for (const [cat, re] of rules) if (re.test(n) && appData.cartao.categories.includes(cat)) return cat;
@@ -5277,6 +5299,7 @@
             const vote = raw.filter(r => !CRED_RX.test(r.name) && !PAY_RX.test(r.name)), vn = vote.length ? vote : raw;
             const neg = vn.filter(r => r.signed < 0).length, purchaseNeg = neg > vn.length / 2;
             const card = cardById(cardSelectedId) || appData.cartao.cards[0];
+            cardImportMeta = { owner: 'p1', ded: '', card: card.id, inv: '' };
             cardImportRows = raw.map(r => {
                 const isPurchase = purchaseNeg ? r.signed < 0 : r.signed > 0;
                 const amount = Math.abs(r.signed);
@@ -5290,11 +5313,13 @@
             renderCardImportPreview();
         }
         function renderCardImportPreview() {
-            const C = appData.cartao, card = cardById(cardSelectedId) || C.cards[0];
+            const C = appData.cartao, card = cardById(cardImportMeta.card) || cardById(cardSelectedId) || C.cards[0], M = cardImportMeta;
             showModal('Revisar importação', `
                 <div class="grid grid-cols-2 gap-3 mb-3">
-                    ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ci-card" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ci-card" value="${card.id}">`}
-                    <div><label class="${LBL}">Forçar fatura (opcional)</label><input type="month" id="ci-inv" class="${INP}"></div>
+                    ${C.cards.length > 1 ? `<div><label class="${LBL}">Cartão</label><select id="ci-card" onchange="cardImportMeta.card=this.value" class="${INP}">${C.cards.map(c => `<option value="${c.id}" ${c.id === card.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : `<input type="hidden" id="ci-card" value="${card.id}">`}
+                    <div><label class="${LBL}">Forçar fatura (opcional)</label><input type="month" id="ci-inv" value="${M.inv || ''}" onchange="cardImportMeta.inv=this.value" class="${INP}"></div>
+                    <div><label class="${LBL}">De quem</label><select id="ci-owner" onchange="cardImportMeta.owner=this.value" class="${INP}"><option value="" ${M.owner === '' ? 'selected' : ''}>Padrão do cartão</option><option value="casa" ${M.owner === 'casa' ? 'selected' : ''}>Casa (conjunta)</option>${plano().people.map(p => `<option value="${p.id}" ${M.owner === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+                    <div><label class="${LBL}">Dedutível no IR</label><select id="ci-ded" onchange="cardImportMeta.ded=this.value" class="${INP}"><option value="">Não</option>${Object.entries(PL_IR).map(([k, l]) => `<option value="${k}" ${M.ded === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
                 </div>
                 <p class="text-[11px] text-slate-400 mb-2">Sem "forçar fatura", cada compra vai para a fatura conforme o dia de fechamento. Estornos e descontos entram como <b class="text-emerald-600">crédito</b> (abatem a fatura). Pagamentos e saldos ficam desmarcados. Ajuste tipo, data, nome, valor e categoria se precisar.</p>
                 <div class="max-h-[50vh] overflow-auto border border-slate-100 dark:border-slate-700 rounded-xl">
@@ -5305,19 +5330,35 @@
                     <td class="p-1"><input value="${esc(r.name)}" onchange="cardImportRows[${i}].name=this.value" class="w-full min-w-[140px] px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${r.note ? `<span class="text-[10px] text-amber-600">${r.note}</span>` : ''}</td>
                     <td class="p-1"><select onchange="cardImportRows[${i}].credit=this.value==='c';this.className=this.className.replace(/text-(emerald|rose)-600/,this.value==='c'?'text-emerald-600':'text-rose-600')" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-bold ${r.credit ? 'text-emerald-600' : 'text-rose-600'}"><option value="p" ${r.credit ? '' : 'selected'}>Compra</option><option value="c" ${r.credit ? 'selected' : ''}>Crédito (estorno/desconto)</option></select></td>
                     <td class="p-1"><input type="number" step="0.01" value="${r.amount.toFixed(2)}" onchange="cardImportRows[${i}].amount=Number(this.value)||0" class="w-24 px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"></td>
-                    <td class="p-1"><select onchange="cardImportRows[${i}].category=this.value" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${C.categories.map(c => `<option ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
+                    <td class="p-1"><select onchange="ciCatChange(${i},this)" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${(C.categories.includes(r.category) ? C.categories : C.categories.concat([r.category])).map(c => `<option value="${esc(c)}" ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="__new__">➕ Nova categoria…</option></select></td>
                 </tr>`).join('')}
                 </tbody></table></div>
                 <button onclick="confirmCardImport()" class="w-full mt-4 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Importar <span id="ci-count"></span></button>`);
             const mc = document.getElementById('modal-content'); mc.classList.remove('max-w-lg'); mc.classList.add('max-w-3xl');
             updateImportCount();
         }
+        function ciCatChange(i, sel) {
+            if (sel.value !== '__new__') { cardImportRows[i].category = sel.value; return; }
+            const nm = (prompt('Nome da nova categoria:') || '').trim();
+            if (!nm) { renderCardImportPreview(); return; }
+            const C = appData.cartao, name = catResolveNew(nm);
+            const ex = C.categories.find(c => normKey(c) === normKey(name));
+            if (ex) cardImportRows[i].category = ex; else { C.categories.push(name); cardImportRows[i].category = name; saveAppData(); }
+            renderCardImportPreview();
+        }
         function updateImportCount() { const n = cardImportRows.filter(r => r.on).length, el = document.getElementById('ci-count'); if (el) el.textContent = `${n} lançamento(s)`; }
         function confirmCardImport() {
             const card = cardById(document.getElementById('ci-card').value), force = document.getElementById('ci-inv').value;
             const rows = cardImportRows.filter(r => r.on && r.date && r.amount > 0);
             if (!rows.length) { showToast('Nenhum lançamento selecionado.', 'warning'); return; }
-            rows.forEach(r => appData.cartao.entries.push({ id: uid(), cardId: card.id, name: r.name, amount: (r.credit ? -1 : 1) * r.amount, date: r.date, invoice: force || cardInvoiceKey(card, r.date), category: r.category, obs: 'Importado da fatura' }));
+            const M = cardImportMeta;
+            rows.forEach(r => {
+                let cat = r.category || 'Outros'; const ex = appData.cartao.categories.find(c => normKey(c) === normKey(cat));
+                if (ex) cat = ex; else appData.cartao.categories.push(cat);
+                const en = { id: uid(), cardId: card.id, name: r.name, amount: (r.credit ? -1 : 1) * r.amount, date: r.date, invoice: force || cardInvoiceKey(card, r.date), category: cat, obs: 'Importado da fatura' };
+                if (M.owner) en.owner = M.owner; if (M.ded && !r.credit) en.dedutivel = M.ded;
+                appData.cartao.entries.push(en);
+            });
             cardSelectedId = card.id; cardInvMonth = force || cardInvoiceKey(card, rows[0].date);
             cardImportRows = [];
             cardCommit(`${rows.length} lançamento(s) importado(s)!`);
@@ -5566,6 +5607,58 @@
         // =====================================================
         // RELATÓRIOS (XLSX) — exportar / importar
         // =====================================================
+        // ===== categorias: última usada, semelhantes, unificar =====
+        function descKey(s) { return normKey(s).replace(/\b(parc(ela)?\.?\s*)?\d{1,2}\s*\/\s*\d{1,2}\b/g, '').replace(/[0-9*#]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+        function catLastUsed(name) {
+            const k = descKey(name); if (!k) return '';
+            let best = '', bd = '';
+            appData.cartao.entries.forEach(e => { if (e.category && descKey(e.name) === k && (e.date || '') >= bd) { bd = e.date || ''; best = e.category; } });
+            appData.financeiro.transactions.forEach(t => { if (!t.cardInvoice && t.type !== 'transferencia' && t.category && descKey(t.desc) === k && (t.date || '') >= bd) { bd = t.date || ''; best = t.category; } });
+            return best;
+        }
+        function catAllNames() {
+            const s = new Set(appData.cartao.categories || []);
+            appData.financeiro.transactions.forEach(t => { if (t.category && !t.cardInvoice && t.type !== 'transferencia') s.add(t.category); });
+            appData.cartao.entries.forEach(e => { if (e.category) s.add(e.category); });
+            (appData.plano && appData.plano.budgets || []).forEach(b => { if (b.category) s.add(b.category); });
+            return [...s].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        }
+        function catCount(c) { return appData.financeiro.transactions.filter(t => t.category === c && !t.cardInvoice).length + appData.cartao.entries.filter(e => e.category === c).length; }
+        function catLev(a, b) { const m = a.length, n = b.length; let p = Array.from({ length: n + 1 }, (_, j) => j); for (let i = 1; i <= m; i++) { const c = [i]; for (let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; } return p[n]; }
+        function catSim(a, b) { const x = normKey(a), y = normKey(b); if (!x || !y) return false; if (x === y) return true; if (Math.min(x.length, y.length) < 5) return false; return catLev(x, y) <= 1; }
+        function catFindSimilar(name, list) { return (list || catAllNames()).find(c => c !== name && catSim(c, name)); }
+        // nome novo digitado: se já existir parecido, pergunta qual usar
+        function catResolveNew(name, list) {
+            name = String(name || '').trim(); if (!name) return name;
+            const L = list || catAllNames(); if (L.includes(name)) return name;
+            const sim = catFindSimilar(name, L); if (!sim) return name;
+            return confirm(`Já existe a categoria "${sim}", parecida com "${name}".\n\nOK = usar "${sim}" no lugar\nCancelar = criar "${name}" mesmo assim`) ? sim : name;
+        }
+        function catRename(from, to) {
+            appData.financeiro.transactions.forEach(t => { if (t.category === from) t.category = to; });
+            appData.cartao.entries.forEach(e => { if (e.category === from) e.category = to; });
+            const cc = appData.cartao.categories.map(c => c === from ? to : c); appData.cartao.categories = cc.filter((c, i) => cc.indexOf(c) === i);
+            if (appData.plano) (appData.plano.budgets || []).forEach(b => { if (b.category === from) b.category = to; });
+        }
+        function openCatMerge() {
+            const acc = s => /[^\x00-\x7F]/.test(s) ? 1 : 0, all = catAllNames().sort((a, b) => (catCount(b) - catCount(a)) || (acc(b) - acc(a))), used = new Set(), groups = [];
+            all.forEach(a => { if (used.has(a)) return; const g = all.filter(b => b === a || (!used.has(b) && catSim(a, b))); if (g.length > 1) { g.forEach(x => used.add(x)); groups.push(g); } });
+            window._cmGroups = groups;
+            showModal('Unificar categorias parecidas', groups.length ? `<p class="text-xs text-slate-500 mb-3">Escolha qual nome manter em cada grupo. Os lançamentos (Financeiro e Cartão) das outras grafias passam para o nome escolhido.</p>
+                <div class="space-y-3 max-h-[55vh] overflow-y-auto">${groups.map((g, gi) => `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 space-y-1.5"><p class="text-[11px] font-bold uppercase text-slate-400">Manter qual?</p>
+                    ${g.map((c, i) => `<label class="flex items-center gap-2 text-sm"><input type="radio" name="cm${gi}" value="${i}" ${i === 0 ? 'checked' : ''}> <b>${esc(c)}</b> <span class="text-xs text-slate-400">(${catCount(c)} lançamento(s))</span></label>`).join('')}
+                    <label class="flex items-center gap-2 text-xs text-slate-500"><input type="radio" name="cm${gi}" value="-1"> Não unificar</label></div>`).join('')}</div>
+                <button onclick="applyCatMerge()" class="w-full mt-4 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Unificar</button>` : '<p class="text-sm text-slate-500 py-4 text-center">Nenhuma categoria parecida encontrada. 👍</p>');
+        }
+        function applyCatMerge() {
+            let n = 0;
+            (window._cmGroups || []).forEach((g, gi) => { const r = document.querySelector(`input[name="cm${gi}"]:checked`), v = r ? Number(r.value) : -1; if (v < 0) return; g.forEach(c => { if (c !== g[v]) { catRename(c, g[v]); n++; } }); });
+            saveAppData(); closeModal(); renderCurrentTabContent(); showToast(n ? `${n} categoria(s) unificada(s).` : 'Nada alterado.', n ? 'success' : 'info');
+        }
+        function finDescSuggest() {
+            const d = document.getElementById('fin-desc'), c = document.getElementById('fin-category'); if (!d || !c || c.dataset.manual === '1') return;
+            const last = catLastUsed(d.value); if (last) { c.value = last; c.dataset.auto = '1'; }
+        }
         function normKey(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
         function parseDateAny(v) {
             if (v instanceof Date && !isNaN(v)) return localDateStr(new Date(v.getTime() + 12 * 3600 * 1000));
@@ -7005,10 +7098,11 @@
             return r * finSort.dir;
         }
         function finNavMonth(d) { financeFilterDate = ymAdd(financeFilterDate || localDateStr().slice(0, 7), d); renderCurrentTabContent(); }
-        function finFiltered() {
+        function finFiltered(before) {
             const f = finF, pf = perPrefix('fin');
             return appData.financeiro.transactions.filter(t => {
-                if (pf && !(t.date && t.date.startsWith(pf))) return false;
+                if (before !== undefined) { if (!(t.date && t.date < before)) return false; }
+                else if (pf && !(t.date && t.date.startsWith(pf))) return false;
                 if (financeFilterStatus !== 'todos' && finSt(t) !== financeFilterStatus) return false;
                 if (f.acc && t.accId !== f.acc && t.toAccId !== f.acc) return false;
                 if (f.cat && (t.category || '') !== f.cat) return false;
@@ -7267,6 +7361,24 @@
             window.addEventListener('resize', () => { if (calcOpen()) { const o = document.getElementById('calc-overlay'); calcMoveTo(o.offsetLeft, o.offsetTop); } });
         })();
         function calcCopy() { const t = document.getElementById('calc-disp').textContent; try { navigator.clipboard.writeText(t.replace(/\./g, '').replace(',', '.')); showToast('Resultado copiado: ' + t, 'success'); } catch (e) { showToast(t, 'info'); } }
+        // ESC fecha o que estiver aberto: janela (modal) > calculadora > menu no celular > telas internas > filtros
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Escape' || e.defaultPrevented) return;
+            const gate = document.getElementById('login-gate'); if (gate && getComputedStyle(gate).display !== 'none' && !gate.classList.contains('hidden')) return;
+            const modal = document.getElementById('global-modal');
+            let done = true;
+            if (modal && !modal.classList.contains('hidden')) closeModal();
+            else if (calcOpen()) closeCalc();
+            else if (window.innerWidth < 768 && !document.getElementById('sidebar').classList.contains('-translate-x-full')) toggleSidebarMobile();
+            else if (typeof saudeGymOpen !== 'undefined' && saudeGymOpen) closeGym();
+            else if (typeof saudeDiagOpen !== 'undefined' && saudeDiagOpen) closeDiag();
+            else if (typeof saudeVacOpen !== 'undefined' && saudeVacOpen) closeVac();
+            else if (typeof saudeCareOpen !== 'undefined' && saudeCareOpen) closeCare();
+            else if (typeof habEvoOpen !== 'undefined' && habEvoOpen) closeEvoView();
+            else if (typeof finFilterOpen !== 'undefined' && finFilterOpen) finToggleFilter();
+            else done = false;
+            if (done) { e.preventDefault(); if (document.activeElement && document.activeElement.blur && document.activeElement.tagName !== 'BODY') document.activeElement.blur(); }
+        });
         document.addEventListener('keydown', e => {
             if (!calcOpen()) return;
             if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -7387,6 +7499,9 @@
                 if (finSt(t) === 'pendente') tp += e.r + e.d;
             });
             const saldo = tr - td;
+            // saldo total = saldo do período + sobra/falta de tudo que veio antes do período (mesmos filtros)
+            const pfx = perPrefix('fin'); let saldoTotal = saldo, antes = 0;
+            if (pfx) { const start = pfx.length === 4 ? pfx + '-01-01' : pfx.length === 7 ? pfx + '-01' : pfx; finFiltered(start).forEach(t => { const e = finEffect(t, finF.acc); antes += e.r - e.d; }); saldoTotal = saldo + antes; }
             const nAct = ['acc', 'cat', 'type'].filter(k => finF[k]).length + (finF.min !== '' ? 1 : 0) + (finF.max !== '' ? 1 : 0) + (finF.q ? 1 : 0) + (financeFilterStatus !== 'todos' ? 1 : 0);
             const sh = (l, k) => `<th class="p-3.5 cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-200 whitespace-nowrap" onclick="finSortBy('${k}')" title="Clique para ordenar">${l}${finSort.k === k ? ` <i class="fa-solid fa-arrow-${finSort.dir > 0 ? 'up' : 'down'} text-[9px]"></i>` : ''}</th>`;
             const cats = [...new Set(appData.financeiro.transactions.map(t => t.category).filter(Boolean))].sort();
@@ -7459,11 +7574,12 @@
                             <input type="number" step="0.01" min="0" placeholder="Valor mín." value="${finF.min}" onchange="finSet('min',this.value)" class="${S} w-28">
                             <input type="number" step="0.01" min="0" placeholder="Valor máx." value="${finF.max}" onchange="finSet('max',this.value)" class="${S} w-28">
                             <input type="text" placeholder="Buscar descrição..." value="${esc(finF.q)}" onchange="finSet('q',this.value)" class="${S} w-44">
+                            <button onclick="openCatMerge()" class="text-xs text-slate-500 font-semibold underline"><i class="fa-solid fa-code-merge mr-1"></i>Unificar categorias</button>
                             <button onclick="finClear()" class="text-xs text-teal-600 dark:text-teal-400 font-semibold underline">Limpar filtros</button>
                         </div>` : ''}
                     </div>
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-5">
-                        ${card('Receitas', tr, 'text-emerald-600')}${card('Despesas', td, 'text-rose-600')}${card('Saldo do Período', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${card('Pendente', tp, 'text-amber-600')}
+                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
+                        ${card('Receitas', tr, 'text-emerald-600')}${card('Despesas', td, 'text-rose-600')}${card('Saldo do Período', saldo, saldo >= 0 ? 'text-teal-600' : 'text-rose-600')}${card('Pendente', tp, 'text-amber-600')}<div class="col-span-2 lg:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border-2 ${saldoTotal >= 0 ? 'border-teal-200 dark:border-teal-900' : 'border-rose-200 dark:border-rose-900'} min-w-0" title="Saldo do período + sobra ou falta dos períodos anteriores (respeita os filtros)"><p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase truncate">Saldo Total</p><h3 class="text-base sm:text-2xl font-bold ${saldoTotal >= 0 ? 'text-teal-600' : 'text-rose-600'} mt-0.5 sm:mt-1 truncate">${saldoTotal < 0 ? '− ' : ''}R$ ${money(Math.abs(saldoTotal))}</h3>${pfx ? `<p class="text-[10px] text-slate-400 mt-0.5 truncate">${antes >= 0 ? 'sobra' : 'falta'} anterior: R$ ${money(Math.abs(antes))}</p>` : ''}</div>
                     </div>
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                         <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4 flex items-center space-x-2"><i class="fa-solid fa-wallet text-teal-500"></i><span>Lançamentos Financeiros</span><span class="text-xs font-normal text-slate-400">(${list.length}) · ${perLabel('fin')}</span></h3>
@@ -7961,7 +8077,7 @@
             appData.cartao.entries.forEach(e => {
                 if (ym && !(e.date || '').startsWith(ym)) return;
                 const c = cardById(e.cardId);
-                rows.push({ id: e.id, type: 'despesa', amount: Number(e.amount) || 0, category: (e.category || 'Outros').trim(), date: e.date || '', desc: e.name || '', owner: c && c.shared ? 'casa' : ((c && c.owner) || ''), src: 'card', st: 'pago', entry: e, card: c });
+                rows.push({ id: e.id, type: 'despesa', amount: Number(e.amount) || 0, category: (e.category || 'Outros').trim(), date: e.date || '', desc: e.name || '', owner: e.owner ? e.owner : (c && c.shared ? 'casa' : ((c && c.owner) || '')), src: 'card', st: 'pago', entry: e, card: c });
             });
             return ignoreVista ? rows : rows.filter(r => plVisible(r.owner));
         }
@@ -7988,6 +8104,7 @@
         function plSetTab(t) { plTab = t; plDay = ''; renderCurrentTabContent(); window.scrollTo(0, 0); }
         function plNavMonth(d) { plMonth = ymAdd(plMonth, d); plDay = ''; renderCurrentTabContent(); }
         function renderPlanejamento(container) {
+            plRecAuto();
             const P = plano();
             const vistas = [['todos', 'Todos'], ['p1', P.people[0].name], ['p2', P.people[1].name], ['casa', 'Casa']];
             const fns = { orcamento: plRenderOrcamento, fluxo: plRenderFluxo, recorrentes: plRenderRecs, vencimentos: plRenderVenc, metas: plRenderMetas, patrimonio: plRenderPatrimonio, investimentos: plRenderInvest, dividas: plRenderDividas, casal: plRenderCasal, analise: plRenderAnalise, ir: plRenderIR };
@@ -8019,14 +8136,16 @@
                 ['kind', 'Tipo', 'select', { opts: [['despesa', 'Despesa'], ['receita', 'Receita']] }], ['tipo', 'Classificação', 'select', { opts: [['assinatura', 'Assinatura / serviço'], ['fixa', 'Conta fixa'], ['seguro', 'Seguro / plano'], ['outra', 'Outra']] }],
                 ['freq', 'Frequência', 'select', { opts: [['mensal', 'Todo mês'], ['anual', 'Uma vez por ano']] }], ['day', 'Dia do vencimento', 'num', { ph: '1 a 31' }],
                 ['month', 'Mês (se anual, 1 a 12)', 'num', {}], ['category', 'Categoria', 'text', { list: 'pl-cats' }],
-                ['owner', 'De quem', 'select', { opts: PL_OWNERS }], ['start', 'Começa em (opcional)', 'date', {}], ['end', 'Termina em (opcional)', 'date', {}] ] },
+                ['owner', 'De quem', 'select', { opts: PL_OWNERS }], ['start', 'Começa em (opcional)', 'date', {}], ['end', 'Termina em (opcional)', 'date', {}],
+                ['newAmount', 'Alteração de valor: novo valor (R$)', 'num', { ph: 'Ex.: reajuste' }], ['newFrom', 'Alteração vale a partir de', 'date', {}] ] },
             goals: { title: 'Meta de economia', fields: [['name', 'Nome da meta', 'text', { req: 1, ph: 'Reserva de emergência, viagem, troca de carro' }], ['target', 'Valor-alvo (R$)', 'num', { req: 1 }], ['deadline', 'Prazo (data)', 'date', { req: 1 }], ['initial', 'Já guardado (R$)', 'num', {}]] },
-            assets: { title: 'Bem / patrimônio', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Apartamento, carro, conta em outro banco' }], ['kind', 'Tipo', 'select', { opts: [['imovel', 'Imóvel'], ['carro', 'Carro / veículo'], ['conta', 'Conta / dinheiro'], ['outro', 'Outro bem']] }], ['value', 'Valor atual (R$)', 'num', { req: 1 }]] },
+            assets: { title: 'Bem / patrimônio', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Apartamento, carro, conta em outro banco' }], ['kind', 'Tipo', 'select', { opts: [['imovel', 'Imóvel'], ['carro', 'Carro / veículo'], ['conta', 'Conta / dinheiro'], ['outro', 'Outro bem']] }], ['value', 'Valor atual (R$)', 'num', { req: 1 }], ['owner', 'De quem é', 'select', { opts: PL_OWNERS }]] },
             invests: { title: 'Aplicação', fields: [['name', 'Nome', 'text', { req: 1, ph: 'CDB Banco X 110% CDI' }], ['inst', 'Instituição', 'text', {}],
                 ['tipo', 'Tipo', 'select', { opts: [['CDB', 'CDB / RDB'], ['LCI/LCA', 'LCI / LCA'], ['Tesouro', 'Tesouro Direto'], ['Fundo', 'Fundo'], ['Acoes', 'Ações / FIIs'], ['Poupanca', 'Poupança'], ['Outro', 'Outro']] }],
                 ['pct', 'Contratado (% do CDI)', 'num', { ph: 'Ex.: 110' }], ['saldo', 'Saldo atual (R$)', 'num', { req: 1 }], ['saldoDate', 'Saldo conferido em', 'date', {}]] },
             debts: { title: 'Dívida / financiamento', fields: [['name', 'Descrição', 'text', { req: 1, ph: 'Financiamento do carro, empréstimo' }], ['saldo', 'Saldo devedor (R$)', 'num', { req: 1 }], ['parcelas', 'Parcelas restantes', 'num', { req: 1 }], ['parcela', 'Valor da parcela (R$)', 'num', { req: 1 }], ['taxa', 'Juros ao mês (%) — vazio = calcular', 'num', {}]] }
         };
+        function plOwnerName(k) { const o = PL_OWNERS().find(x => x[0] === (k || '')); return o ? (o[0] ? o[1] : 'Casa') : 'Casa'; }
         function plOpen(kind, id, preset) {
             const F = PL_FORMS[kind], list = plano()[kind], cur = id ? list.find(x => x.id === id) : null;
             const v = Object.assign({}, preset || {}, cur || {});
@@ -8055,7 +8174,9 @@
                 if (kind === 'goals') { n.aportes = []; }
                 if (kind === 'invests') { const a = recNum(document.getElementById('plf-aporte').value); n.aportes = a > 0 ? [{ id: uid(), date: document.getElementById('plf-aporteDate').value || localDateStr(), amount: a }] : []; }
                 list.push(n);
+                if (kind === 'recs') { const cur = plCurYM(), st = n.start ? n.start.slice(0, 7) : ''; const ym = st && st > cur ? st : cur; if (plRecDue(n, ym)) plRecMake(n, ym); }
             }
+            if (kind === 'recs') { const r = id ? list.find(x => x.id === id) : list[list.length - 1]; plRecApplyChange(r); }
             saveAppData(); closeModal(); renderCurrentTabContent(); showToast('Salvo!', 'success');
         }
         function plDel(kind, id) { if (!confirm('Excluir este item?')) return; const P = plano(); P[kind] = P[kind].filter(x => x.id !== id); saveAppData(); renderCurrentTabContent(); }
@@ -8100,13 +8221,29 @@
             return appData.financeiro.transactions.some(t => (t.date || '').startsWith(ym) && (t.recId === rec.id || (k && normKey(t.desc).includes(k))))
                 || (!!k && appData.cartao.entries.some(e => e.invoice === ym && normKey(e.name).includes(k)));   // já está numa fatura de cartão
         }
-        function plRecYear(r) { const v = Number(r.amount) || 0; return r.freq === 'anual' ? v : v * 12; }
+        function plRecAmt(r, ym) { const n = Number(r.newAmount); return n > 0 && r.newFrom && (ym || plCurYM()) >= r.newFrom.slice(0, 7) ? n : (Number(r.amount) || 0); }
+        function plRecYear(r) { const v = plRecAmt(r); return r.freq === 'anual' ? v : v * 12; }
+        function plRecMake(r, ym) {
+            const d = plRecDue(r, ym) || `${ym}-${pad2(Number(r.day) || 1)}`;
+            const t = { id: uid(), type: r.kind === 'receita' ? 'receita' : 'despesa', status: 'pendente', desc: r.name, amount: plRecAmt(r, ym).toFixed(2), category: r.category || (r.tipo === 'assinatura' ? 'Assinatura' : 'Contas fixas'), date: d, accId: '', toAccId: '', attachments: [], recId: r.id };
+            if (r.owner) t.owner = r.owner;
+            appData.financeiro.transactions.push(t);
+            (r.lancados || (r.lancados = [])).push(ym);
+        }
+        // lança automaticamente no Financeiro o mês atual de cada recorrente ativo (uma única vez por mês)
+        function plRecAuto() {
+            const cur = plCurYM(); let ch = false;
+            plano().recs.forEach(r => { if ((r.lancados || []).includes(cur) || !plRecDue(r, cur) || plRecMaterialized(r, cur)) return; plRecMake(r, cur); ch = true; });
+            if (ch) saveAppData();
+        }
+        // alteração de valor: atualiza os lançamentos pendentes a partir da data de início
+        function plRecApplyChange(r) {
+            const n = Number(r.newAmount); if (!(n > 0) || !r.newFrom) return;
+            appData.financeiro.transactions.forEach(t => { if (t.recId === r.id && finSt(t) === 'pendente' && (t.date || '').slice(0, 7) >= r.newFrom.slice(0, 7)) t.amount = n.toFixed(2); });
+        }
         function plRecLancar(id, ym) {
             const r = plano().recs.find(x => x.id === id); if (!r) return;
-            const d = plRecDue(r, ym) || `${ym}-${pad2(Number(r.day) || 1)}`;
-            const t = { id: uid(), type: r.kind === 'receita' ? 'receita' : 'despesa', status: 'pendente', desc: r.name, amount: Number(r.amount).toFixed(2), category: r.category || (r.tipo === 'assinatura' ? 'Assinatura' : 'Contas fixas'), date: d, accId: '', toAccId: '', attachments: [], recId: r.id };
-            if (r.owner) t.owner = r.owner;
-            appData.financeiro.transactions.push(t); saveAppData(); renderCurrentTabContent(); showToast('Lançado como pendente no Financeiro.', 'success');
+            plRecMake(r, ym); saveAppData(); renderCurrentTabContent(); showToast('Lançado como pendente no Financeiro.', 'success');
         }
         function plRecToggle(id) { const r = plano().recs.find(x => x.id === id); if (r) { r.active = r.active === false; saveAppData(); renderCurrentTabContent(); } }
         function plRecSuggest() {
@@ -8126,12 +8263,12 @@
         function plRenderRecs() {
             const P = plano(), recs = P.recs.filter(r => plVisible(r.owner || '')), act = recs.filter(r => r.active !== false);
             const desp = act.filter(r => r.kind !== 'receita'), subs = desp.filter(r => r.tipo === 'assinatura');
-            const totMes = desp.reduce((s, r) => s + (r.freq === 'anual' ? (Number(r.amount) || 0) / 12 : Number(r.amount) || 0), 0), totAno = desp.reduce((s, r) => s + plRecYear(r), 0), subAno = subs.reduce((s, r) => s + plRecYear(r), 0);
+            const totMes = desp.reduce((s, r) => s + (r.freq === 'anual' ? plRecAmt(r) / 12 : plRecAmt(r)), 0), totAno = desp.reduce((s, r) => s + plRecYear(r), 0), subAno = subs.reduce((s, r) => s + plRecYear(r), 0);
             const sug = plRecSuggest(), cur = plCurYM();
             const row = r => { const mat = plRecDue(r, cur) ? plRecMaterialized(r, cur) : true; return `<div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 ${r.active === false ? 'opacity-50' : ''}">
                 <div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-sm text-slate-800 dark:text-white truncate">${esc(r.name)} ${r.kind === 'receita' ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">receita</span>' : ''}</p>
                     <p class="text-xs text-slate-500">${r.freq === 'anual' ? 'Anual · mês ' + (r.month || '?') : 'Todo mês'} · dia ${r.day || '—'} · ${esc(r.category || r.tipo)}${r.owner ? ' · ' + esc(plPersonName(r.owner)) : ''}</p></div>
-                    <div class="text-right shrink-0"><p class="font-bold text-sm ${r.kind === 'receita' ? 'text-emerald-600' : 'text-rose-600'}">${R$(r.amount)}</p><p class="text-[10px] text-slate-400">${R$(plRecYear(r))}/ano</p></div></div>
+                    <div class="text-right shrink-0"><p class="font-bold text-sm ${r.kind === 'receita' ? 'text-emerald-600' : 'text-rose-600'}">${R$(plRecAmt(r))}</p><p class="text-[10px] text-slate-400">${R$(plRecYear(r))}/ano</p>${Number(r.newAmount) > 0 && r.newFrom && plCurYM() < r.newFrom.slice(0, 7) ? `<p class="text-[10px] text-amber-600 font-bold">${R$(r.newAmount)} desde ${fmtBR(r.newFrom)}</p>` : ''}</div></div>
                 <div class="flex flex-wrap gap-1.5 mt-2">${!mat ? `<button onclick="plRecLancar('${r.id}','${cur}')" class="${PL_BTN2} !text-teal-700"><i class="fa-solid fa-plus mr-1"></i>Lançar este mês</button>` : ''}
                     <button onclick="plRecToggle('${r.id}')" class="${PL_BTN2}">${r.active === false ? 'Reativar' : 'Pausar'}</button>${plEditBtns('recs', r.id)}</div></div>`; };
             return `<div class="${PL_CARD}">
@@ -8162,7 +8299,7 @@
             });
             P.recs.forEach(rec => months.forEach(m => {
                 const d = plRecDue(rec, m); if (!d || (m === cur && d < today) || plRecMaterialized(rec, m) || !plVisible(rec.owner || '')) return;
-                const o = out.find(x => x.ym === m), v = Number(rec.amount) || 0;
+                const o = out.find(x => x.ym === m), v = plRecAmt(rec, m);
                 if (rec.kind === 'receita') o.ent += v; else o.sai += v;
                 o.items.push({ desc: rec.name + ' (recorrente)', val: rec.kind === 'receita' ? v : -v, date: d });
             }));
@@ -8278,12 +8415,14 @@
         }
         function plInvAporteDel(iid, aid) { const iv = plano().invests.find(x => x.id === iid); if (!iv) return; iv.aportes = iv.aportes.filter(a => a.id !== aid); saveAppData(); renderCurrentTabContent(); }
         function plInvTotal() { return plano().invests.reduce((s, i) => s + (Number(i.saldo) || 0), 0); }
+        function plPoupCards() { return contasData().filter(a => a.type === 'poupanca').map(a => ({ a, saldo: contaSaldoDash(a.id) })); }
         function plRenderInvest() {
             const iv = plano().invests, tot = plInvTotal(), apl = iv.reduce((s, i) => s + plInvStats(i).tot, 0);
             return `<div class="${PL_CARD}"><div class="flex flex-wrap items-center justify-between gap-3 mb-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-seedling text-teal-500"></i>Investimentos</h3><button onclick="plOpen('invests')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Nova aplicação</button></div>
-                <div class="grid grid-cols-3 gap-2 mb-4"><div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Saldo total</p><p class="font-bold text-slate-800 dark:text-white">${R$(tot)}</p></div>
+                <div class="grid grid-cols-3 gap-2 mb-4"><div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Saldo total</p><p class="font-bold text-slate-800 dark:text-white">${R$(tot + plPoupCards().reduce((x, p) => x + Math.max(0, p.saldo), 0))}</p></div>
                     <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Aplicado</p><p class="font-bold text-slate-800 dark:text-white">${R$(apl)}</p></div>
                     <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase font-bold text-slate-400">Rendimento</p><p class="font-bold ${tot - apl >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${R$(apl ? tot - apl : 0)}</p></div></div>
+                ${plPoupCards().length ? `<div class="mb-4"><p class="text-[11px] font-bold uppercase text-slate-400 mb-2">Cartões poupança (saldo vem do menu Cartão)</p><div class="grid grid-cols-1 md:grid-cols-2 gap-3">${plPoupCards().map(p => `<div class="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900"><p class="font-bold text-slate-800 dark:text-white truncate"><i class="fa-solid fa-piggy-bank text-emerald-600 mr-1"></i>${esc(p.a.name)}</p><p class="text-xs text-slate-500">Poupança · rende ~0,5% ao mês (estimativa)</p><p class="text-xl font-bold mt-1 text-slate-800 dark:text-white">${R$(p.saldo)}</p><p class="text-[11px] text-slate-500">≈ ${R$(Math.max(0, p.saldo) * 0.005)} por mês</p></div>`).join('')}</div><p class="text-[11px] text-slate-400 mt-1">Já contam no patrimônio em "Contas"; aqui somam só no total abaixo.</p></div>` : ''}
                 ${iv.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${iv.map(i => { const s = plInvStats(i); return `<div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
                     <div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-slate-800 dark:text-white truncate">${esc(i.name)}</p><p class="text-xs text-slate-500">${esc(i.tipo || '')}${i.inst ? ' · ' + esc(i.inst) : ''}${Number(i.pct) ? ' · contratado ' + i.pct + '% do CDI' : ''}</p></div>${plEditBtns('invests', i.id)}</div>
                     <p class="text-xl font-bold mt-2 text-slate-800 dark:text-white">${R$(i.saldo)}</p>
@@ -8390,7 +8529,8 @@
                 <div class="${PL_CARD}"><div class="flex items-center justify-between mb-2"><h3 class="font-bold text-slate-800 dark:text-white">Evolução mês a mês</h3><button onclick="plSnapAdd()" class="${PL_BTN2}">+ mês anterior</button></div>${chart}
                     ${sn.length ? `<div class="mt-2 max-h-28 overflow-y-auto text-xs text-slate-500 space-y-0.5">${sn.slice().reverse().map(s => `<div class="flex justify-between"><span>${fmtYM(s.ym)}${s.manual ? ' (manual)' : ''}</span><span><b>${R$(s.net)}</b> ${s.ym !== plCurYM() ? `<button onclick="plSnapDel('${s.ym}')" class="text-slate-300 hover:text-rose-600 ml-1"><i class="fa-solid fa-xmark"></i></button>` : ''}</span></div>`).join('')}</div>` : ''}</div>
                 <div class="${PL_CARD} lg:col-span-2"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-slate-800 dark:text-white">Bens e outros valores</h3><button onclick="plOpen('assets')" class="${PL_BTN}"><i class="fa-solid fa-plus mr-1"></i>Novo bem</button></div>
-                    ${P.assets.length ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-2">${P.assets.map(a => `<div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-semibold text-sm truncate">${esc(a.name)}</p><p class="text-xs text-slate-500">${R$(a.value)}</p></div>${plEditBtns('assets', a.id)}</div>`).join('')}</div>` : '<p class="text-sm text-slate-400">Cadastre imóvel, carro etc. Contas, investimentos e dívidas entram sozinhos das outras abas.</p>'}</div></div>`;
+                    ${P.assets.length ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-2">${P.assets.map(a => `<div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40 flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-semibold text-sm truncate">${esc(a.name)}</p><p class="text-xs text-slate-500">${R$(a.value)}</p><span class="inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-100 text-teal-800">${esc(plOwnerName(a.owner))}</span></div>${plEditBtns('assets', a.id)}</div>`).join('')}</div>
+                    <div class="mt-3 flex flex-wrap gap-2 text-xs">${PL_OWNERS().map(([k, nm]) => `<span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700">${esc(k ? nm : 'Casa')}: <b>${R$(P.assets.filter(a => (a.owner || '') === k).reduce((t, a) => t + (Number(a.value) || 0), 0))}</b></span>`).join('')}</div>` : '<p class="text-sm text-slate-400">Cadastre imóvel, carro etc. Contas, investimentos e dívidas entram sozinhos das outras abas.</p>'}</div></div>`;
         }
 
         // ---------- 9) Casal: divisão de despesas e acerto de contas ----------
@@ -8502,9 +8642,14 @@
 
         // ---------- 11) Imposto de Renda: despesas dedutíveis ----------
         const PL_IR = { saude: 'Saúde', educacao: 'Educação', previdencia: 'Previdência (PGBL)', outros: 'Outras dedutíveis' };
+        function plIRItems() {
+            const out = appData.financeiro.transactions.filter(t => t.dedutivel && t.type === 'despesa');
+            appData.cartao.entries.forEach(e => { if (e.dedutivel && Number(e.amount) > 0) { const c = cardById(e.cardId); out.push({ id: e.id, date: e.date, desc: e.name + ' (cartão)', amount: Number(e.amount), dedutivel: e.dedutivel, attachments: [], owner: e.owner ? e.owner : (c && c.shared ? 'casa' : ((c && c.owner) || '')) }); } });
+            return out;
+        }
         function plRenderIR() {
-            const anos = new Set([plAnoIR]); appData.financeiro.transactions.forEach(t => { if (t.dedutivel && t.date) anos.add(t.date.slice(0, 4)); });
-            const list = appData.financeiro.transactions.filter(t => t.dedutivel && t.type === 'despesa' && (t.date || '').startsWith(plAnoIR) && plVisible(t.owner || '')).sort((a, b) => a.date.localeCompare(b.date));
+            const anos = new Set([plAnoIR]); plIRItems().forEach(t => { if (t.date) anos.add(t.date.slice(0, 4)); });
+            const list = plIRItems().filter(t => (t.date || '').startsWith(plAnoIR) && plVisible(t.owner || '')).sort((a, b) => a.date.localeCompare(b.date));
             const by = {}; list.forEach(t => { by[t.dedutivel] = (by[t.dedutivel] || 0) + (Number(t.amount) || 0); });
             const tot = list.reduce((s, t) => s + (Number(t.amount) || 0), 0), semComp = list.filter(t => !(t.attachments || []).length).length;
             return `<div class="${PL_CARD}"><div class="flex flex-wrap items-center justify-between gap-3 mb-4"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-file-invoice text-teal-500"></i>Despesas dedutíveis no Imposto de Renda</h3>
@@ -8515,7 +8660,7 @@
                 ${list.length ? `<div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-[11px] uppercase text-slate-400"><tr><th class="py-1.5">Data</th><th>Descrição</th><th>Tipo</th><th class="text-right">Valor</th><th class="text-center">Comprov.</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-700">${list.map(t => `<tr><td class="py-1.5 whitespace-nowrap">${fmtBR(t.date)}</td><td>${esc(t.desc)}</td><td class="text-xs">${PL_IR[t.dedutivel] || ''}</td><td class="text-right whitespace-nowrap">${R$(t.amount)}</td><td class="text-center">${(t.attachments || []).length ? '<i class="fa-solid fa-paperclip text-teal-600"></i> ' + t.attachments.length : '<span class="text-slate-300">—</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400 text-center py-6">Nenhuma despesa marcada como dedutível em ' + plAnoIR + '.</p>'}</div>`;
         }
         function plIRCsv() {
-            const list = appData.financeiro.transactions.filter(t => t.dedutivel && t.type === 'despesa' && (t.date || '').startsWith(plAnoIR)).sort((a, b) => a.date.localeCompare(b.date));
+            const list = plIRItems().filter(t => (t.date || '').startsWith(plAnoIR)).sort((a, b) => a.date.localeCompare(b.date));
             const q = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
             const lines = [['Data', 'Descrição', 'Tipo', 'Valor', 'Comprovantes'].map(q).join(';')].concat(list.map(t => [fmtBR(t.date), t.desc, PL_IR[t.dedutivel] || '', Number(t.amount).toFixed(2).replace('.', ','), (t.attachments || []).length].map(q).join(';')));
             const by = {}; list.forEach(t => { by[t.dedutivel] = (by[t.dedutivel] || 0) + (Number(t.amount) || 0); });
