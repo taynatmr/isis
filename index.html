@@ -256,7 +256,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 56</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 58</div>
             </div>
         </aside>
 
@@ -8637,7 +8637,7 @@
                 if (!Array.isArray(d.pagos)) d.pagos = [];
                 // desfaz o que não vale mais (lançamento apagado, voltou para pendente, mudou de valor ou de dívida)
                 d.pagos = d.pagos.filter(p => {
-                    const t = byId[p.txId], ok = t && t.debtId === d.id && finSt(t) !== 'pendente' && Math.abs((Number(t.amount) || 0) - p.amount) < 0.005;
+                    const t = byId[p.txId], ok = p.v === 3 && t && t.debtId === d.id && finSt(t) !== 'pendente' && Math.abs((Number(t.amount) || 0) - p.amount) < 0.005;
                     if (!ok) { d.saldo = Math.round(((Number(d.saldo) || 0) - p.dSaldo) * 100) / 100; d.parcelas = (Number(d.parcelas) || 0) - p.dParcelas; }
                     return ok;
                 });
@@ -8645,11 +8645,14 @@
                 txs.filter(t => t.debtId === d.id && t.type === 'despesa' && finSt(t) !== 'pendente' && !d.pagos.some(p => p.txId === t.id)).sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(t => {
                     const a = Number(t.amount) || 0, saldo = Number(d.saldo) || 0, parc = Number(d.parcela) || 0, np = Number(d.parcelas) || 0;
                             let ns, nn, tipo;
-                    if (parc > 0 && Math.abs(a - parc) <= Math.max(1, parc * 0.02)) { const i = plDebtRate(d); ns = Math.max(0, saldo * (1 + i) - a); nn = Math.max(0, np - 1); tipo = 'parcela'; }
-                    else { ns = Math.max(0, saldo - a); nn = ns <= 0.005 ? 0 : Math.max(0, plDebtSim(d, a, 0, 'prazo').restantes); tipo = 'extra'; }
+                    // o valor pago sempre DIMINUI o que falta (saldo − pago) e as parcelas nunca aumentam; os juros % só entram na simulação
+                    ns = Math.max(0, saldo - a);
+                    // cada "parcela" inteira paga (valor ÷ parcela) tira 1 das parcelas que faltam: 2 parcelas pagas = 200 → faltam 2 a menos
+                    const k = parc > 0 ? Math.floor(a / parc + 0.02) : 0;
+                    nn = Math.max(0, np - k); tipo = parc > 0 && k >= 1 && Math.abs(a - k * parc) <= Math.max(1, k * parc * 0.02) ? 'parcela' : 'extra';
                     if (ns <= 0.005) { ns = 0; nn = 0; }
                     ns = Math.round(ns * 100) / 100;
-                    d.pagos.push({ txId: t.id, date: t.date, amount: a, tipo, dSaldo: Math.round((ns - saldo) * 100) / 100, dParcelas: nn - np });
+                    d.pagos.push({ v: 3, txId: t.id, date: t.date, amount: a, tipo, dSaldo: Math.round((ns - saldo) * 100) / 100, dParcelas: nn - np });
                     d.saldo = ns; d.parcelas = nn;
                 });
             });
@@ -8665,7 +8668,7 @@
                         return `<div class="grid grid-cols-2 gap-2 mt-3">${st('Valor original', orig ? R$(orig) : '—')}${st('Valor pago', orig ? R$(Math.max(0, orig - (Number(d.saldo) || 0))) : '—', 'text-emerald-600')}${st('Falta pagar', R$(d.saldo), Number(d.saldo) > 0 ? 'text-rose-600' : 'text-emerald-600')}${st('Valor da parcela', R$(d.parcela))}${st('Parcelas', tt ? `${Math.max(0, tt - rest)} pagas de ${tt} <span class="block text-[11px] font-semibold text-slate-500">faltam ${rest}</span>` : `faltam ${rest}`)}${st('Juros ao mês', Number(d.taxa) > 0 ? String(d.taxa).replace('.', ',') + '%' : '—')}</div>`; })()}
                     ${Number(d.original) > 0 ? (() => { const pg = Math.max(0, Number(d.original) - (Number(d.saldo) || 0)), pc = Math.min(100, pg / Number(d.original) * 100); return `<div class="mt-2"><div class="flex justify-between text-[11px] text-slate-500 mb-1"><span>Original ${R$(d.original)}</span><span><b>${pc.toFixed(0)}%</b> quitado · ${R$(pg)}</span></div><div class="h-2.5 rounded-full bg-slate-200 dark:bg-slate-600 overflow-hidden"><div class="h-full bg-emerald-500" style="width:${pc}%"></div></div></div>`; })() : '<p class="text-[11px] text-amber-600 mt-1">Informe o valor original (editar) para ver o quanto já foi quitado.</p>'}
                     ${Number(d.saldo) > 0 ? `<p class="text-xs text-slate-500 mt-1.5">${Number(d.taxa) > 0 ? `Falta pagar ${R$(total)} no total em parcelas, sendo ${R$(jur)} acima do saldo (juros).` : `Faltam ${R$(total)} em parcelas (${d.parcelas} × ${R$(d.parcela)}).`}</p>` : '<p class="text-xs text-emerald-600 font-bold mt-1.5"><i class="fa-solid fa-circle-check mr-1"></i>Dívida quitada!</p>'}
-                    ${(d.pagos || []).length ? `<details class="mt-2"><summary class="text-[11px] font-bold text-teal-700 cursor-pointer">${d.pagos.length} pagamento(s) pelo Financeiro</summary><div class="mt-1 max-h-24 overflow-y-auto text-[11px] text-slate-500 space-y-0.5">${d.pagos.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => `<div class="flex justify-between"><span>${fmtBR(p.date)} · ${p.tipo === 'parcela' ? 'parcela' : 'amortização'}</span><b>${R$(p.amount)}</b></div>`).join('')}</div></details>` : ''}
+                    ${(d.pagos || []).length ? `<details class="mt-2"><summary class="text-[11px] font-bold text-teal-700 cursor-pointer">${d.pagos.length} pagamento(s) pelo Financeiro</summary><div class="mt-1 max-h-24 overflow-y-auto text-[11px] text-slate-500 space-y-0.5">${d.pagos.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => `<div class="flex justify-between"><span>${fmtBR(p.date)} · ${p.tipo === 'parcela' ? (p.dParcelas < -1 ? (-p.dParcelas) + ' parcelas' : 'parcela') : 'amortização'}</span><b>${R$(p.amount)}</b></div>`).join('')}</div></details>` : ''}
                     <button onclick="plSimDebt('${d.id}')" class="${PL_BTN2} mt-2 !text-teal-700"><i class="fa-solid fa-calculator mr-1"></i>Simular amortização</button></div>`; }).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nenhuma dívida cadastrada.</p>'}</div>`;
         }
 
