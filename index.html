@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 67</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 68</div>
             </div>
         </aside>
 
@@ -397,7 +397,7 @@
         const BUDGET_STATUSES = ['Pendente', 'Aprovado', 'Rejeitado', 'Pago'];
         let obraSortKey = 'date', obraSortDir = 'desc';
         let budgetView = 'bloco', budgetSelectMode = false, budgetSelected = [], budgetGroupOpen = {};
-        let cardSelectedId = null, cardInvMonth = '', cardQ = '', _cardQT = null;
+        let cardSelectedId = null, cardInvMonth = '', cardQ = '', _cardQT = null, cardCat = '', cardPer = { mode: 'fatura', from: '', to: '' };
         let finF = { acc: '', cat: '', type: '', min: '', max: '', q: '', hab: false };
         const FIN_COLS = [['desc', 'Descrição'], ['category', 'Categoria'], ['acc', 'Cartão/Conta'], ['date', 'Data'], ['amount', 'Valor'], ['status', 'Status'], ['att', 'Anexos'], ['act', 'Ações']];
         let finColPref = { order: FIN_COLS.map(c => c[0]), hidden: [] };
@@ -4909,7 +4909,12 @@
             if (!cardInvMonth) cardInvMonth = cardInvoiceKey(card, localDateStr());
             const key = cardInvMonth;
             const invEntries = cardEntriesFor(card.id, key), qn = normKey(cardQ || '');
-            const entries = (qn ? C.entries.filter(e => e.cardId === card.id && normKey([e.name, e.category, e.obs, Math.abs(Number(e.amount) || 0).toFixed(2), Math.abs(Number(e.amount) || 0).toFixed(2).replace('.', ','), fmtBR(e.date), e.invoice].join(' ')).includes(qn)) : invEntries.slice()).sort(cardCmp);
+            const pm = cardPer.mode, wide = !!qn || pm !== 'fatura';
+            const inPer = e => pm === 'todos' ? true : ((!cardPer.from || (e.date || '') >= cardPer.from) && (!cardPer.to || (e.date || '') <= cardPer.to));
+            const perEntries = pm === 'fatura' ? invEntries : C.entries.filter(e => e.cardId === card.id && inPer(e));
+            const catsHere = catSortList([...new Set((qn || pm !== 'fatura' ? C.entries.filter(e => e.cardId === card.id) : invEntries).map(e => e.category).filter(Boolean))]);
+            if (cardCat && !catsHere.includes(cardCat) && !C.entries.some(e => e.cardId === card.id && e.category === cardCat)) cardCat = '';
+            const entriesAll = (qn ? C.entries.filter(e => e.cardId === card.id && normKey([e.name, e.category, e.obs, Math.abs(Number(e.amount) || 0).toFixed(2), Math.abs(Number(e.amount) || 0).toFixed(2).replace('.', ','), fmtBR(e.date), e.invoice].join(' ')).includes(qn)) : perEntries.slice()).sort(cardCmp), entries = entriesAll.filter(e => !cardCat || e.category === cardCat);
             const total = invEntries.reduce((s, e) => s + (Number(e.amount) || 0), 0), shownTotal = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
             const tx = cardInvoiceTx(card.id, key);
             const paid = tx && tx.status === 'pago';
@@ -4917,7 +4922,7 @@
             const used = keys.reduce((s, k) => { const t = cardInvoiceTx(card.id, k); return s + ((t && t.status === 'pago') ? 0 : cardInvoiceTotal(card.id, k)); }, 0);
             const limit = Number(card.limit) || 0;
             const byCat = {};
-            entries.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + (Number(e.amount) || 0); });
+            entriesAll.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + (Number(e.amount) || 0); });
             const masked = card.number ? '•••• ' + String(card.number).replace(/\D/g, '').slice(-4) : '••••';
 
             container.innerHTML = `
@@ -4939,6 +4944,13 @@
                         <div class="text-center min-w-[170px]"><p class="text-[10px] uppercase font-bold text-slate-400">Fatura de</p><p class="font-bold text-slate-800 dark:text-white">${fmtYM(key)}</p></div>
                         <button onclick="cardNavMonth(1)" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-right"></i></button>
                         <input type="month" value="${key}" onchange="cardSetMonth(this.value)" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 w-full">
+                        <span class="text-[10px] uppercase font-bold text-slate-400">Analisar</span>
+                        <div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-bold">${[['fatura', 'Fatura mensal'], ['datas', 'Entre datas'], ['todos', 'Todo o período']].map(([k, l]) => `<button onclick="cardSetPer('${k}')" class="px-3 py-1.5 ${pm === k ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}">${l}</button>`).join('')}</div>
+                        ${pm === 'datas' ? `<input type="date" value="${cardPer.from}" onchange="cardPer.from=this.value;renderCurrentTabContent()" class="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs" title="Data inicial da compra"><span class="text-xs text-slate-400">até</span><input type="date" value="${cardPer.to}" onchange="cardPer.to=this.value;renderCurrentTabContent()" class="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs" title="Data final da compra">` : ''}
+                        <select onchange="cardSetCat(this.value)" class="px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs" title="Filtrar por categoria"><option value="">Todas as categorias</option>${catsHere.map(c => `<option value="${esc(c)}" ${c === cardCat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+                        ${cardCat ? `<button onclick="cardSetCat('')" class="text-xs underline text-teal-700">limpar categoria</button>` : ''}
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <button onclick="openCardEntryModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow"><i class="fa-solid fa-plus mr-1.5"></i>Novo lançamento</button>
@@ -4973,12 +4985,12 @@
                 </div>
 
                 <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 flex items-center space-x-2"><i class="fa-solid fa-receipt text-teal-500"></i><span>Lançamentos da fatura</span></h3>
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 flex items-center space-x-2"><i class="fa-solid fa-receipt text-teal-500"></i><span>${pm === 'fatura' ? 'Lançamentos da fatura' : pm === 'datas' ? 'Lançamentos do período' : 'Todos os lançamentos do cartão'}</span></h3>
                     <p class="text-[11px] text-slate-400 mb-3">Em Finanças aparece apenas "Cartão de Crédito" com o valor final desta fatura.</p>
                     <div class="relative mb-4"><i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i><input id="card-q" type="search" value="${esc(cardQ)}" oninput="cardSearch(this.value)" placeholder="Buscar em todas as faturas deste cartão (nome, categoria, valor, data)…" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                         ${qn ? `<p class="text-[11px] text-teal-700 dark:text-teal-300 mt-1.5">${entries.length} resultado(s) em todas as faturas · soma R$ ${money(shownTotal)} · <button onclick="cardSearch('');document.getElementById('card-q').value=''" class="underline font-semibold">limpar busca</button></p>` : ''}</div>
-                    ${Object.keys(byCat).length ? `<div class="flex flex-wrap gap-2 mb-4">${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="px-2.5 py-1 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"><b>${esc(k)}</b> R$ ${money(v)}</span>`).join('')}</div>` : ''}
-                    ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">${qn ? 'Nada encontrado para essa busca.' : 'Nenhum lançamento nesta fatura.'}</p></div>` : `
+                    ${Object.keys(byCat).length ? `<div class="flex flex-wrap gap-2 mb-4">${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<button onclick="cardSetCat(decodeURIComponent('${encodeURIComponent(k)}'))" title="Filtrar por esta categoria" class="px-2.5 py-1 rounded-lg text-xs ${k === cardCat ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700'}"><b>${esc(k)}</b> R$ ${money(v)}</button>`).join('')}</div>` : ''}
+                    ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">${qn ? 'Nada encontrado para essa busca.' : cardCat ? 'Nenhum lançamento nessa categoria.' : pm !== 'fatura' ? 'Nenhum lançamento neste período.' : 'Nenhum lançamento nesta fatura.'}</p></div>` : `
                     ${card.shared ? cardPayersSummary(entries) : ''}
                     <div id="card-sel-bar">${cardSelBar()}</div>
                     <div class="overflow-x-auto"><table class="w-full text-left text-sm">
@@ -4988,7 +5000,7 @@
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         ${entries.map(e => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
                             <td class="p-3"><input type="checkbox" class="card-sel" data-id="${e.id}" data-amt="${Number(e.amount) || 0}" onchange="cardSelUpdate()"></td>
-                            <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}${qn ? `<span class="block text-[10px] text-slate-400">fatura ${esc(fmtYM(e.invoice))}</span>` : ''}</td>
+                            <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}${wide ? `<span class="block text-[10px] text-slate-400">fatura ${esc(fmtYM(e.invoice))}</span>` : ''}</td>
                             <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}${(e.pagoPor || []).length ? `<div class="mt-1 flex flex-wrap gap-1">${e.pagoPor.map(p => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">${esc(p.name)} R$ ${money(p.amount)}</span>`).join('')}</div>` : ''}</td>
                             <td class="p-3"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(e.category)}</span></td>
                             <td class="p-3">${e.installment ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${e.installment.n}/${e.installment.total}</span>` : '<span class="text-slate-300">—</span>'}</td>
@@ -4999,7 +5011,7 @@
                                 <button onclick="deleteCardEntry('${e.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
                             </td></tr>`).join('')}
                         </tbody>
-                        <tfoot><tr><td colspan="6" class="p-3 text-right font-bold text-slate-500">${qn ? 'Total da busca' : 'Total da fatura'}</td><td class="p-3 font-extrabold text-rose-600">R$ ${money(shownTotal)}</td><td></td></tr></tfoot>
+                        <tfoot><tr><td colspan="6" class="p-3 text-right font-bold text-slate-500">${qn ? 'Total da busca' : (pm !== 'fatura' ? 'Total do período' : 'Total da fatura') + (cardCat ? ' (' + esc(cardCat) + ')' : '')}</td><td class="p-3 font-extrabold text-rose-600">R$ ${money(shownTotal)}</td><td></td></tr></tfoot>
                     </table></div>`}
                 </div>
             </div>`;
@@ -5028,6 +5040,8 @@
                 <span class="ml-auto flex items-center gap-3"><button onclick="openBulkEdit('card')" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold shadow"><i class="fa-solid fa-pen-to-square mr-1"></i>Editar mais</button>
                 <button onclick="cardSelAll(false)" class="text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button></span></div>` : cardSelBar();
         }
+        function cardSetPer(m) { cardPer.mode = m; if (m === 'datas' && !cardPer.from) { const d = new Date(); cardPer.to = localDateStr(d); d.setDate(1); cardPer.from = localDateStr(d); } renderCurrentTabContent(); }
+        function cardSetCat(c) { cardCat = c; renderCurrentTabContent(); }
         function cardSelAll(on) { document.querySelectorAll('.card-sel').forEach(b => b.checked = on); cardSelUpdate(); }
         function cardSortBy(k) { if (cardSort.k === k) cardSort.dir *= -1; else cardSort = { k, dir: k === 'amount' ? -1 : 1 }; renderCurrentTabContent(); }
         function cardTh(l, k, cls) { return `<th class="p-3 ${cls || ''} cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-200 whitespace-nowrap" onclick="cardSortBy('${k}')" title="Clique para ordenar">${l}${cardSort.k === k ? ` <i class="fa-solid fa-arrow-${cardSort.dir > 0 ? 'up' : 'down'} text-[9px]"></i>` : ''}</th>`; }
