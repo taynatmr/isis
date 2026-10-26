@@ -256,7 +256,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 62</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 64</div>
             </div>
         </aside>
 
@@ -367,7 +367,7 @@
         let lembreteFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
         let hobbyFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
         let financeFilterDate = localDateStr().slice(0, 7); // padrão: mês atual; '' = todos os meses
-        let obraFilterStatus = 'todos', obraHidePend = false, obraHideOther = false, obraPerson = '';
+        let obraFilterStatus = 'todos', obraHidePend = false, obraHideOther = false, obraPerson = '', obraSel = new Set(), obraVisible = [];
         let obraSortOrder = 'date-desc';
         let budgetFilterStatus = 'todos';
         let finFilterOpen = false, finSort = { k: 'date', dir: 1 };
@@ -3202,6 +3202,7 @@
             if (obraHidePend) contributionsList = contributionsList.filter(c => c.type !== 'pendente');
             if (obraHideOther) contributionsList = contributionsList.filter(c => c.type === 'pendente');
             contributionsList = sortContribs(contributionsList);
+            obraVisible = contributionsList.map(c => c.id);
 
             // Lista de Orçamentos
             let budgetsList = [...appData.habitacao.budgets];
@@ -3308,11 +3309,13 @@
                         </div>
 
                         ${contributionsList.length === 0 ? '<p class="text-sm text-slate-400 py-6 text-center">Nenhuma movimentação encontrada.</p>' : `
+                            <div id="obra-sel-bar">${obraSelBar()}</div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left text-sm">
                                     <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]">
                                         <tr>
-                                            <th onclick="setObraSortKey('pessoa')" class="p-3.5 rounded-l-xl cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Pessoa${sortIcon('pessoa')}</th>
+                                            <th class="p-3.5 rounded-l-xl w-8"><input type="checkbox" id="obra-sel-all" title="Selecionar todas as movimentações da lista" onchange="obraSelAll(this.checked)" ${obraVisible.length && obraVisible.every(i => obraSel.has(i)) ? 'checked' : ''}></th>
+                                            <th onclick="setObraSortKey('pessoa')" class="p-3.5 cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Pessoa${sortIcon('pessoa')}</th>
                                             <th onclick="setObraSortKey('tipo')" class="p-3.5 cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Tipo${sortIcon('tipo')}</th>
                                             <th onclick="setObraSortKey('desc')" class="p-3.5 cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Descrição${sortIcon('desc')}</th>
                                             <th onclick="setObraSortKey('date')" class="p-3.5 cursor-pointer select-none hover:text-teal-600 whitespace-nowrap">Data${sortIcon('date')}</th>
@@ -3325,6 +3328,7 @@
                                             const person = appData.habitacao.people.find(p => p.id === c.personId) || {name: c.type === 'pendente' ? '—' : 'Desconhecido'};
                                             return `
                                                 <tr class="hover:bg-slate-50/50">
+                                                    <td class="p-3.5"><input type="checkbox" ${obraSel.has(c.id) ? 'checked' : ''} onchange="obraSelToggle('${c.id}',this.checked)"></td>
                                                     <td class="p-3.5 font-bold text-slate-800 dark:text-white">${person.name}</td>
                                                     <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? 'Pendente' : c.fin ? 'Gasto' : 'Retirada'}</span></td>
                                                     <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}${c.linkKey ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">via Financeiro</span>' : ''}</td>
@@ -3505,6 +3509,24 @@
             saveAppData(); renderCurrentTabContent();
         }
 
+        // ---- soma das movimentações selecionadas (Habitação) ----
+        function obraSelBar() {
+            let n = 0, ap = 0, re = 0, pe = 0;
+            appData.habitacao.contributions.forEach(c => { if (!obraSel.has(c.id) || !obraVisible.includes(c.id)) return; n++; const v = Number(c.amount) || 0; if (c.type === 'aporte') ap += v; else if (c.type === 'retirada') re += v; else pe += v; });
+            if (!n) return `<p class="text-[11px] text-slate-400 mb-3"><i class="fa-regular fa-square-check mr-1"></i>Marque as movimentações para ver a soma.</p>`;
+            const net = ap - re;
+            return `<div class="flex flex-wrap items-center gap-x-6 gap-y-1 p-3.5 mb-3 rounded-2xl bg-teal-50 dark:bg-teal-950/40 text-sm text-slate-700 dark:text-slate-200">
+                <b>${n} selecionado${n > 1 ? 's' : ''}</b>
+                <span>Aportes: <b class="text-emerald-600">R$ ${money(ap)}</b></span>
+                <span>Retiradas: <b class="text-rose-600">R$ ${money(re)}</b></span>
+                ${pe ? `<span>Pendentes (previsão): <b class="text-amber-600">R$ ${money(pe)}</b></span>` : ''}
+                <span>Soma (aportes − retiradas): <b class="${net >= 0 ? 'text-teal-600' : 'text-rose-600'}">${net < 0 ? '− ' : ''}R$ ${money(Math.abs(net))}</b></span>
+                <button onclick="obraSelClear()" class="ml-auto text-xs font-semibold underline text-teal-700 dark:text-teal-300">Limpar seleção</button></div>`;
+        }
+        function obraSelRefresh() { const b = document.getElementById('obra-sel-bar'); if (b) b.innerHTML = obraSelBar(); const a = document.getElementById('obra-sel-all'); if (a) a.checked = obraVisible.length > 0 && obraVisible.every(i => obraSel.has(i)); }
+        function obraSelToggle(id, on) { if (on) obraSel.add(id); else obraSel.delete(id); obraSelRefresh(); }
+        function obraSelAll(on) { obraVisible.forEach(i => { if (on) obraSel.add(i); else obraSel.delete(i); }); renderCurrentTabContent(); }
+        function obraSelClear() { obraSel.clear(); renderCurrentTabContent(); }
         function setObraFilter(val) { obraFilterStatus = val; renderCurrentTabContent(); }
         function setObraSort(val) { obraSortOrder = val; renderCurrentTabContent(); }
         function setBudgetFilter(val) { budgetFilterStatus = val; renderCurrentTabContent(); }
@@ -7643,7 +7665,9 @@
         // ---------- Soma dos lançamentos selecionados ----------
         function finSelBar() {
             let n = 0, r = 0, d = 0;
-            finFiltered().forEach(t => { if (!finSel.has(t.id)) return; const e = finEffect(t, finF.acc); r += e.r; d += e.d; n++; });
+            finFiltered().forEach(t => { if (!finSel.has(t.id)) return; n++; const v = Number(t.amount) || 0;
+                // soma pelo TIPO (receita soma, despesa subtrai), qualquer conta ou categoria; só transferências dependem da conta
+                if (t.type === 'receita') r += v; else if (t.type === 'despesa') d += v; else { const e = finEffect(t, finF.acc); r += e.r; d += e.d; } });
             if (!n) return `<p class="text-[11px] text-slate-400 mb-3"><i class="fa-regular fa-square-check mr-1"></i>Marque os lançamentos na lista para ver a soma.</p>`;
             const net = r - d;
             return `<div class="flex flex-wrap items-center gap-x-6 gap-y-1 p-3.5 mb-3 rounded-2xl bg-teal-50 dark:bg-teal-950/40 text-sm text-slate-700 dark:text-slate-200">
