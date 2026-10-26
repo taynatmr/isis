@@ -103,6 +103,15 @@
         try { applyColors(JSON.parse(localStorage.getItem('meusistema_colors') || 'null')); } catch (e) { applyColors(null); }
     </script>
     <style>
+    .pl-item .pl-det{display:none}.pl-item.open .pl-det{display:block}.pl-item{cursor:pointer}
+    .pl-v-rows .pl-list{display:flex!important;flex-direction:column;gap:.375rem}
+    .pl-v-rows .pl-item{padding:.5rem .75rem!important;border-radius:.75rem!important}
+    .pl-v-rows .pl-item>*:not(:first-child){display:none}
+    .pl-v-rows .pl-item.open>*:not(:first-child){display:block}
+    .pl-v-rows .pl-item>:first-child{margin-bottom:0!important}
+    .pl-v-rows .pl-item.open>:first-child{margin-bottom:.5rem!important}
+    </style>
+    <style>
         /* texto sobre botões coloridos e menu lateral claro/escuro */
         .bg-teal-500.text-white, .bg-teal-600.text-white, .bg-teal-700.text-white { color: var(--on-ac) !important; }
         #sidebar { color: var(--sd-text); }
@@ -256,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 64</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 67</div>
             </div>
         </aside>
 
@@ -320,7 +329,8 @@
     </div>
 
     <!-- TOAST NOTIFICATION CONTAINER -->
-    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+    <button id="help-fab" onclick="openHelp()" title="Informações sobre esta tela" aria-label="Informações sobre esta tela" class="fixed bottom-3 right-3 z-40 w-7 h-7 rounded-full bg-teal-600/80 hover:bg-teal-600 text-white text-xs font-bold italic font-serif shadow flex items-center justify-center">i</button>
+    <div id="toast-container" class="fixed bottom-16 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
 
     <script>
         // --- CORE DATA STORE & INITIALIZATION ---
@@ -389,6 +399,29 @@
         let budgetView = 'bloco', budgetSelectMode = false, budgetSelected = [], budgetGroupOpen = {};
         let cardSelectedId = null, cardInvMonth = '', cardQ = '', _cardQT = null;
         let finF = { acc: '', cat: '', type: '', min: '', max: '', q: '', hab: false };
+        const FIN_COLS = [['desc', 'Descrição'], ['category', 'Categoria'], ['acc', 'Cartão/Conta'], ['date', 'Data'], ['amount', 'Valor'], ['status', 'Status'], ['att', 'Anexos'], ['act', 'Ações']];
+        let finColPref = { order: FIN_COLS.map(c => c[0]), hidden: [] };
+        (function finLoadPrefs() {   // lembra filtros, ordenação, período e colunas da última vez
+            try {
+                const P = JSON.parse(localStorage.getItem('isis_fin_prefs') || 'null'); if (!P) return;
+                if (P.f) finF = Object.assign(finF, P.f); if (P.sort && P.sort.k) finSort = P.sort; if (P.st) financeFilterStatus = P.st;
+                if (P.per && P.per.mode) { Object.assign(PER.fin, P.per); window._finPerSaved = true; }
+                if (P.cols) { const ord = (P.cols.order || []).filter(k => FIN_COLS.some(c => c[0] === k)); FIN_COLS.forEach(c => { if (!ord.includes(c[0])) ord.push(c[0]); }); finColPref = { order: ord, hidden: (P.cols.hidden || []).filter(k => k !== 'desc') }; }
+            } catch (e) {}
+        })();
+        function finPersist() { try { localStorage.setItem('isis_fin_prefs', JSON.stringify({ f: finF, sort: finSort, st: financeFilterStatus, per: PER.fin, cols: finColPref })); } catch (e) {} }
+        function finColsList() { return finColPref.order.filter(k => !finColPref.hidden.includes(k)); }
+        function openFinCols() {
+            showModal('Colunas do Financeiro', `<p class="text-xs text-slate-500 mb-3">Use as setas para mudar a ordem e o olho para mostrar/esconder. Fica salvo para a próxima vez.</p>
+                <div class="space-y-1.5">${finColPref.order.map((k, i) => { const l = FIN_COLS.find(c => c[0] === k)[1], h = finColPref.hidden.includes(k); return `<div class="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40 ${h ? 'opacity-50' : ''}"><span class="flex-1 text-sm font-semibold">${l}</span>
+                    <button onclick="finColMove(${i},-1)" ${i === 0 ? 'disabled' : ''} class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button onclick="finColMove(${i},1)" ${i === finColPref.order.length - 1 ? 'disabled' : ''} class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
+                    ${k === 'desc' ? '<span class="w-8"></span>' : `<button onclick="finColHide('${k}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid ${h ? 'fa-eye-slash' : 'fa-eye'}"></i></button>`}</div>`; }).join('')}</div>
+                <button onclick="finColReset()" class="mt-3 w-full bg-slate-100 dark:bg-slate-700 py-2 rounded-xl text-xs font-bold">Voltar ao padrão</button>`);
+        }
+        function finColMove(i, d) { const o = finColPref.order, j = i + d; if (j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j], o[i]]; finPersist(); openFinCols(); renderCurrentTabContent(); }
+        function finColHide(k) { const h = finColPref.hidden, i = h.indexOf(k); if (i >= 0) h.splice(i, 1); else h.push(k); finPersist(); openFinCols(); renderCurrentTabContent(); }
+        function finColReset() { finColPref = { order: FIN_COLS.map(c => c[0]), hidden: [] }; finPersist(); openFinCols(); renderCurrentTabContent(); }
         let contaSel = null;
         let dashAcc = '', dashMode = 'saldo';
         let dashBase = 'geral', dashMonth = localDateStr().slice(0, 7); // início: geral do mês atual
@@ -966,7 +999,7 @@
             else if (tabId === 'agenda' && prevTab !== 'agenda') agTab = 'compromissos';
             currentActiveTab = tabId;
             if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; habCasaOpen = false; habEvoOpen = false; }
-            if (tabId === 'financeiro') { financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); } // sempre abre no mês atual cheio
+            if (tabId === 'financeiro' && !window._finPerSaved) { financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); } // sempre abre no mês atual cheio
             if (tabId !== 'saude') { saudeDiagOpen = false; saudeVacOpen = false; saudeCareOpen = false; saudeGymOpen = false; }
             if (tabId !== 'hobbies') { recOpen = false; recViewId = null; }
             if (tabId !== 'docs') { docFolderId = null; docUnlocked.clear(); } // pastas com senha voltam a ficar trancadas
@@ -1102,18 +1135,7 @@
 
                     <!-- Quick Metrics Grid -->
                     <div class="dash-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <p class="text-xs font-medium text-slate-400 uppercase">Água Hoje</p>
-                                <h3 class="text-xl font-bold text-slate-800 dark:text-white mt-1">${getWater(localDateStr())} <span class="text-xs font-normal text-slate-500">/ ${appData.saude.waterGoal} ml</span></h3>
-                                <div class="mt-2 flex space-x-1">
-                                    <button onclick="addWater(250)" class="bg-teal-50 dark:bg-teal-950 text-teal-600 px-2 py-0.5 rounded text-[10px] font-bold">+250ml</button>
-                                </div>
-                            </div>
-                            <div class="w-12 h-12 rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-500 flex items-center justify-center text-xl">
-                                <i class="fa-solid fa-glass-water"></i>
-                            </div>
-                        </div>
+                        ${dashDueHtml()}
 
                         <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
@@ -4094,6 +4116,7 @@
                                 <input type="text" id="profile-name-input" value="${appData.profile.name}" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                             </div>
                             <button onclick="saveProfileSettings()" class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow">Salvar Alterações</button>
+                            <div class="pt-4 border-t border-slate-100 dark:border-slate-700"><button onclick="openCatManager()" class="bg-slate-100 dark:bg-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold"><i class="fa-solid fa-tags mr-1.5"></i>Editar categorias</button><p class="text-[11px] text-slate-400 mt-1.5">Inserir, renomear, excluir e ordenar as categorias de todo o sistema.</p></div>
                         </div>
                     </div>
                 </div>
@@ -4309,7 +4332,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Categoria</label>
-                            <input type="text" id="fin-category" list="fin-cat-list" value="${esc(t.category)}" oninput="this.dataset.manual='1'" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            ${catSelect('fin-category', t.category, { req: 1, extra: ['Despesa da casa', 'Transferência'], cls: 'w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm' })}
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -5087,7 +5110,7 @@
 
         // --- Cartão: categorias ---
         function openCardCategories() {
-            const cats = appData.cartao.categories;
+            const cats = catSortList(appData.cartao.categories);
             showModal('Categorias do cartão', `
                 <div class="space-y-2 mb-4">
                     ${cats.map(c => `<div class="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 text-sm"><span>${esc(c)}</span><button onclick="removeCardCategory(decodeURIComponent('${encodeURIComponent(c)}'))" class="text-slate-400 hover:text-rose-600"><i class="fa-solid fa-xmark"></i></button></div>`).join('')}
@@ -5113,7 +5136,7 @@
 
         // --- Cartão: lançamentos ---
         function catSelectHtml(selected) {
-            const cats = appData.cartao.categories.slice();
+            const cats = catSortList(appData.cartao.categories);
             if (selected && !cats.includes(selected)) cats.push(selected);
             return `<select id="ce-cat" onchange="document.getElementById('ce-newcat').classList.toggle('hidden', this.value !== '__new__')" class="${INP}">
                 ${cats.map(c => `<option value="${esc(c)}" ${c === selected ? 'selected' : ''}>${esc(c)}</option>`).join('')}
@@ -5402,7 +5425,7 @@
                     <td class="p-1"><input value="${esc(r.name)}" onchange="cardImportRows[${i}].name=this.value" class="w-full min-w-[140px] px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${r.note ? `<span class="text-[10px] text-amber-600">${r.note}</span>` : ''}</td>
                     <td class="p-1"><select onchange="cardImportRows[${i}].credit=this.value==='c';this.className=this.className.replace(/text-(emerald|rose)-600/,this.value==='c'?'text-emerald-600':'text-rose-600')" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-bold ${r.credit ? 'text-emerald-600' : 'text-rose-600'}"><option value="p" ${r.credit ? '' : 'selected'}>Compra</option><option value="c" ${r.credit ? 'selected' : ''}>Crédito (estorno/desconto)</option></select></td>
                     <td class="p-1"><input type="number" step="0.01" value="${r.amount.toFixed(2)}" onchange="cardImportRows[${i}].amount=Number(this.value)||0" class="w-24 px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"></td>
-                    <td class="p-1"><select onchange="ciCatChange(${i},this)" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${(C.categories.includes(r.category) ? C.categories : C.categories.concat([r.category])).map(c => `<option value="${esc(c)}" ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="__new__">➕ Nova categoria…</option></select></td>
+                    <td class="p-1"><select onchange="ciCatChange(${i},this)" class="px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">${catSortList(C.categories.includes(r.category) ? C.categories : C.categories.concat([r.category])).map(c => `<option value="${esc(c)}" ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="__new__">➕ Nova categoria…</option></select></td>
                 </tr>`).join('')}
                 </tbody></table></div>
                 <button onclick="confirmCardImport()" class="w-full mt-4 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Importar <span id="ci-count"></span></button>`);
@@ -5415,7 +5438,7 @@
             if (!nm) { renderCardImportPreview(); return; }
             const C = appData.cartao, name = catResolveNew(nm);
             const ex = C.categories.find(c => normKey(c) === normKey(name));
-            if (ex) cardImportRows[i].category = ex; else { C.categories.push(name); cardImportRows[i].category = name; saveAppData(); }
+            if (ex) cardImportRows[i].category = ex; else { C.categories.push(name); C.categories = catSortList(C.categories); cardImportRows[i].category = name; saveAppData(); }
             renderCardImportPreview();
         }
         function updateImportCount() { const n = cardImportRows.filter(r => r.on).length, el = document.getElementById('ci-count'); if (el) el.textContent = `${n} lançamento(s)`; }
@@ -5688,12 +5711,40 @@
             appData.financeiro.transactions.forEach(t => { if (!t.cardInvoice && t.type !== 'transferencia' && t.category && descKey(t.desc) === k && (t.date || '') >= bd) { bd = t.date || ''; best = t.category; } });
             return best;
         }
+        function catSortList(a) {   // A–Z, ou a ordem escolhida em Configurações › Editar categorias
+            const reg = appData.cartao.categories || [], man = !!appData.cartao.catManual;
+            return a.slice().sort((x, y) => { if (man) { const i = reg.indexOf(x), j = reg.indexOf(y); if (i >= 0 || j >= 0) return (i < 0 ? 1e6 : i) - (j < 0 ? 1e6 : j) || x.localeCompare(y, 'pt-BR'); } return x.localeCompare(y, 'pt-BR'); });
+        }
+        function catRegister(name) {
+            name = String(name || '').trim(); if (!name) return '';
+            const ex = (appData.cartao.categories || []).find(c => normKey(c) === normKey(name)); if (ex) return ex;
+            appData.cartao.categories.push(name); if (!appData.cartao.catManual) appData.cartao.categories = catSortList(appData.cartao.categories); saveAppData(); return name;
+        }
+        // lista suspensa de categorias (ordem alfabética) + "Nova categoria…"; vale em qualquer tela
+        function catSelect(id, selected, o) {
+            o = o || {}; let cats = catAllNames().concat(o.extra || []);
+            if (selected && !cats.some(c => c === selected)) cats.push(selected);
+            cats = catSortList(cats.filter((c, i) => cats.indexOf(c) === i));
+            return `<select id="${id}" data-prev="${esc(selected || '')}" ${o.req ? 'required' : ''} onchange="catPick(this)" class="${o.cls || INP}">${o.blank ? `<option value="">${esc(o.blank)}</option>` : (selected ? '' : '<option value="" disabled selected>Selecione…</option>')}${cats.map(c => `<option value="${esc(c)}" ${c === selected ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="__new__">➕ Nova categoria…</option></select>`;
+        }
+        function catSetVal(el, v) {
+            if (!el) return; if (v && ![...el.options].some(o => o.value === v)) { const op = document.createElement('option'); op.value = v; op.textContent = v; el.insertBefore(op, el.querySelector('option[value="__new__"]')); }
+            el.value = v; el.dataset.prev = v;
+        }
+        function catPick(el) {
+            if (el.value !== '__new__') { el.dataset.prev = el.value; return; }
+            const n = prompt('Nome da nova categoria:'); const prev = el.dataset.prev || '';
+            if (!n || !n.trim()) { el.value = prev; return; }
+            const r = catRegister(catResolveNew(n.trim())); if (!r) { el.value = prev; return; }
+            catSetVal(el, r); el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
         function catAllNames() {
             const s = new Set(appData.cartao.categories || []);
+            ((appData.plano && appData.plano.recs) || []).forEach(r => { if (r.category) s.add(r.category); });
             appData.financeiro.transactions.forEach(t => { if (t.category && !t.cardInvoice && t.type !== 'transferencia') s.add(t.category); });
             appData.cartao.entries.forEach(e => { if (e.category) s.add(e.category); });
             (appData.plano && appData.plano.budgets || []).forEach(b => { if (b.category) s.add(b.category); });
-            return [...s].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            return catSortList([...s].filter(Boolean));
         }
         function catCount(c) { return appData.financeiro.transactions.filter(t => t.category === c && !t.cardInvoice).length + appData.cartao.entries.filter(e => e.category === c).length; }
         function catLev(a, b) { const m = a.length, n = b.length; let p = Array.from({ length: n + 1 }, (_, j) => j); for (let i = 1; i <= m; i++) { const c = [i]; for (let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; } return p[n]; }
@@ -5710,7 +5761,38 @@
             appData.financeiro.transactions.forEach(t => { if (t.category === from) t.category = to; });
             appData.cartao.entries.forEach(e => { if (e.category === from) e.category = to; });
             const cc = appData.cartao.categories.map(c => c === from ? to : c); appData.cartao.categories = cc.filter((c, i) => cc.indexOf(c) === i);
-            if (appData.plano) (appData.plano.budgets || []).forEach(b => { if (b.category === from) b.category = to; });
+            if (appData.plano) { (appData.plano.budgets || []).forEach(b => { if (b.category === from) b.category = to; }); (appData.plano.recs || []).forEach(b => { if (b.category === from) b.category = to; }); }
+        }
+        // ---- Configurações › Editar categorias: inserir, renomear, excluir e ordenar ----
+        function openCatManager() {
+            const C = appData.cartao; catSyncReg();
+            const cats = C.categories.slice();
+            showModal('Editar categorias', `<p class="text-xs text-slate-500 mb-3">Vale para Financeiro, Cartão e Planejamento. ${C.catManual ? 'Ordem <b>manual</b>.' : 'Ordem <b>A–Z</b> (ao usar as setas passa a ser manual).'}</p>
+                <form onsubmit="catMgrAdd(event)" class="flex gap-2 mb-3"><input id="cm-new" required placeholder="Nova categoria" class="${INP}"><button class="bg-teal-600 text-white px-4 rounded-xl text-sm font-bold">Adicionar</button></form>
+                <div class="space-y-1.5 max-h-[50vh] overflow-y-auto">${cats.map((c, i) => `<div class="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40"><span class="flex-1 min-w-0 truncate text-sm font-semibold">${esc(c)} <span class="text-[10px] font-normal text-slate-400">${catCount(c)}</span></span>
+                    <button onclick="catMgrMove(${i},-1)" ${i === 0 ? 'disabled' : ''} class="px-2 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button onclick="catMgrMove(${i},1)" ${i === cats.length - 1 ? 'disabled' : ''} class="px-2 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
+                    <button onclick="catMgrRename(${i})" class="px-2 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="catMgrDel(${i})" class="px-2 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button></div>`).join('') || '<p class="text-sm text-slate-400 text-center py-4">Nenhuma categoria.</p>'}</div>
+                <div class="flex gap-2 mt-3"><button onclick="catMgrAZ()" class="flex-1 bg-slate-100 dark:bg-slate-700 py-2 rounded-xl text-xs font-bold"><i class="fa-solid fa-arrow-down-a-z mr-1"></i>Ordenar A–Z</button><button onclick="openCatMerge()" class="flex-1 bg-slate-100 dark:bg-slate-700 py-2 rounded-xl text-xs font-bold"><i class="fa-solid fa-code-merge mr-1"></i>Unificar parecidas</button></div>`);
+        }
+        function catSyncReg() { const C = appData.cartao; catAllNames().forEach(c => { if (!C.categories.includes(c)) C.categories.push(c); }); if (!C.catManual) C.categories = catSortList(C.categories); }
+        function catMgrDone() { saveAppData(); openCatManager(); renderCurrentTabContent(); }
+        function catMgrAdd(e) { e.preventDefault(); const n = document.getElementById('cm-new').value.trim(); if (!n) return; const r = catResolveNew(n); catRegister(r); openCatManager(); }
+        function catMgrMove(i, d) { const C = appData.cartao, a = C.categories, j = i + d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; C.catManual = true; catMgrDone(); }
+        function catMgrAZ() { const C = appData.cartao; C.catManual = false; C.categories = catSortList(C.categories); catMgrDone(); }
+        function catMgrRename(i) {
+            const C = appData.cartao, old = C.categories[i], n = (prompt('Novo nome da categoria:', old) || '').trim(); if (!n || n === old) return;
+            const ex = C.categories.find(c => c !== old && normKey(c) === normKey(n));
+            if (ex) { if (!confirm(`"${ex}" já existe. Juntar "${old}" em "${ex}"?`)) return; catRename(old, ex); C.categories = C.categories.filter(c => c !== old); }
+            else { catRename(old, n); }
+            catMgrDone();
+        }
+        function catMgrDel(i) {
+            const C = appData.cartao, old = C.categories[i], n = catCount(old);
+            if (n) { if (!confirm(`"${old}" é usada em ${n} lançamento(s). Eles passarão para "Outros". Excluir mesmo assim?`)) return; catRegister('Outros'); catRename(old, 'Outros'); }
+            else if (!confirm(`Excluir a categoria "${old}"?`)) return;
+            C.categories = C.categories.filter(c => c !== old); catMgrDone();
         }
         function openCatMerge() {
             const acc = s => /[^\x00-\x7F]/.test(s) ? 1 : 0, all = catAllNames().sort((a, b) => (catCount(b) - catCount(a)) || (acc(b) - acc(a))), used = new Set(), groups = [];
@@ -5729,7 +5811,7 @@
         }
         function finDescSuggest() {
             const d = document.getElementById('fin-desc'), c = document.getElementById('fin-category'); if (!d || !c || c.dataset.manual === '1') return;
-            const last = catLastUsed(d.value); if (last) { c.value = last; c.dataset.auto = '1'; }
+            const last = catLastUsed(d.value); if (last) { catSetVal(c, last); c.dataset.auto = '1'; }
         }
         function normKey(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
         function parseDateAny(v) {
@@ -6059,9 +6141,13 @@
             }
 
             // Saúde
-            const goal = Number(appData.saude.waterGoal || 3000), w = getWater(today);
-            if (w < goal) add('fa-droplet', 'Saúde', `Água hoje: ${w} ml de ${goal} ml. Faltam ${goal - w} ml, que tal um copo agora?`, w < goal / 2 ? 'warn' : 'info');
-            else add('fa-droplet', 'Saúde', 'Meta de água de hoje batida. Parabéns!', 'good');
+            try {
+                const A = avisosCalc(), RD = Math.max(0, Number(plano().remindDays) || 0);
+                const its = [].concat(A.faturasAtr, A.contasAtr, A.contasHoje, A.faturasProx.filter(i => i.dias <= RD), A.contasProx).sort((x, y) => x.dias - y.dias);
+                const lb = i => i.dias < 0 ? `venceu há ${-i.dias}d` : i.dias === 0 ? 'vence hoje' : `em ${i.dias}d`;
+                if (its.length) add('fa-file-invoice-dollar', 'Contas', `Contas vencidas / a vencer (${RD} dia${RD === 1 ? '' : 's'}): ` + its.slice(0, 6).map(i => `${esc(i.nome)} (${lb(i)}, ${R(i.valor || 0)})`).join('; ') + (its.length > 6 ? ` e mais ${its.length - 6}` : '') + '.', its.some(i => i.dias < 0) ? 'warn' : 'info');
+                else add('fa-file-invoice-dollar', 'Contas', `Nenhuma conta vencida nem a vencer em ${RD} dia(s).`, 'good');
+            } catch (e) {}
             const taken = (appData.saude.medLog[today] || []);
             const missing = appData.saude.meds.filter(m => !taken.includes(m.id) && medActiveToday(m) && !((Number(m.cadN) > 1 && m.cadUn !== 'horas') || (m.cadUn === 'horas' && Number(m.cadN) > 24)));
             if (missing.length) add('fa-pills', 'Saúde', `Remédio(s) ainda não marcado(s) hoje: ${missing.map(m => esc(m.name) + (medInfo(m, today).dose ? ' ' + esc(medInfo(m, today).dose) : '') + ' (' + esc(m.time) + ')').join(', ')}.`, 'warn');
@@ -6074,6 +6160,61 @@
             const hb = appData.hobbies.filter(x => x.status !== 'Finalizado');
             if (hb.length) add('fa-heart', 'Hobbies', `${hb.length} hobby(s) em andamento. Reservar um horário fixo na semana ajuda a tirá-los do papel.`);
             return tips;
+        }
+        // =====================================================
+        // AJUDA — botão "i" em cada tela + perguntas (busca local nos tópicos, funciona offline)
+        // =====================================================
+        const HELP = {
+            dashboard: { t: 'Resumo (início)', o: 'Visão geral do dia: contas, saldo, fundo da obra, cartão, compromissos e lembretes.', f: 'Puxa de Planejamento › Vencimentos (contas a vencer, no prazo de dias escolhido lá), Financeiro (receitas, despesas e saldo do período), Habitação (fundo), Cartão (faturas), Agenda e Lembretes.', b: [['ISIS', 'Dicas e sugestões automáticas (contas, orçamento, saúde, lembretes).'], ['Novo Compromisso', 'Cria um compromisso na Agenda.'], ['Olho / Oculto', 'Esconde os valores em R$ da tela.'], ['Cartões de contas a vencer', 'Clique para abrir Planejamento › Vencimentos.'], ['Mural de aniversariantes', 'Mostra aniversários cadastrados em Agenda › Contatos (blocos, lista ou mês).'], ['Categorias mais consumidas', 'Soma os gastos por categoria no período.']] },
+            saude: { t: 'Saúde e Bem-estar', o: 'Controle de remédios, água, exercícios, vacinas, diagnósticos e autocuidado.', f: 'Tudo é cadastrado aqui mesmo; as dicas da ISIS usam estes dados (remédios não marcados, meta de água).', b: [['Inserir Remédio', 'Cadastra remédio/vitamina com horário, dose e frequência.'], ['Calendário (1–31)', 'Marque o dia para ver/registrar remédios tomados.'], ['+250ml / +500ml / Adicionar ao dia', 'Registra a água bebida; "Definir total do dia" substitui o valor.'], ['Diagnóstico, Vacinas, Exercícios, Autocuidado', 'Abrem as áreas específicas, cada uma com seu cadastro.']] },
+            financeiro: { t: 'Financeiro', o: 'Todas as receitas, despesas e transferências entre contas.', f: 'Os lançamentos são digitados aqui, importados do Extrato (OFX/CSV) ou gerados por Recorrentes, Cartão (faturas) e Habitação/Casa. Os cartões do topo somam o período escolhido; "Saldo total" soma as contas (contas de Habitação não entram).', b: [['Dia / Mês / Ano / Todos', 'Define o período mostrado; as setas mudam de mês.'], ['Colunas', 'Reordena e esconde colunas da tabela; fica salvo.'], ['Filtro', 'Filtra por conta, categoria, tipo, valor e texto. Os filtros ficam salvos até você limpar.'], ['Análise', 'Gráficos e comparativos do período.'], ['Inserir Transação', 'Novo lançamento (receita, despesa ou transferência; pode parcelar, ser recorrente, ligar a dívida ou à Habitação).'], ['Extrato', 'Importa extrato bancário OFX ou CSV.'], ['Caixas de seleção', 'Selecione vários: aparece a soma (receita soma, despesa subtrai) e o botão "Editar mais" para alterar nome, categoria, data etc. em lote.'], ['Status (Pago/Pendente)', 'Clique para alternar.'], ['Anexar', 'Guarda comprovantes no lançamento.'], ['Lápis / Copiar / Lixeira', 'Editar, duplicar ou excluir.']] },
+            cartao: { t: 'Cartão de Crédito', o: 'Cadastro de cartões, lançamentos e faturas.', f: 'A fatura de cada mês vira um lançamento pendente no Financeiro (com vencimento) e alimenta os avisos de contas a vencer.', b: [['Novo cartão / Editar cartão', 'Nome, fechamento, vencimento, limite e se é compartilhado (quem pagou).'], ['Novo lançamento', 'Compra no cartão, com parcelas e categoria.'], ['Importar fatura', 'Lê a fatura (arquivo) e mostra prévia para ajustar categoria, "de quem" e dedutível antes de importar.'], ['Categorias', 'Gerencia as categorias do cartão (veja também Configurações › Editar categorias).'], ['Busca', 'Procura lançamentos pelo texto.']] },
+            contas: { t: 'Contas (cartões/contas bancárias)', o: 'Cadastro das contas e cartões de débito usados no Financeiro.', f: 'O saldo vem dos lançamentos do Financeiro ligados a cada conta.', b: [['Novo cartão', 'Cadastra conta/cartão de débito (incluindo contas de Habitação, que ficam fora do saldo geral).'], ['Lançar no Financeiro', 'Abre um novo lançamento já ligado à conta.'], ['Dia / Mês / Ano / Todos', 'Período do extrato da conta.']] },
+            agenda: { t: 'Agenda', o: 'Compromissos, lembretes e contatos (com aniversários).', f: 'Os compromissos de hoje e lembretes pendentes aparecem no Resumo e nas dicas da ISIS.', b: [['Compromissos / Lembretes / Contatos', 'Alternam as três áreas.'], ['Calendário / Lista', 'Modo de visualização.'], ['Hoje', 'Volta para o dia atual.'], ['Inserir Compromisso', 'Novo item com data, hora e repetição.']] },
+            notas: { t: 'Notas', o: 'Anotações livres.', f: 'Ficam só aqui (e na nuvem, se logado).', b: [['Cartões / Linhas', 'Modo de visualização das notas.'], ['Nova nota', 'Cria uma anotação.']] },
+            hobbies: { t: 'Hobbies e projetos', o: 'Acompanhamento de hobbies, projetos e receitas.', f: 'Cadastro próprio; contam nas dicas da ISIS (hobbies em andamento).', b: [['Todos / Somente Ativos / Finalizados / Receitas', 'Filtros por situação.'], ['Inserir Hobby / Projeto', 'Novo item com categoria e status.']] },
+            habitacao: { t: 'Habitação e construção', o: 'Controle da obra/casa: fundo, aportes, orçamentos, fornecedores, liberações, despesas da casa, dívidas, evolução e documentos.', f: 'Aportes e despesas marcadas como "Habitação" no Financeiro aparecem aqui; despesas da casa também alimentam o acerto de contas em Planejamento › Casal.', b: [['Aportar', 'Registra aporte de cada pessoa no fundo.'], ['Incluir Orçamento', 'Cadastra orçamento de fornecedor (aprovado/pendente); a ISIS compara com o fundo.'], ['Fornecedores / Liberações', 'Cadastro de fornecedores e liberações do financiamento.'], ['Despesas da casa', 'Gastos do dia a dia da casa, com "quem pagou". Tem seleção com soma.'], ['Dívidas, Evolução, Documentos', 'Áreas de apoio da obra.']] },
+            docs: { t: 'Documentos pessoais', o: 'Pastas e arquivos de documentos (algumas pastas podem ter senha).', f: 'Arquivos ficam no aparelho e na nuvem da sua conta.', b: [['Nova Pasta', 'Cria pasta (opcionalmente com senha).'], ['Documentos sem pasta', 'Arquivos soltos.']] },
+            configuracoes: { t: 'Configurações', o: 'Preferências do sistema.', f: 'Salva no seu aparelho e na conta.', b: [['Salvar Alterações', 'Grava o nome do casal exibido no Resumo.'], ['Editar categorias', 'Inserir, renomear, excluir e ordenar as categorias de todo o sistema.'], ['Notificações / Ver avisos agora', 'Liga os avisos de contas, faturas e lembretes.'], ['Sua conta e a nuvem', 'Sincronizar agora, sair ou excluir a conta.'], ['Cores do sistema', 'Troca/reseta as cores.'], ['Relatórios (Excel)', 'Exporta/importa dados em planilha; há um modelo de importação.']] },
+            backup: { t: 'Backup e sincronização', o: 'Cópias de segurança e nuvem.', f: 'Pasta local (Chrome/Edge), arquivo .json e Google Drive.', b: [['Sincronizar agora', 'Envia/recebe da nuvem.'], ['Selecionar Pasta de Backup Local', 'Salva cópia automática numa pasta do computador.'], ['Baixar backup agora / Restaurar de arquivo .json', 'Backup manual.'], ['Trazer do Drive', 'Importa dados antigos do Google Drive.']] },
+            'pl:orcamento': { t: 'Planejamento › Orçamento', o: 'Define quanto pode gastar por categoria e compara com o gasto do mês.', f: 'O gasto vem do Financeiro (despesas) e do Cartão, na categoria e no mês escolhidos, respeitando Todos/Tayná/Samuel/Casa.', b: [['Novo limite', 'Categoria, Valor total, Período e Guardar mensal (os dois últimos são opcionais e só aparecem ao clicar no item).'], ['Setas do mês', 'Mudam o mês analisado.'], ['Gastos sem limite (+)', 'Cria o limite para uma categoria que já tem gasto.'], ['Cartões / Linhas', 'Modo de visualização (vale para todo o Planejamento).']] },
+            'pl:fluxo': { t: 'Planejamento › Fluxo projetado', o: 'Projeta o saldo dos próximos meses.', f: 'Parte do saldo atual e soma receitas/despesas recorrentes, pendentes, faturas e parcelas de dívidas.', b: [['Meses a projetar', 'Quantidade de meses à frente.']] },
+            'pl:recorrentes': { t: 'Planejamento › Recorrentes', o: 'Contas e receitas que se repetem (assinaturas, aluguel, salário...).', f: 'Cada mês o sistema lança a ocorrência no Financeiro (pendente) e permite lançar adiantado.', b: [['Nova recorrente', 'Nome, valor, dia, frequência, conta, categoria, IR, alteração de valor a partir de uma data e lançamento adiantado.'], ['Lápis / Lixeira', 'Editar ou excluir. Recorrentes criadas no Financeiro (caixa "Recorrente") também aparecem aqui.']] },
+            'pl:vencimentos': { t: 'Planejamento › Vencimentos', o: 'Calendário de contas a pagar/receber e faturas.', f: 'Puxa lançamentos pendentes do Financeiro, faturas de cartão e recorrentes. O campo "avisar com X dias" define o prazo usado também no Resumo e nos avisos.', b: [['Dias de aviso', 'Quantos dias antes do vencimento a conta passa a aparecer como "a vencer".'], ['Dia do calendário', 'Mostra os itens do dia.']] },
+            'pl:metas': { t: 'Planejamento › Metas', o: 'Objetivos de poupança com prazo.', f: 'Aportes digitados aqui calculam quanto falta e quanto guardar por mês.', b: [['Nova meta', 'Valor-alvo, prazo e valor inicial.'], ['Aportar', 'Registra um depósito na meta.']] },
+            'pl:patrimonio': { t: 'Planejamento › Patrimônio', o: 'Bens, investimentos e dívidas formando o patrimônio líquido.', f: 'Soma bens cadastrados aqui + investimentos − dívidas (de Planejamento). Cada bem tem um dono (Tayná, Samuel ou Casa).', b: [['Novo bem', 'Imóvel, veículo etc., com valor e dono.'], ['Salvar foto do patrimônio', 'Guarda o valor do mês para ver a evolução.']] },
+            'pl:investimentos': { t: 'Planejamento › Investimentos', o: 'Aplicações (CDB, LCI/LCA, Tesouro, fundos, poupança...), rendimento e simulador.', f: 'Saldo e aportes digitados aqui; rendimento estimado a partir do % do CDI.', b: [['Novo investimento', 'Tipo, % do CDI, saldo, valor aplicado e data.'], ['Aportar / Atualizar saldo', 'Registra novo aporte ou o saldo conferido.'], ['Simulador', 'Projeta o rendimento líquido de IR por prazo.']] },
+            'pl:dividas': { t: 'Planejamento › Dívidas', o: 'Financiamentos e empréstimos.', f: 'Dados cadastrados aqui; ao dar baixa por um lançamento no Financeiro ("pagamento de dívida"), os valores pagos e parcelas restantes se atualizam sozinhos.', b: [['Nova dívida', 'Valor original, já pago/falta pagar, parcela, quantidade de parcelas e juros (opcional; sem juros informado não calcula).'], ['Simular', 'Testa amortização extra.']] },
+            'pl:casal': { t: 'Planejamento › Casal', o: 'Divisão das despesas da casa e acerto de contas entre Tayná e Samuel.', f: 'Usa despesas da Casa (Financeiro, Cartão e Habitação) com "quem pagou" informado e a divisão definida (ex.: 50/50). Despesas sem "quem pagou" ficam de fora e são avisadas.', b: [['Registrar acerto', 'Lança o pagamento entre os dois e zera a diferença.'], ['Divisão', 'Define a proporção de cada um.']] },
+            'pl:analise': { t: 'Planejamento › Análise', o: 'Comparativos e gráficos do que foi gasto.', f: 'Vem do Financeiro e do Cartão.', b: [['Mês / Ano', 'Escolhe o tipo de comparação.']] },
+            'pl:ir': { t: 'Planejamento › Imposto de Renda', o: 'Reúne despesas dedutíveis e rendimentos do ano.', f: 'Lançamentos do Financeiro/Cartão marcados como "Dedutível" (saúde, educação etc.) e investimentos.', b: [['Ano', 'Escolhe o ano-base.']] }
+        };
+        function helpKey() { return currentActiveTab === 'planejamento' ? 'pl:' + plTab : currentActiveTab; }
+        function helpToks(s) { return normKey(s).split(/[^a-z0-9]+/).filter(w => w.length > 2 && !['que', 'para', 'com', 'uma', 'como', 'dos', 'das', 'nao', 'por', 'onde', 'qual', 'quais', 'tem', 'esta', 'fazer', 'posso'].includes(w)); }
+        function helpBody(k) {
+            const h = HELP[k]; if (!h) return '<p class="text-sm text-slate-500">Ainda não há explicação para esta tela.</p>';
+            return `<p class="text-sm mb-3">${h.o}</p>
+                <p class="text-[11px] font-bold uppercase text-slate-400 mb-1">De onde vêm as informações</p><p class="text-sm mb-3">${h.f}</p>
+                <p class="text-[11px] font-bold uppercase text-slate-400 mb-1">Botões e campos</p>
+                <ul class="space-y-1.5 mb-1">${h.b.map(([a, d]) => `<li class="text-sm"><b>${a}</b> — ${d}</li>`).join('')}</ul>`;
+        }
+        function openHelp() {
+            const k = helpKey(), h = HELP[k];
+            showModal('ℹ️ ' + (h ? h.t : 'Ajuda'), `<div class="max-h-[50vh] overflow-y-auto pr-1">${helpBody(k)}</div>
+                <form onsubmit="helpAsk(event)" class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700"><label class="${LBL}">Ficou com dúvida? Pergunte</label>
+                    <div class="flex gap-2"><input id="help-q" required placeholder="Ex.: como baixar uma dívida?" class="${INP}"><button class="bg-teal-600 text-white px-4 rounded-xl text-sm font-bold">Perguntar</button></div></form>
+                <div id="help-ans" class="mt-3 space-y-2"></div>`);
+        }
+        function helpAsk(e) {
+            e.preventDefault(); const q = document.getElementById('help-q').value, T = helpToks(q), cur = helpKey();
+            const syn = { divida: ['dividas', 'financiamento', 'baixa', 'parcela'], baixar: ['baixa', 'pagamento', 'quitar'], apagar: ['excluir', 'lixeira'], deletar: ['excluir', 'lixeira'], remover: ['excluir', 'lixeira'], mudar: ['editar', 'alterar'], trocar: ['editar', 'alterar'], categoria: ['categorias'], backup: ['backup', 'pasta', 'restaurar'], senha: ['pasta', 'documentos'], gasto: ['despesa', 'despesas'], conta: ['contas', 'vencimentos'] };
+            let T2 = T.slice(); T.forEach(w => (syn[w] || []).forEach(x => T2.push(x)));
+            const sc = Object.keys(HELP).map(k => {
+                const h = HELP[k], txt = normKey([h.t, h.o, h.f, h.b.map(x => x.join(' ')).join(' ')].join(' ')); let s = 0;
+                T2.forEach(w => { if (txt.includes(w)) s += normKey(h.t).includes(w) ? 3 : 1; }); if (k === cur) s += 0.5; return { k, s };
+            }).filter(x => x.s >= 1).sort((a, b) => b.s - a.s).slice(0, 3);
+            const out = document.getElementById('help-ans');
+            out.innerHTML = sc.length ? sc.map(x => { const h = HELP[x.k], hit = h.b.filter(([a, d]) => T2.some(w => normKey(a + ' ' + d).includes(w))).slice(0, 4); return `<div class="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/30 text-sm"><p class="font-bold mb-1">${h.t}</p><p class="mb-1">${h.o}</p>${hit.map(([a, d]) => `<p class="text-xs"><b>${a}</b> — ${d}</p>`).join('')}${x.k !== cur ? '<p class="text-[11px] text-slate-400 mt-1">(em outra tela do sistema)</p>' : ''}</div>`; }).join('') : '<p class="text-sm text-slate-500">Não achei uma resposta pronta para isso. Tente outras palavras (ex.: "excluir", "categoria", "dívida", "backup") ou me pergunte aqui na conversa com o Claude.</p>';
         }
         function openIsis() {
             const tones = { warn: 'bg-amber-50 text-amber-800 border-amber-200', good: 'bg-emerald-50 text-emerald-800 border-emerald-200', info: 'bg-slate-50 text-slate-700 border-slate-200' };
@@ -6311,6 +6452,24 @@
         }
 
         // ========== AVISOS AO ABRIR (faturas em atraso, contas e lembretes) ==========
+        // Início: contas e faturas vencidas / a vencer (mesma janela de dias do Planejamento › Vencimentos)
+        function dashDueHtml() {
+            let A, RD = 0; try { A = avisosCalc(); RD = Math.max(0, Number(plano().remindDays) || 0); } catch (e) { A = null; }
+            const items = A ? [].concat(
+                A.faturasAtr.map(i => Object.assign({ k: 'fat' }, i)), A.contasAtr.map(i => Object.assign({ k: 'conta' }, i)), A.contasHoje.map(i => Object.assign({ k: 'conta' }, i)),
+                A.faturasProx.filter(i => i.dias <= RD).map(i => Object.assign({ k: 'fat' }, i)), A.contasProx.map(i => Object.assign({ k: 'conta' }, i))).sort((a, b) => a.dias - b.dias) : [];
+            const atr = items.filter(i => i.dias < 0), tot = items.reduce((s, i) => s + (i.valor || 0), 0);
+            const lbl = i => i.dias < 0 ? `venceu há ${-i.dias} dia${i.dias === -1 ? '' : 's'}` : i.dias === 0 ? 'vence hoje' : `em ${i.dias} dia${i.dias === 1 ? '' : 's'}`;
+            return `<div onclick="plTab='vencimentos';switchTab('planejamento')" class="cursor-pointer bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border ${atr.length ? 'border-rose-200 dark:border-rose-900' : 'border-slate-100 dark:border-slate-700'} flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                    <p class="text-xs font-medium text-slate-400 uppercase">Contas a vencer / vencidas</p>
+                    ${items.length ? `<h3 class="text-xl font-bold ${atr.length ? 'text-rose-600' : 'text-amber-600'} mt-1">${dashHide ? '••••' : 'R$ ' + money(tot)} <span class="text-xs font-normal text-slate-500">${items.length} conta${items.length > 1 ? 's' : ''}${atr.length ? ' · ' + atr.length + ' vencida' + (atr.length > 1 ? 's' : '') : ''}</span></h3>
+                    <div class="mt-2 space-y-1">${items.slice(0, 3).map(i => `<div class="flex justify-between gap-2 text-[11px]"><span class="truncate ${i.dias < 0 ? 'text-rose-600 font-semibold' : 'text-slate-600 dark:text-slate-300'}">${esc(i.nome)}</span><span class="shrink-0 text-slate-400">${lbl(i)}</span></div>`).join('')}${items.length > 3 ? `<p class="text-[10px] text-slate-400">+${items.length - 3} outra(s)</p>` : ''}</div>`
+                    : `<h3 class="text-base font-bold text-emerald-600 mt-1">Tudo em dia</h3><p class="text-[11px] text-slate-400 mt-1">Nada vencido nem a vencer em ${RD} dia(s). Ajuste em Planejamento › Vencimentos.</p>`}
+                </div>
+                <div class="w-12 h-12 shrink-0 rounded-2xl ${atr.length ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-500' : 'bg-amber-50 dark:bg-amber-950/60 text-amber-500'} flex items-center justify-center text-xl"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+            </div>`;
+        }
         function avisosCalc() {
             const hoje = localDateStr(), A = { faturasAtr: [], faturasProx: [], contasAtr: [], contasHoje: [], contasProx: [], lemAtr: [], lemHoje: [], orc: [] }, RD = Math.max(0, Number(plano().remindDays) || 0);
             const diff = ds => Math.round((new Date(ds + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000);
@@ -7111,7 +7270,7 @@
             const rw = document.getElementById('fin-rec-wrap'); if (rw) { rw.classList.toggle('hidden', ty === 'transferencia'); if (ty === 'transferencia') { document.getElementById('fin-rec').checked = false; finRecUi(); } }
             document.getElementById('fin-acc-lbl').textContent = ty === 'transferencia' ? 'Conta de origem' : 'Cartão / Conta';
             const c = document.getElementById('fin-category');
-            if (ty === 'transferencia' && !c.value.trim()) c.value = 'Transferência';
+            if (ty === 'transferencia' && !c.value.trim()) catSetVal(c, 'Transferência');
         }
 
         // ---------- Tela Financeiro (filtro geral) ----------
@@ -7565,6 +7724,7 @@
         }
 
         function renderFinanceiro(container) {
+            finPersist();
             const list = finFiltered();
             let tr = 0, td = 0, tp = 0;
             list.forEach(t => {
@@ -7582,10 +7742,11 @@
             const o = (v, l, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`;
             const S = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
             const card = (l, v, c) => `<div class="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 min-w-0"><p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase truncate">${l}</p><h3 class="text-base sm:text-2xl font-bold ${c} mt-0.5 sm:mt-1 truncate">R$ ${money(v)}</h3></div>`;
+            const HDR = { desc: sh('Descrição', 'desc'), category: sh('Categoria', 'category'), acc: sh('Cartão/Conta', 'acc'), date: sh('Data', 'date'), amount: sh('Valor', 'amount'), status: sh('Status', 'status'), att: '<th class="p-3.5">Anexos</th>', act: '<th class="p-3.5 text-right">Ações</th>' };
             const finTbl = (rows, grp) => `
                         <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                             <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-400 uppercase text-[11px]"><tr>
-                                <th class="p-3.5 rounded-l-xl w-8"><input type="checkbox" id="fin-sel-all-${grp}" title="Selecionar todos desta lista" onchange="finSelGroup(this.checked,'${grp}')" ${rows.length && rows.every(t => finSel.has(t.id)) ? 'checked' : ''}></th>${sh('Descrição','desc')}${sh('Categoria','category')}${sh('Cartão/Conta','acc')}${sh('Data','date')}${sh('Valor','amount')}${sh('Status','status')}<th class="p-3.5">Anexos</th><th class="p-3.5 text-right rounded-r-xl">Ações</th>
+                                <th class="p-3.5 rounded-l-xl w-8"><input type="checkbox" id="fin-sel-all-${grp}" title="Selecionar todos desta lista" onchange="finSelGroup(this.checked,'${grp}')" ${rows.length && rows.every(t => finSel.has(t.id)) ? 'checked' : ''}></th>${finColsList().map(k => HDR[k]).join('')}
                             </tr></thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                             ${rows.map(t => {
@@ -7596,23 +7757,25 @@
                                 const tDir = isT ? (ef.d > 0 ? 'out' : ef.r > 0 ? 'in' : 'mid') : '';
                                 const vc = tDir === 'mid' ? 'text-sky-600' : (tDir === 'in' || (!isT && t.type === 'receita')) ? 'text-emerald-600' : 'text-rose-600';
                                 const sg = tDir === 'mid' ? '⇄' : (tDir === 'in' || (!isT && t.type === 'receita')) ? '+' : '-';
-                                return `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
-                                    <td class="p-3.5"><input type="checkbox" ${finSel.has(t.id) ? 'checked' : ''} onchange="finSelToggle('${t.id}', this.checked)"></td>
-                                    <td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
+                                const CELL = {
+                                    chk: `<td class="p-3.5"><input type="checkbox" ${finSel.has(t.id) ? 'checked' : ''} onchange="finSelToggle('${t.id}', this.checked)"></td>`,
+                                    desc: `<td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
                                         ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
                                         ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}${t.habitacional ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Também aparece em Habitação"><i class="fa-solid fa-hammer"></i></span>` : ''}${t.casaId ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Também aparece em Habitação › Despesas da casa"><i class="fa-solid fa-house-chimney"></i></span>` : ''}
-                                        ${isT ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">transf.</span>` : ''}</td>
-                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>
-                                    <td class="p-3.5 text-xs text-slate-500 whitespace-nowrap">${acc}</td>
-                                    <td class="p-3.5 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td>
-                                    <td class="p-3.5 font-bold whitespace-nowrap ${vc}">${sg} R$ ${money(t.amount)}</td>
-                                    <td class="p-3.5"><button onclick="toggleFinanceStatus('${t.id}')" title="Clique para alternar entre ${t.type === 'receita' ? 'Recebido' : 'Pago'} e Pendente" class="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${finStCls(t)}"><i class="fa-solid ${finSt(t) === 'pendente' ? 'fa-clock' : 'fa-circle-check'} mr-1"></i>${finStLabel(t)}</button></td>
-                                    <td class="p-3.5"><button onclick="openAttachmentsModal('${t.id}')" title="Anexos" class="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${nAtt ? 'bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}"><i class="fa-solid fa-paperclip mr-1"></i>${nAtt || 'Anexar'}</button></td>
-                                    <td class="p-3.5 text-right space-x-1 whitespace-nowrap">
+                                        ${isT ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">transf.</span>` : ''}</td>`,
+                                    category: `<td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>`,
+                                    acc: `<td class="p-3.5 text-xs text-slate-500 whitespace-nowrap">${acc}</td>`,
+                                    date: `<td class="p-3.5 text-slate-500 whitespace-nowrap">${fmtBR(t.date)}</td>`,
+                                    amount: `<td class="p-3.5 font-bold whitespace-nowrap ${vc}">${sg} R$ ${money(t.amount)}</td>`,
+                                    status: `<td class="p-3.5"><button onclick="toggleFinanceStatus('${t.id}')" title="Clique para alternar entre ${t.type === 'receita' ? 'Recebido' : 'Pago'} e Pendente" class="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${finStCls(t)}"><i class="fa-solid ${finSt(t) === 'pendente' ? 'fa-clock' : 'fa-circle-check'} mr-1"></i>${finStLabel(t)}</button></td>`,
+                                    att: `<td class="p-3.5"><button onclick="openAttachmentsModal('${t.id}')" title="Anexos" class="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${nAtt ? 'bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}"><i class="fa-solid fa-paperclip mr-1"></i>${nAtt || 'Anexar'}</button></td>`,
+                                    act: `<td class="p-3.5 text-right space-x-1 whitespace-nowrap">
                                         <button onclick="editFinance('${t.id}')" title="Editar" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
                                         ${t.cardInvoice ? '' : `<button onclick="duplicateFinance('${t.id}')" title="Duplicar" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-teal-600"><i class="fa-regular fa-copy"></i></button>`}
                                         <button onclick="deleteFinance('${t.id}')" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
-                                    </td></tr>`;
+                                    </td>`,
+                                };
+                                return `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">${CELL.chk}${finColsList().map(k => CELL[k]).join('')}</tr>`;
                             }).join('')}
                             </tbody></table></div>`;
             const pendRows = list.filter(t => finSt(t) === 'pendente'), resRows = list.filter(t => finSt(t) !== 'pendente');
@@ -7633,6 +7796,7 @@
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             ${perBarHtml('fin')}
                             <div class="flex flex-wrap items-center gap-2">
+                                <button onclick="openFinCols()" title="Reordenar / esconder colunas" class="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-table-columns mr-1"></i>Colunas</button>
                                 <button onclick="finToggleFilter()" class="px-3 py-2 rounded-xl text-xs font-bold ${finFilterOpen || nAct ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid fa-filter mr-1"></i>Filtro${nAct ? ' (' + nAct + ')' : ''}<i class="fa-solid fa-chevron-${finFilterOpen ? 'up' : 'down'} ml-1.5 text-[9px]"></i></button>
                                 <button onclick="finSet('hab', !finF.hab)" title="${finF.hab ? 'Mostrando só movimentações Habitacional (toque para ver tudo)' : 'Ver só movimentações Habitacional'}" class="w-9 h-9 rounded-xl flex items-center justify-center ${finF.hab ? 'bg-amber-500 text-white shadow' : 'bg-slate-100 dark:bg-slate-700 text-amber-600'}"><i class="fa-solid fa-hammer"></i></button>
                                 <button onclick="openAnalise()" class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5"><i class="fa-solid fa-chart-line"></i><span>Análise</span></button>
@@ -7697,7 +7861,7 @@
                 <datalist id="bk-cats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
                 <form onsubmit="applyBulkEdit(event)" class="space-y-2.5">
                     ${bulkRow('name', 'Nome', `<input id="bk-name" class="${INP}" placeholder="Novo nome">`)}
-                    ${bulkRow('cat', 'Categoria', `<input id="bk-cat" list="bk-cats" class="${INP}" placeholder="Nova categoria">`)}
+                    ${bulkRow('cat', 'Categoria', `${catSelect('bk-cat', '', { blank: '— escolha —' })}`)}
                     ${bulkRow('date', 'Data', `<input id="bk-date" type="date" class="${INP}">`)}
                     ${bulkRow('owner', 'De quem', `<select id="bk-owner" class="${INP}">${owners}</select>`)}
                     ${bulkRow('ded', 'Dedutível no IR', `<select id="bk-ded" class="${INP}">${ded}</select>`)}
@@ -8223,6 +8387,12 @@
         }
         function plPersonName(id) { const p = plano().people.find(x => x.id === id); return p ? p.name : (id === 'casa' || !id ? 'Casa' : id); }
         function plVisible(owner) { if (plVista === 'todos') return true; return (owner || 'casa') === plVista; }
+        let plView = (() => { try { return localStorage.getItem('isis_pl_view') || 'cards'; } catch (e) { return 'cards'; } })();
+        function plSetView(v) { plView = v; try { localStorage.setItem('isis_pl_view', v); } catch (e) {} renderCurrentTabContent(); }
+        function plItemClick(ev) { if (ev.target.closest('button,a,input,select,textarea,label')) return; const it = ev.target.closest('.pl-item'); if (it) it.classList.toggle('open'); }
+        function plMarkItems(root) {   // cartões dentro de grades viram "itens" (linha compacta ↔ cartão)
+            root.querySelectorAll('#pl-body .grid > div[class*="rounded-2xl"], #pl-body .space-y-2 > div[class*="rounded-2xl"], #pl-body .space-y-3 > div[class*="rounded-2xl"]').forEach(el => { if (el.closest('table') || el.querySelector('.pl-item') || /(^|\s)flex(\s|$)/.test(el.className)) return; el.classList.add('pl-item'); el.parentElement.classList.add('pl-list'); });
+        }
         function plSetVista(v) { plVista = v; try { localStorage.setItem('isis_pl_vista', v); } catch (e) {} renderCurrentTabContent(); }
         function plCurYM() { return localDateStr().slice(0, 7); }
 
@@ -8270,12 +8440,14 @@
             const fns = { orcamento: plRenderOrcamento, fluxo: plRenderFluxo, recorrentes: plRenderRecs, vencimentos: plRenderVenc, metas: plRenderMetas, patrimonio: plRenderPatrimonio, investimentos: plRenderInvest, dividas: plRenderDividas, casal: plRenderCasal, analise: plRenderAnalise, ir: plRenderIR };
             let body = '';
             try { body = (fns[plTab] || plRenderOrcamento)(); } catch (e) { console.error(e); body = '<p class="text-sm text-rose-600">Erro ao montar esta tela: ' + esc(e.message) + '</p>'; }
-            container.innerHTML = `<div class="space-y-4 max-w-7xl mx-auto">
+            container.innerHTML = `<div class="space-y-4 max-w-7xl mx-auto ${plView === 'rows' ? 'pl-v-rows' : ''}" onclick="plItemClick(event)">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div class="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 max-w-full">${PL_TABS.map(([k, l, ic]) => `<button onclick="plSetTab('${k}')" class="shrink-0 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 ${plTab === k ? 'bg-teal-600 text-white shadow' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700'}"><i class="fa-solid ${ic}"></i>${l}</button>`).join('')}</div>
                     <div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-bold" title="Ver só os lançamentos de cada pessoa ou da casa">${vistas.map(([k, l]) => `<button onclick="plSetVista('${k}')" class="px-3 py-1.5 ${plVista === k ? 'bg-amber-500 text-teal-950' : 'bg-white dark:bg-slate-800 text-slate-500'}">${esc(l)}</button>`).join('')}</div>
                 </div>
-                ${body}</div>`;
+                <div class="flex justify-end"><div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-bold" title="Como ver as listas desta área"><button onclick="plSetView('cards')" class="px-3 py-1.5 ${plView === 'cards' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}"><i class="fa-solid fa-table-cells-large mr-1"></i>Cartões</button><button onclick="plSetView('rows')" class="px-3 py-1.5 ${plView === 'rows' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}"><i class="fa-solid fa-list mr-1"></i>Linhas</button></div></div>
+                <div id="pl-body">${body}</div></div>`;
+            plMarkItems(container);
         }
         function plMonthNav() {
             return `<div class="flex items-center gap-2"><button onclick="plNavMonth(-1)" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-left text-xs"></i></button>
@@ -8290,12 +8462,12 @@
         // ---------- formulário genérico ----------
         const PL_OWNERS = () => [['', 'Casa (conjunta)'], ['p1', plano().people[0].name], ['p2', plano().people[1].name]];
         const PL_FORMS = {
-            budgets: { title: 'Orçamento por categoria', fields: [['category', 'Categoria', 'text', { list: 'pl-cats', req: 1 }], ['limit', 'Limite mensal (R$)', 'num', { req: 1 }]] },
+            budgets: { title: 'Orçamento por categoria', fields: [['category', 'Categoria', 'cat', { req: 1 }], ['limit', 'Valor total (R$)', 'num', { req: 1 }], ['periodo', 'Período (opcional)', 'text', { ph: 'Ex.: 12 meses, até dez/2027' }], ['guardar', 'Guardar mensal (R$, opcional)', 'num', {}]] },
             recs: { title: 'Conta recorrente / assinatura', fields: [
                 ['name', 'Nome', 'text', { req: 1, ph: 'Ex.: Netflix, Academia, Seguro do carro' }], ['amount', 'Valor (R$)', 'num', { req: 1 }],
                 ['kind', 'Tipo', 'select', { opts: [['despesa', 'Despesa'], ['receita', 'Receita']] }], ['tipo', 'Classificação', 'select', { opts: [['assinatura', 'Assinatura / serviço'], ['fixa', 'Conta fixa'], ['seguro', 'Seguro / plano'], ['outra', 'Outra']] }],
                 ['freq', 'Frequência', 'select', { opts: [['mensal', 'Todo mês'], ['anual', 'Uma vez por ano']] }], ['day', 'Dia do vencimento', 'num', { ph: '1 a 31' }],
-                ['month', 'Mês (se anual, 1 a 12)', 'num', {}], ['category', 'Categoria', 'text', { list: 'pl-cats' }],
+                ['month', 'Mês (se anual, 1 a 12)', 'num', {}], ['category', 'Categoria', 'cat', {}],
                 ['owner', 'De quem', 'select', { opts: PL_OWNERS }], ['start', 'Começa em (opcional)', 'date', {}], ['end', 'Termina em (opcional)', 'date', {}],
                 ['newAmount', 'Alteração de valor: novo valor (R$)', 'num', { ph: 'Ex.: reajuste' }], ['newFrom', 'Alteração vale a partir de', 'date', {}],
                 ['accId', 'Cartão / Conta que paga (Financeiro)', 'select', { opts: () => [['', '— Sem cartão/conta —']].concat(contasData().map(a => [a.id, accLabel(a)])) }],
@@ -8321,7 +8493,8 @@
             const inp = ([k, l, t, o]) => {
                 const val = v[k] === undefined || v[k] === null ? '' : v[k];
                 let h;
-                if (t === 'select') h = `<select id="plf-${k}" class="${INP}">${(typeof o.opts === 'function' ? o.opts() : o.opts).map(([a, b]) => `<option value="${esc(a)}" ${String(val) === String(a) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
+                if (t === 'cat') h = catSelect('plf-' + k, String(val), { req: o.req, blank: o.req ? '' : '— nenhuma —' });
+                else if (t === 'select') h = `<select id="plf-${k}" class="${INP}">${(typeof o.opts === 'function' ? o.opts() : o.opts).map(([a, b]) => `<option value="${esc(a)}" ${String(val) === String(a) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
                 else h = `<input id="plf-${k}" type="${t === 'num' ? 'text' : t}" ${t === 'num' ? 'inputmode="decimal"' : ''} ${o.list ? `list="${o.list}"` : ''} ${o.req ? 'required' : ''} placeholder="${esc(o.ph || '')}" value="${esc(val)}" class="${INP}">`;
                 return `<div><label class="${LBL}">${l}</label>${h}</div>`;
             };
@@ -8373,6 +8546,7 @@
                     <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/40 border ${pct >= 100 ? 'border-rose-300' : pct >= 80 ? 'border-amber-300' : 'border-slate-100 dark:border-slate-700'}">
                         <div class="flex justify-between items-start gap-2 mb-2"><div class="min-w-0"><p class="font-bold text-sm text-slate-800 dark:text-white truncate">${esc(b.category)}</p>
                             <p class="text-xs text-slate-500">${R$(spent)} de ${R$(lim)}</p></div>${plEditBtns('budgets', b.id)}</div>
+                        ${(b.periodo || Number(b.guardar) > 0) ? `<p class="pl-det text-[11px] text-slate-500 mb-1.5">${b.periodo ? `<i class="fa-regular fa-calendar mr-1"></i>Período: <b>${esc(b.periodo)}</b>` : ''}${b.periodo && Number(b.guardar) > 0 ? ' · ' : ''}${Number(b.guardar) > 0 ? `<i class="fa-solid fa-piggy-bank mr-1"></i>Guardar por mês: <b>${R$(Number(b.guardar))}</b>` : ''}</p>` : ''}
                         ${plBar(pct)}
                         <p class="text-[11px] mt-1.5 ${pct >= 100 ? 'text-rose-600 font-bold' : pct >= 80 ? 'text-amber-600 font-bold' : 'text-slate-400'}">${pct >= 100 ? '<i class="fa-solid fa-triangle-exclamation mr-1"></i>Estourou em ' + R$(spent - lim) : pct >= 80 ? '<i class="fa-solid fa-triangle-exclamation mr-1"></i>Atenção: ' + Math.round(pct) + '% do limite — restam ' + R$(lim - spent) : Math.round(pct) + '% · restam ' + R$(lim - spent)}</p>
                     </div>`).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nenhum limite definido. Toque em "Novo limite" (ex.: Mercado R$ 1.500, Lazer R$ 400, Assinaturas R$ 200).</p>'}
@@ -8764,11 +8938,12 @@
             let T = 0, pa = 0, pb = 0, sem = 0; const items = [];
             const byName = n => { const k = normKey(n); return normKey(a.name) === k ? 'a' : normKey(b.name) === k ? 'b' : ''; };
             rows.forEach(r => {
-                T += r.amount; let who = [];
+                let who = [];
                 if (r.src === 'fin') { who = r.payer === a.id ? [['a', r.amount]] : r.payer === b.id ? [['b', r.amount]] : []; }
                 else (r.entry.pagoPor || []).forEach(p => { const w = byName(p.name); if (w) who.push([w, Number(p.amount) || 0]); });
                 const sum = who.reduce((s, x) => s + x[1], 0);
                 who.forEach(([w, v]) => { if (w === 'a') pa += v; else pb += v; });
+                T += Math.min(sum, r.amount);   // só entra na divisão o que tem quem pagou informado
                 if (sum < r.amount - 0.005) sem += r.amount - sum;
                 items.push({ r, who, sum });
             });
