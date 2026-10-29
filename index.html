@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 72</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 73</div>
             </div>
         </aside>
 
@@ -8555,7 +8555,7 @@
             try { body = (fns[plTab] || plRenderOrcamento)(); } catch (e) { console.error(e); body = '<p class="text-sm text-rose-600">Erro ao montar esta tela: ' + esc(e.message) + '</p>'; }
             container.innerHTML = `<div class="space-y-4 max-w-7xl mx-auto ${plView === 'rows' ? 'pl-v-rows' : ''}" onclick="plItemClick(event)">
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div class="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 max-w-full">${PL_TABS.map(([k, l, ic]) => `<button onclick="plSetTab('${k}')" class="shrink-0 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 ${plTab === k ? 'bg-teal-600 text-white shadow' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700'}"><i class="fa-solid ${ic}"></i>${l}</button>`).join('')}</div>
+                    <div class="flex flex-wrap gap-1.5 max-w-full">${PL_TABS.map(([k, l, ic]) => `<button onclick="plSetTab('${k}')" class="shrink-0 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 ${plTab === k ? 'bg-teal-600 text-white shadow' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700'}"><i class="fa-solid ${ic}"></i>${l}</button>`).join('')}</div>
                     <div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-bold" title="Ver só os lançamentos de cada pessoa ou da casa">${vistas.map(([k, l]) => `<button onclick="plSetVista('${k}')" class="px-3 py-1.5 ${plVista === k ? 'bg-amber-500 text-teal-950' : 'bg-white dark:bg-slate-800 text-slate-500'}">${esc(l)}</button>`).join('')}</div>
                 </div>
                 <div class="flex justify-end"><div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-bold" title="Como ver as listas desta área"><button onclick="plSetView('cards')" class="px-3 py-1.5 ${plView === 'cards' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}"><i class="fa-solid fa-table-cells-large mr-1"></i>Cartões</button><button onclick="plSetView('rows')" class="px-3 py-1.5 ${plView === 'rows' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}"><i class="fa-solid fa-list mr-1"></i>Linhas</button></div></div>
