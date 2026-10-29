@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 68</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 72</div>
             </div>
         </aside>
 
@@ -397,7 +397,7 @@
         const BUDGET_STATUSES = ['Pendente', 'Aprovado', 'Rejeitado', 'Pago'];
         let obraSortKey = 'date', obraSortDir = 'desc';
         let budgetView = 'bloco', budgetSelectMode = false, budgetSelected = [], budgetGroupOpen = {};
-        let cardSelectedId = null, cardInvMonth = '', cardQ = '', _cardQT = null, cardCat = '', cardPer = { mode: 'fatura', from: '', to: '' };
+        let cardSelectedId = null, cardInvMonth = '', cardQ = '', _cardQT = null, cardCat = '', cardQAll = false, cardPer = { mode: 'fatura', from: '', to: '' };
         let finF = { acc: '', cat: '', type: '', min: '', max: '', q: '', hab: false };
         const FIN_COLS = [['desc', 'Descrição'], ['category', 'Categoria'], ['acc', 'Cartão/Conta'], ['date', 'Data'], ['amount', 'Valor'], ['status', 'Status'], ['att', 'Anexos'], ['act', 'Ações']];
         let finColPref = { order: FIN_COLS.map(c => c[0]), hidden: [] };
@@ -430,7 +430,7 @@
         let dashHide = localStorage.getItem('meusistema_hide') === '1';
         let dashFund = localStorage.getItem('meusistema_dash_fund') || '';
         let dashCardAcc = localStorage.getItem('meusistema_dash_card') || '';
-        let habCasaOpen = false, habEvoOpen = false, casaView = (() => { try { return localStorage.getItem('isis_casa_view') === 'cards' ? 'cards' : 'linhas'; } catch (e) { return 'linhas'; } })(), casaQ = '', casaSt = '', casaComp = '', habLibOpen = false, libView = 'cards', libQ = '', libVia = '', libFrom = '', libTo = '', careMetaView = 'cards', saudeCareOpen = false, careTab = 'rotinas', careDate = localDateStr(), colorsOpen = false;
+        let habCasaOpen = false, habEvoOpen = false, habBudOpen = false, casaView = (() => { try { return localStorage.getItem('isis_casa_view') === 'cards' ? 'cards' : 'linhas'; } catch (e) { return 'linhas'; } })(), casaQ = '', casaSt = '', casaComp = '', habLibOpen = false, libView = 'cards', libQ = '', libVia = '', libFrom = '', libTo = '', careMetaView = 'cards', saudeCareOpen = false, careTab = 'rotinas', careDate = localDateStr(), colorsOpen = false;
         let recOpen = false, recViewId = null, recQuery = '', recSel = new Set();
         let finSel = new Set();
         let dashCardMonth = 'auto'; // fatura do cartão na tela inicial: 'auto' = fatura em aberto mais próxima; 'AAAA-MM' = mês; '' = total
@@ -993,12 +993,36 @@
         }
 
 
+        // ---- Menu lateral: ordem e itens ocultos (Configurações › Ordenar menu), salvo no perfil ----
+        function menuPref() { if (!appData.profile) appData.profile = {}; const m = appData.profile.menu || (appData.profile.menu = { order: [], hidden: [] }); if (!Array.isArray(m.order)) m.order = []; if (!Array.isArray(m.hidden)) m.hidden = []; return m; }
+        function menuItems() { return [...document.querySelectorAll('#sidebar nav > a.nav-item')].map(a => ({ id: a.id, label: (a.querySelector('span') || a).textContent.trim(), el: a })); }
+        function applyMenu() {
+            const nav = document.querySelector('#sidebar nav'); if (!nav) return;
+            const m = menuPref(), items = menuItems(), pos = id => { const i = m.order.indexOf(id); return i < 0 ? 1e6 + items.findIndex(x => x.id === id) : i; };
+            items.slice().sort((a, b) => pos(a.id) - pos(b.id)).forEach(x => nav.appendChild(x.el));
+            items.forEach(x => x.el.classList.toggle('hidden', m.hidden.includes(x.id) && x.id !== 'nav-configuracoes'));
+        }
+        function openMenuManager() {
+            const m = menuPref(), items = menuItems().sort((a, b) => { const f = id => { const i = m.order.indexOf(id); return i < 0 ? 1e6 : i; }; return f(a.id) - f(b.id); });
+            // a ordem atual na tela já reflete applyMenu(); usa-a como base
+            const cur = [...document.querySelectorAll('#sidebar nav > a.nav-item')].map(a => ({ id: a.id, label: (a.querySelector('span') || a).textContent.trim() }));
+            m.order = cur.map(x => x.id);
+            showModal('Ordenar menu', `<p class="text-xs text-slate-500 mb-3">Use as setas para mudar a ordem e o olho para mostrar ou ocultar. Configurações não pode ser ocultada.</p>
+                <div class="space-y-1.5 max-h-[55vh] overflow-y-auto">${cur.map((x, i) => { const h = m.hidden.includes(x.id); return `<div class="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40 ${h ? 'opacity-50' : ''}"><span class="flex-1 text-sm font-semibold">${esc(x.label)}</span>
+                    <button onclick="menuMove(${i},-1)" ${i === 0 ? 'disabled' : ''} class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button onclick="menuMove(${i},1)" ${i === cur.length - 1 ? 'disabled' : ''} class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
+                    ${x.id === 'nav-configuracoes' ? '<span class="w-8"></span>' : `<button onclick="menuHide('${x.id}')" class="px-2.5 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid ${h ? 'fa-eye-slash' : 'fa-eye'}"></i></button>`}</div>`; }).join('')}</div>
+                <button onclick="menuReset()" class="mt-3 w-full bg-slate-100 dark:bg-slate-700 py-2 rounded-xl text-xs font-bold">Voltar ao padrão</button>`);
+        }
+        function menuMove(i, d) { const m = menuPref(), o = m.order, j = i + d; if (j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j], o[i]]; saveAppData(); applyMenu(); openMenuManager(); }
+        function menuHide(id) { const m = menuPref(), k = m.hidden.indexOf(id); if (k >= 0) m.hidden.splice(k, 1); else m.hidden.push(id); saveAppData(); applyMenu(); openMenuManager(); }
+        function menuReset() { appData.profile.menu = { order: [], hidden: [] }; saveAppData(); location.reload(); }
         function switchTab(tabId) {
             const prevTab = currentActiveTab;
             if (tabId === 'lembretes') { agTab = 'lembretes'; tabId = 'agenda'; }
             else if (tabId === 'agenda' && prevTab !== 'agenda') agTab = 'compromissos';
             currentActiveTab = tabId;
-            if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; habCasaOpen = false; habEvoOpen = false; }
+            if (tabId !== 'habitacao') { habDocsOpen = false; habDocsFolderId = null; habLibOpen = false; habCasaOpen = false; habEvoOpen = false; habBudOpen = false; }
             if (tabId === 'financeiro' && !window._finPerSaved) { financeFilterDate = localDateStr().slice(0, 7); PER.fin = Object.assign({ mode: 'mes' }, _perNow()); } // sempre abre no mês atual cheio
             if (tabId !== 'saude') { saudeDiagOpen = false; saudeVacOpen = false; saudeCareOpen = false; saudeGymOpen = false; }
             if (tabId !== 'hobbies') { recOpen = false; recViewId = null; }
@@ -1007,6 +1031,7 @@
                 el.classList.remove('bg-side-900', 'text-white', 'shadow-inner');
                 el.classList.add('text-slate-300');
             });
+            applyMenu();
             const activeEl = document.getElementById(`nav-${tabId}`);
             if (activeEl) {
                 activeEl.classList.add('bg-side-900', 'text-white', 'shadow-inner');
@@ -3213,6 +3238,7 @@
             if (habLibOpen) { renderHabLib(container); return; }
             if (habCasaOpen) { renderHabCasa(container); return; }
             if (habEvoOpen) { renderHabEvo(container); return; }
+            if (habBudOpen) { renderHabBud(container); return; }
             const { balances, spent, totalAportes, totalRetiradas, totalGasto, totalPrev, saldoCaixaObra } = habSummary();
 
             // Filtro e Ordenação de Movimentações
@@ -3240,31 +3266,39 @@
                             <h2 class="text-2xl sm:text-3xl font-bold mt-2"><i class="fa-solid fa-hammer mr-2"></i> Habitação & Construção</h2>
                             <p class="text-amber-100 mt-1 text-sm">Controle de aportes, orçamentos, recibos e fornecedores.</p>
                         </div>
-                        <div class="flex flex-wrap gap-3">
-                            <button onclick="openSupplierModal()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
-                                <i class="fa-solid fa-address-book"></i>
-                                <span>Fornecedores</span>
-                            </button>
-                            <button onclick="openLibView()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
-                                <i class="fa-solid fa-hand-holding-dollar"></i>
-                                <span>Liberações</span>
-                            </button>
-                            <button onclick="openCasaView()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm">
+                        <div class="flex flex-col gap-3 items-end md:ml-auto">
+                            <div class="flex flex-wrap lg:flex-nowrap gap-3 justify-end">
+                            <button onclick="openCasaView()" class="bg-amber-400 hover:bg-amber-500 text-teal-950 shadow-lg font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-house-chimney"></i>
                                 <span>DESPESAS DA CASA</span>
                             </button>
-                            <button onclick="plTab='dividas';switchTab('planejamento')" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
+                            <button onclick="openLibView()" class="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-hand-holding-dollar"></i>
-                                <span>DÍVIDAS</span>
+                                <span>Liberações</span>
                             </button>
-                            <button onclick="openEvoView()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md transition-all flex items-center space-x-2 text-sm">
+                            <button onclick="plTab='dividas';switchTab('planejamento')" class="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
+                                <i class="fa-solid fa-file-invoice-dollar"></i>
+                                <span>Dívidas</span>
+                            </button>
+                            <button onclick="openEvoView()" class="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-camera-retro"></i>
-                                <span>EVOLUÇÃO</span>
+                                <span>Evolução</span>
                             </button>
-                            <button onclick="openDocsView()" class="bg-white hover:bg-amber-50 text-teal-950 font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center space-x-2 text-sm">
+                            </div>
+                            <div class="flex flex-wrap lg:flex-nowrap gap-3 justify-end">
+                            <button onclick="openBudView()" class="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
+                                <i class="fa-solid fa-file-invoice"></i>
+                                <span>Orçamentos</span>
+                            </button>
+                            <button onclick="openSupplierModal()" class="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
+                                <i class="fa-solid fa-address-book"></i>
+                                <span>Fornecedores</span>
+                            </button>
+                            <button onclick="openDocsView()" class="bg-white hover:bg-amber-50 text-teal-950 shadow-lg font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-folder-open"></i>
-                                <span>DOCUMENTOS</span>
+                                <span>Documentos</span>
                             </button>
+                            </div>
                         </div>
                     </div>
 
@@ -3301,8 +3335,6 @@
                             </div>
                         </div>
                     </div>
-
-                    ${budgetsSectionHtml(budgetsList)}
 
                     <!-- Movimentações com Filtro e Ordenação -->
                     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
@@ -4048,8 +4080,71 @@
 
 
         // --- FORNECEDORES MODAL ---
+        function openBudView() { habBudOpen = true; renderCurrentTabContent(); window.scrollTo(0, 0); }
+        function closeBudView() { habBudOpen = false; budgetSelectMode = false; budgetSelected = []; renderCurrentTabContent(); }
+        function renderHabBud(container) {
+            let list = [...appData.habitacao.budgets]; if (budgetFilterStatus !== 'todos') list = list.filter(b => b.status === budgetFilterStatus);
+            container.innerHTML = `<div class="space-y-6 max-w-7xl mx-auto">
+                <div class="bg-gradient-to-r from-amber-900 via-amber-800 to-teal-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div><button onclick="closeBudView()" class="text-amber-200 hover:text-white text-xs font-semibold mb-2 flex items-center space-x-1"><i class="fa-solid fa-arrow-left"></i><span>Voltar para Habitação</span></button>
+                        <h2 class="text-2xl sm:text-3xl font-bold"><i class="fa-solid fa-file-invoice mr-2"></i> Orçamentos</h2><p class="text-amber-100 mt-1 text-sm">Orçamentos e recibos da obra, por fornecedor e grupo.</p></div>
+                    <button onclick="openBudPdf()" class="bg-white/20 hover:bg-white/30 text-white font-bold px-4 py-2.5 rounded-xl backdrop-blur-md flex items-center space-x-2 text-sm"><i class="fa-solid fa-file-arrow-down"></i><span>Baixar PDF</span></button>
+                </div>
+                ${budgetsSectionHtml(list)}</div>`;
+        }
+        // ---- PDF genérico em tabela (A4 paisagem), usa o mesmo gerador carregado para as receitas ----
+        async function isisTablePdf(title, sub, cols, rows, filename) {
+            let J; try { J = await recLoadPdf(); } catch (e) { showToast('Não consegui carregar o gerador de PDF. Verifique a internet e tente de novo.', 'error'); return; }
+            const clean = t => String(t == null ? '' : t).replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, '-').replace(/\u2026/g, '...').replace(/[^\u0009\u000a\u0020-\u00ff]/g, '');
+            const doc = new J.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' }), W = 297, H = 210, M = 12, MW = W - 2 * M;
+            const tot = cols.reduce((a, c) => a + c.w, 0), cw = cols.map(c => c.w / tot * MW); let y = M;
+            const head = () => { doc.setFillColor(156, 112, 32); doc.rect(M, y, MW, 7, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255, 255, 255); let x = M; cols.forEach((c, i) => { doc.text(clean(c.h), x + 1.5, y + 4.8, { align: c.r ? 'left' : 'left' }); x += cw[i]; }); y += 7; };
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(46, 31, 18); doc.text(clean(title), M, y + 5); y += 8;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110, 110, 110); doc.text(clean(sub || '') + (sub ? '  -  ' : '') + 'gerado em ' + fmtBR(localDateStr()), M, y + 3); y += 7;
+            head();
+            rows.forEach(r => {
+                const grp = r.group; const cells = grp ? [r.text] : r;
+                doc.setFont('helvetica', grp ? 'bold' : 'normal'); doc.setFontSize(9);
+                const lines = grp ? [doc.splitTextToSize(clean(r.text), MW - 3)] : cells.map((c, i) => doc.splitTextToSize(clean(c), cw[i] - 3));
+                const n = Math.max(...lines.map(l => l.length)), h = n * 4.2 + 2.4;
+                if (y + h > H - 14) { doc.addPage(); y = M; head(); }
+                if (grp) { doc.setFillColor(253, 243, 215); doc.rect(M, y, MW, h, 'F'); doc.setTextColor(120, 80, 10); doc.text(lines[0], M + 1.5, y + 4.4); }
+                else { let x = M; doc.setTextColor(40, 40, 40); lines.forEach((l, i) => { doc.text(l, x + 1.5, y + 4.4); x += cw[i]; }); }
+                doc.setDrawColor(225, 220, 205); doc.line(M, y + h, M + MW, y + h); y += h;
+            });
+            const nP = doc.getNumberOfPages(); for (let i = 1; i <= nP; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('ISIS  -  pagina ' + i + ' de ' + nP, W / 2, H - 6, { align: 'center' }); }
+            doc.save(filename.replace(/[\\/:*?"<>|]/g, '-') + '.pdf');
+        }
+        function supplierPdf() {
+            const L = appData.habitacao.suppliers || []; if (!L.length) { showToast('Nenhum fornecedor cadastrado.', 'warning'); return; }
+            isisTablePdf('Fornecedores - Habitação', L.length + ' cadastrado(s)', [{ h: 'Fornecedor', w: 3 }, { h: 'Contato', w: 2.5 }, { h: 'Telefone', w: 2 }, { h: 'Observação', w: 4 }], L.slice().sort((a, b) => normKey(a.name).localeCompare(normKey(b.name))).map(x => [x.name, x.contact, x.phone, x.obs || '']), 'fornecedores');
+        }
+        function openBudPdf() {
+            const H = appData.habitacao, groups = H.budgetGroups || [], loose = H.budgets.filter(b => !groups.some(g => g.id === b.groupId));
+            if (!H.budgets.length) { showToast('Nenhum orçamento cadastrado.', 'warning'); return; }
+            const row = b => `<label class="flex items-center gap-2 text-sm py-1 pl-2"><input type="checkbox" class="bpdf-b" data-g="${b.groupId || ''}" value="${b.id}"> <span class="flex-1 truncate">${esc(b.title)} <span class="text-[11px] text-slate-400">${esc(b.supplier || '')}</span></span><span class="text-xs text-amber-600 font-bold">R$ ${money(Number(b.amount) || 0)}</span></label>`;
+            const c = document.getElementById('modal-content');
+            showModal('Baixar orçamentos em PDF', `<p class="text-xs text-slate-500 mb-3">Marque o que quer no PDF. Marcar um <b>grupo</b> inclui todos os orçamentos dele.</p>
+                <label class="flex items-center gap-2 text-sm font-bold mb-2"><input type="checkbox" onchange="document.querySelectorAll('#modal-content input[type=checkbox]').forEach(x=>x.checked=this.checked)"> Selecionar tudo</label>
+                <div class="max-h-[50vh] overflow-y-auto space-y-2">${groups.map(g => { const all = H.budgets.filter(b => b.groupId === g.id); return `<div class="rounded-xl border border-amber-200 dark:border-amber-900/60 p-2"><label class="flex items-center gap-2 text-sm font-bold"><input type="checkbox" onchange="document.querySelectorAll('#modal-content .bpdf-b[data-g=&quot;${g.id}&quot;]').forEach(x=>x.checked=this.checked)"> <i class="fa-solid fa-layer-group text-amber-500"></i> ${esc(g.name)} <span class="text-[11px] font-normal text-slate-400">(${all.length})</span></label>${all.map(row).join('')}</div>`; }).join('')}
+                    ${loose.length ? `<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-2"><p class="text-[11px] font-bold uppercase text-slate-400 mb-1">Sem grupo</p>${loose.map(row).join('')}</div>` : ''}</div>
+                <button onclick="budPdfGo()" class="w-full mt-4 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow"><i class="fa-solid fa-file-arrow-down mr-1.5"></i>Gerar PDF</button>`);
+            c.classList.remove('max-w-lg'); c.classList.add('max-w-2xl');
+        }
+        function budPdfGo() {
+            const H = appData.habitacao, ids = new Set([...document.querySelectorAll('#modal-content .bpdf-b:checked')].map(x => x.value));
+            if (!ids.size) { showToast('Marque ao menos um orçamento.', 'warning'); return; }
+            const line = b => [b.title, (b.supplier || '') + (b.brand ? ' / ' + b.brand : ''), fmtBR(b.date), b.status || '', 'R$ ' + money(Number(b.amount) || 0), 'R$ ' + money(Number(b.paidAmount) || 0)];
+            const rows = []; let T = 0, P = 0;
+            (H.budgetGroups || []).forEach(g => { const sel = H.budgets.filter(b => b.groupId === g.id && ids.has(b.id)); if (!sel.length) return; rows.push({ group: 1, text: 'Grupo: ' + g.name + (g.supplier ? '  -  ' + g.supplier : '') + '   |   total R$ ' + money(sumBudgets(sel, 'amount')) + '   pago R$ ' + money(sumBudgets(sel, 'paidAmount')) }); sel.forEach(b => rows.push(line(b))); });
+            H.budgets.filter(b => !(H.budgetGroups || []).some(g => g.id === b.groupId) && ids.has(b.id)).forEach(b => rows.push(line(b)));
+            const chosen = H.budgets.filter(b => ids.has(b.id)); T = sumBudgets(chosen, 'amount'); P = sumBudgets(chosen, 'paidAmount');
+            rows.push({ group: 1, text: 'TOTAL: R$ ' + money(T) + '   |   pago R$ ' + money(P) + '   |   em aberto R$ ' + money(Math.max(0, T - P)) });
+            closeModal(); isisTablePdf('Orçamentos - Habitação', chosen.length + ' orçamento(s)', [{ h: 'Orçamento', w: 4 }, { h: 'Fornecedor / Marca', w: 3 }, { h: 'Data', w: 1.4 }, { h: 'Status', w: 1.4 }, { h: 'Valor total', w: 1.8 }, { h: 'Pago', w: 1.8 }], rows, 'orcamentos');
+        }
         function openSupplierModal() {
             showModal('Cadastro de Fornecedores', `
+                <div class="flex justify-end -mt-2 mb-2"><button onclick="supplierPdf()" title="Baixar todos os fornecedores em PDF" class="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow flex items-center gap-1.5"><i class="fa-solid fa-arrow-down"></i> Baixar PDF</button></div>
                 <div class="space-y-6">
                     <form onsubmit="saveSupplier(event)" class="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
                         <h4 class="font-bold text-xs text-slate-500 uppercase">Novo Fornecedor</h4>
@@ -4064,7 +4159,7 @@
                         <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-teal-950 py-2 rounded-xl font-bold text-xs shadow">Salvar Fornecedor</button>
                     </form>
 
-                    <div class="space-y-3 max-h-60 overflow-y-auto">
+                    <div class="space-y-3 max-h-[45vh] overflow-y-auto">
                         <h4 class="font-bold text-xs text-slate-500 uppercase">Lista de Fornecedores Cadastrados</h4>
                         ${(!appData.habitacao.suppliers || appData.habitacao.suppliers.length === 0) ? '<p class="text-xs text-slate-400">Nenhum fornecedor cadastrado.</p>' : appData.habitacao.suppliers.map(s => `
                             <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 flex justify-between items-center text-xs">
@@ -4078,6 +4173,7 @@
                     </div>
                 </div>
             `);
+            { const mc = document.getElementById('modal-content'); mc.classList.remove('max-w-lg'); mc.classList.add('max-w-3xl'); }
         }
 
         function saveSupplier(e) {
@@ -4116,7 +4212,7 @@
                                 <input type="text" id="profile-name-input" value="${appData.profile.name}" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                             </div>
                             <button onclick="saveProfileSettings()" class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow">Salvar Alterações</button>
-                            <div class="pt-4 border-t border-slate-100 dark:border-slate-700"><button onclick="openCatManager()" class="bg-slate-100 dark:bg-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold"><i class="fa-solid fa-tags mr-1.5"></i>Editar categorias</button><p class="text-[11px] text-slate-400 mt-1.5">Inserir, renomear, excluir e ordenar as categorias de todo o sistema.</p></div>
+                            <div class="pt-4 border-t border-slate-100 dark:border-slate-700"><button onclick="openCatManager()" class="bg-slate-100 dark:bg-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold"><i class="fa-solid fa-tags mr-1.5"></i>Editar categorias</button> <button onclick="openMenuManager()" class="bg-slate-100 dark:bg-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold"><i class="fa-solid fa-bars-staggered mr-1.5"></i>Ordenar menu</button><p class="text-[11px] text-slate-400 mt-1.5">Inserir, renomear, excluir e ordenar as categorias de todo o sistema.</p></div>
                         </div>
                     </div>
                 </div>
@@ -4193,7 +4289,7 @@
         function showModal(title, htmlContent) {
             const modal = document.getElementById('global-modal');
             const content = document.getElementById('modal-content');
-            content.classList.remove('max-w-3xl', 'max-w-2xl'); content.classList.add('max-w-lg');
+            content.classList.remove('max-w-3xl', 'max-w-2xl', 'max-w-5xl', 'max-w-4xl'); content.classList.add('max-w-lg');
             content.innerHTML = `
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-bold text-lg text-slate-800 dark:text-white">${title}</h3>
@@ -4909,12 +5005,12 @@
             if (!cardInvMonth) cardInvMonth = cardInvoiceKey(card, localDateStr());
             const key = cardInvMonth;
             const invEntries = cardEntriesFor(card.id, key), qn = normKey(cardQ || '');
-            const pm = cardPer.mode, wide = !!qn || pm !== 'fatura';
+            const pm = cardPer.mode, wide = (!!qn && cardQAll) || pm !== 'fatura';
             const inPer = e => pm === 'todos' ? true : ((!cardPer.from || (e.date || '') >= cardPer.from) && (!cardPer.to || (e.date || '') <= cardPer.to));
             const perEntries = pm === 'fatura' ? invEntries : C.entries.filter(e => e.cardId === card.id && inPer(e));
-            const catsHere = catSortList([...new Set((qn || pm !== 'fatura' ? C.entries.filter(e => e.cardId === card.id) : invEntries).map(e => e.category).filter(Boolean))]);
+            const catsHere = catSortList([...new Set((qn && cardQAll ? C.entries.filter(e => e.cardId === card.id) : perEntries).map(e => e.category).filter(Boolean))]);
             if (cardCat && !catsHere.includes(cardCat) && !C.entries.some(e => e.cardId === card.id && e.category === cardCat)) cardCat = '';
-            const entriesAll = (qn ? C.entries.filter(e => e.cardId === card.id && normKey([e.name, e.category, e.obs, Math.abs(Number(e.amount) || 0).toFixed(2), Math.abs(Number(e.amount) || 0).toFixed(2).replace('.', ','), fmtBR(e.date), e.invoice].join(' ')).includes(qn)) : perEntries.slice()).sort(cardCmp), entries = entriesAll.filter(e => !cardCat || e.category === cardCat);
+            const entriesAll = (qn ? (cardQAll ? C.entries.filter(e => e.cardId === card.id) : perEntries).filter(e => normKey([e.name, e.category, e.obs, Math.abs(Number(e.amount) || 0).toFixed(2), Math.abs(Number(e.amount) || 0).toFixed(2).replace('.', ','), fmtBR(e.date), e.invoice].join(' ')).includes(qn)) : perEntries.slice()).sort(cardCmp), entries = entriesAll.filter(e => !cardCat || e.category === cardCat);
             const total = invEntries.reduce((s, e) => s + (Number(e.amount) || 0), 0), shownTotal = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
             const tx = cardInvoiceTx(card.id, key);
             const paid = tx && tx.status === 'pago';
@@ -4987,8 +5083,9 @@
                 <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 flex items-center space-x-2"><i class="fa-solid fa-receipt text-teal-500"></i><span>${pm === 'fatura' ? 'Lançamentos da fatura' : pm === 'datas' ? 'Lançamentos do período' : 'Todos os lançamentos do cartão'}</span></h3>
                     <p class="text-[11px] text-slate-400 mb-3">Em Finanças aparece apenas "Cartão de Crédito" com o valor final desta fatura.</p>
-                    <div class="relative mb-4"><i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i><input id="card-q" type="search" value="${esc(cardQ)}" oninput="cardSearch(this.value)" placeholder="Buscar em todas as faturas deste cartão (nome, categoria, valor, data)…" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                        ${qn ? `<p class="text-[11px] text-teal-700 dark:text-teal-300 mt-1.5">${entries.length} resultado(s) em todas as faturas · soma R$ ${money(shownTotal)} · <button onclick="cardSearch('');document.getElementById('card-q').value=''" class="underline font-semibold">limpar busca</button></p>` : ''}</div>
+                    <div class="relative mb-4"><i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i><input id="card-q" type="search" value="${esc(cardQ)}" oninput="cardSearch(this.value)" placeholder="Buscar no período escolhido (nome, categoria, valor, data)…" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        <label class="flex items-center gap-1.5 mt-1.5 text-xs text-slate-600 dark:text-slate-300"><input type="checkbox" ${cardQAll ? 'checked' : ''} onchange="cardQAll=this.checked;renderCurrentTabContent()"> Todo período (buscar em todas as faturas)</label>
+                        ${qn ? `<p class="text-[11px] text-teal-700 dark:text-teal-300 mt-1">${entries.length} resultado(s) ${cardQAll ? 'em todas as faturas' : pm === 'fatura' ? 'nesta fatura' : 'no período'} · soma R$ ${money(shownTotal)} · <button onclick="cardSearch('');document.getElementById('card-q').value=''" class="underline font-semibold">limpar busca</button></p>` : ''}</div>
                     ${Object.keys(byCat).length ? `<div class="flex flex-wrap gap-2 mb-4">${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<button onclick="cardSetCat(decodeURIComponent('${encodeURIComponent(k)}'))" title="Filtrar por esta categoria" class="px-2.5 py-1 rounded-lg text-xs ${k === cardCat ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700'}"><b>${esc(k)}</b> R$ ${money(v)}</button>`).join('')}</div>` : ''}
                     ${entries.length === 0 ? `<div class="text-center py-10 text-slate-400"><i class="fa-solid fa-receipt text-4xl mb-2"></i><p class="text-sm">${qn ? 'Nada encontrado para essa busca.' : cardCat ? 'Nenhum lançamento nessa categoria.' : pm !== 'fatura' ? 'Nenhum lançamento neste período.' : 'Nenhum lançamento nesta fatura.'}</p></div>` : `
                     ${card.shared ? cardPayersSummary(entries) : ''}
@@ -6181,13 +6278,13 @@
         const HELP = {
             dashboard: { t: 'Resumo (início)', o: 'Visão geral do dia: contas, saldo, fundo da obra, cartão, compromissos e lembretes.', f: 'Puxa de Planejamento › Vencimentos (contas a vencer, no prazo de dias escolhido lá), Financeiro (receitas, despesas e saldo do período), Habitação (fundo), Cartão (faturas), Agenda e Lembretes.', b: [['ISIS', 'Dicas e sugestões automáticas (contas, orçamento, saúde, lembretes).'], ['Novo Compromisso', 'Cria um compromisso na Agenda.'], ['Olho / Oculto', 'Esconde os valores em R$ da tela.'], ['Cartões de contas a vencer', 'Clique para abrir Planejamento › Vencimentos.'], ['Mural de aniversariantes', 'Mostra aniversários cadastrados em Agenda › Contatos (blocos, lista ou mês).'], ['Categorias mais consumidas', 'Soma os gastos por categoria no período.']] },
             saude: { t: 'Saúde e Bem-estar', o: 'Controle de remédios, água, exercícios, vacinas, diagnósticos e autocuidado.', f: 'Tudo é cadastrado aqui mesmo; as dicas da ISIS usam estes dados (remédios não marcados, meta de água).', b: [['Inserir Remédio', 'Cadastra remédio/vitamina com horário, dose e frequência.'], ['Calendário (1–31)', 'Marque o dia para ver/registrar remédios tomados.'], ['+250ml / +500ml / Adicionar ao dia', 'Registra a água bebida; "Definir total do dia" substitui o valor.'], ['Diagnóstico, Vacinas, Exercícios, Autocuidado', 'Abrem as áreas específicas, cada uma com seu cadastro.']] },
-            financeiro: { t: 'Financeiro', o: 'Todas as receitas, despesas e transferências entre contas.', f: 'Os lançamentos são digitados aqui, importados do Extrato (OFX/CSV) ou gerados por Recorrentes, Cartão (faturas) e Habitação/Casa. Os cartões do topo somam o período escolhido; "Saldo total" soma as contas (contas de Habitação não entram).', b: [['Dia / Mês / Ano / Todos', 'Define o período mostrado; as setas mudam de mês.'], ['Colunas', 'Reordena e esconde colunas da tabela; fica salvo.'], ['Filtro', 'Filtra por conta, categoria, tipo, valor e texto. Os filtros ficam salvos até você limpar.'], ['Análise', 'Gráficos e comparativos do período.'], ['Inserir Transação', 'Novo lançamento (receita, despesa ou transferência; pode parcelar, ser recorrente, ligar a dívida ou à Habitação).'], ['Extrato', 'Importa extrato bancário OFX ou CSV.'], ['Caixas de seleção', 'Selecione vários: aparece a soma (receita soma, despesa subtrai) e o botão "Editar mais" para alterar nome, categoria, data etc. em lote.'], ['Status (Pago/Pendente)', 'Clique para alternar.'], ['Anexar', 'Guarda comprovantes no lançamento.'], ['Lápis / Copiar / Lixeira', 'Editar, duplicar ou excluir.']] },
+            financeiro: { t: 'Financeiro', o: 'Todas as receitas, despesas e transferências entre contas.', f: 'Os lançamentos são digitados aqui, importados do Extrato (OFX/CSV) ou gerados por Recorrentes, Cartão (faturas) e Habitação/Casa. Os cartões do topo somam o período escolhido; "Saldo total" soma as contas (contas de Habitação não entram).', b: [['Dia / Mês / Ano / Todos', 'Define o período mostrado; as setas mudam de mês.'], ['Colunas', 'Reordena e esconde colunas da tabela; fica salvo.'], ['Filtro', 'Filtra por conta, categoria, tipo, valor e texto. Os filtros ficam salvos até você limpar.'], ['Inserir Transação', 'Novo lançamento (receita, despesa ou transferência; pode parcelar, ser recorrente, ligar a dívida ou à Habitação).'], ['Extrato', 'Importa extrato bancário OFX ou CSV.'], ['Caixas de seleção', 'Selecione vários: aparece a soma (receita soma, despesa subtrai) e o botão "Editar mais" para alterar nome, categoria, data etc. em lote.'], ['Status (Pago/Pendente)', 'Clique para alternar.'], ['Anexar', 'Guarda comprovantes no lançamento.'], ['Lápis / Copiar / Lixeira', 'Editar, duplicar ou excluir.']] },
             cartao: { t: 'Cartão de Crédito', o: 'Cadastro de cartões, lançamentos e faturas.', f: 'A fatura de cada mês vira um lançamento pendente no Financeiro (com vencimento) e alimenta os avisos de contas a vencer.', b: [['Novo cartão / Editar cartão', 'Nome, fechamento, vencimento, limite e se é compartilhado (quem pagou).'], ['Novo lançamento', 'Compra no cartão, com parcelas e categoria.'], ['Importar fatura', 'Lê a fatura (arquivo) e mostra prévia para ajustar categoria, "de quem" e dedutível antes de importar.'], ['Categorias', 'Gerencia as categorias do cartão (veja também Configurações › Editar categorias).'], ['Busca', 'Procura lançamentos pelo texto.']] },
             contas: { t: 'Contas (cartões/contas bancárias)', o: 'Cadastro das contas e cartões de débito usados no Financeiro.', f: 'O saldo vem dos lançamentos do Financeiro ligados a cada conta.', b: [['Novo cartão', 'Cadastra conta/cartão de débito (incluindo contas de Habitação, que ficam fora do saldo geral).'], ['Lançar no Financeiro', 'Abre um novo lançamento já ligado à conta.'], ['Dia / Mês / Ano / Todos', 'Período do extrato da conta.']] },
             agenda: { t: 'Agenda', o: 'Compromissos, lembretes e contatos (com aniversários).', f: 'Os compromissos de hoje e lembretes pendentes aparecem no Resumo e nas dicas da ISIS.', b: [['Compromissos / Lembretes / Contatos', 'Alternam as três áreas.'], ['Calendário / Lista', 'Modo de visualização.'], ['Hoje', 'Volta para o dia atual.'], ['Inserir Compromisso', 'Novo item com data, hora e repetição.']] },
             notas: { t: 'Notas', o: 'Anotações livres.', f: 'Ficam só aqui (e na nuvem, se logado).', b: [['Cartões / Linhas', 'Modo de visualização das notas.'], ['Nova nota', 'Cria uma anotação.']] },
             hobbies: { t: 'Hobbies e projetos', o: 'Acompanhamento de hobbies, projetos e receitas.', f: 'Cadastro próprio; contam nas dicas da ISIS (hobbies em andamento).', b: [['Todos / Somente Ativos / Finalizados / Receitas', 'Filtros por situação.'], ['Inserir Hobby / Projeto', 'Novo item com categoria e status.']] },
-            habitacao: { t: 'Habitação e construção', o: 'Controle da obra/casa: fundo, aportes, orçamentos, fornecedores, liberações, despesas da casa, dívidas, evolução e documentos.', f: 'Aportes e despesas marcadas como "Habitação" no Financeiro aparecem aqui; despesas da casa também alimentam o acerto de contas em Planejamento › Casal.', b: [['Aportar', 'Registra aporte de cada pessoa no fundo.'], ['Incluir Orçamento', 'Cadastra orçamento de fornecedor (aprovado/pendente); a ISIS compara com o fundo.'], ['Fornecedores / Liberações', 'Cadastro de fornecedores e liberações do financiamento.'], ['Despesas da casa', 'Gastos do dia a dia da casa, com "quem pagou". Tem seleção com soma.'], ['Dívidas, Evolução, Documentos', 'Áreas de apoio da obra.']] },
+            habitacao: { t: 'Habitação e construção', o: 'Controle da obra/casa: fundo, aportes, orçamentos, fornecedores, liberações, despesas da casa, dívidas, evolução e documentos.', f: 'Aportes e despesas marcadas como "Habitação" no Financeiro aparecem aqui; despesas da casa também alimentam o acerto de contas em Planejamento › Casal.', b: [['Aportar', 'Registra aporte de cada pessoa no fundo.'], ['Orçamentos', 'Tela própria: cadastra e agrupa orçamentos (aprovado/pendente) e baixa PDF dos selecionados; a ISIS compara com o fundo.'], ['Fornecedores', 'Cadastro de fornecedores, com PDF de todos.'], ['Liberações', 'Liberações do financiamento.'], ['Despesas da casa', 'Gastos do dia a dia da casa, com "quem pagou". Tem seleção com soma.'], ['Dívidas, Evolução, Documentos', 'Áreas de apoio da obra.']] },
             docs: { t: 'Documentos pessoais', o: 'Pastas e arquivos de documentos (algumas pastas podem ter senha).', f: 'Arquivos ficam no aparelho e na nuvem da sua conta.', b: [['Nova Pasta', 'Cria pasta (opcionalmente com senha).'], ['Documentos sem pasta', 'Arquivos soltos.']] },
             configuracoes: { t: 'Configurações', o: 'Preferências do sistema.', f: 'Salva no seu aparelho e na conta.', b: [['Salvar Alterações', 'Grava o nome do casal exibido no Resumo.'], ['Editar categorias', 'Inserir, renomear, excluir e ordenar as categorias de todo o sistema.'], ['Notificações / Ver avisos agora', 'Liga os avisos de contas, faturas e lembretes.'], ['Sua conta e a nuvem', 'Sincronizar agora, sair ou excluir a conta.'], ['Cores do sistema', 'Troca/reseta as cores.'], ['Relatórios (Excel)', 'Exporta/importa dados em planilha; há um modelo de importação.']] },
             backup: { t: 'Backup e sincronização', o: 'Cópias de segurança e nuvem.', f: 'Pasta local (Chrome/Edge), arquivo .json e Google Drive.', b: [['Sincronizar agora', 'Envia/recebe da nuvem.'], ['Selecionar Pasta de Backup Local', 'Salva cópia automática numa pasta do computador.'], ['Baixar backup agora / Restaurar de arquivo .json', 'Backup manual.'], ['Trazer do Drive', 'Importa dados antigos do Google Drive.']] },
@@ -6199,7 +6296,8 @@
             'pl:patrimonio': { t: 'Planejamento › Patrimônio', o: 'Bens, investimentos e dívidas formando o patrimônio líquido.', f: 'Soma bens cadastrados aqui + investimentos − dívidas (de Planejamento). Cada bem tem um dono (Tayná, Samuel ou Casa).', b: [['Novo bem', 'Imóvel, veículo etc., com valor e dono.'], ['Salvar foto do patrimônio', 'Guarda o valor do mês para ver a evolução.']] },
             'pl:investimentos': { t: 'Planejamento › Investimentos', o: 'Aplicações (CDB, LCI/LCA, Tesouro, fundos, poupança...), rendimento e simulador.', f: 'Saldo e aportes digitados aqui; rendimento estimado a partir do % do CDI.', b: [['Novo investimento', 'Tipo, % do CDI, saldo, valor aplicado e data.'], ['Aportar / Atualizar saldo', 'Registra novo aporte ou o saldo conferido.'], ['Simulador', 'Projeta o rendimento líquido de IR por prazo.']] },
             'pl:dividas': { t: 'Planejamento › Dívidas', o: 'Financiamentos e empréstimos.', f: 'Dados cadastrados aqui; ao dar baixa por um lançamento no Financeiro ("pagamento de dívida"), os valores pagos e parcelas restantes se atualizam sozinhos.', b: [['Nova dívida', 'Valor original, já pago/falta pagar, parcela, quantidade de parcelas e juros (opcional; sem juros informado não calcula).'], ['Simular', 'Testa amortização extra.']] },
-            'pl:casal': { t: 'Planejamento › Casal', o: 'Divisão das despesas da casa e acerto de contas entre Tayná e Samuel.', f: 'Usa despesas da Casa (Financeiro, Cartão e Habitação) com "quem pagou" informado e a divisão definida (ex.: 50/50). Despesas sem "quem pagou" ficam de fora e são avisadas.', b: [['Registrar acerto', 'Lança o pagamento entre os dois e zera a diferença.'], ['Divisão', 'Define a proporção de cada um.']] },
+            'pl:calcinv': { t: 'Planejamento › Cálculo Invest.', o: 'Calculadora de investimentos (antes era o botão Análise do Financeiro).', f: 'Não puxa dados: você digita tipo de rendimento, taxa, valor inicial, aporte mensal e prazo.', b: [['Abrir calculadora', 'Mostra rendimento líquido de IR, comparativo por prazo e por % do CDI.']] },
+            'pl:casal': { t: 'Planejamento › Cálculo', o: 'Calculadora de divisão de despesas entre várias pessoas, para consulta.', f: 'Tudo é digitado na própria tela (não puxa do Financeiro). Fica salvo até você limpar.', b: [['Pessoas', 'Adicione os nomes de quem participa.'], ['Nova despesa', 'Valor, quem pagou e entre quem é dividida. Sem "quem pagou" a despesa fica fora da divisão.'], ['Resultado', 'Quanto cada um pagou, a cota de cada um e quem paga quanto a quem.'], ['Limpar despesas / Limpar tudo', 'Começa um cálculo novo.']] },
             'pl:analise': { t: 'Planejamento › Análise', o: 'Comparativos e gráficos do que foi gasto.', f: 'Vem do Financeiro e do Cartão.', b: [['Mês / Ano', 'Escolhe o tipo de comparação.']] },
             'pl:ir': { t: 'Planejamento › Imposto de Renda', o: 'Reúne despesas dedutíveis e rendimentos do ano.', f: 'Lançamentos do Financeiro/Cartão marcados como "Dedutível" (saúde, educação etc.) e investimentos.', b: [['Ano', 'Escolhe o ano-base.']] }
         };
@@ -7163,7 +7261,7 @@
                 <form onsubmit="saveNote(event)" class="space-y-4">
                     <div><label class="${LBL}">Título</label><input type="text" id="nt-title" value="${esc(base ? base.title : '')}" required class="${INP}"></div>
                     ${base ? `<input type="hidden" id="nt-kind" value="${kind}">` : `<div><label class="${LBL}">Tipo</label><select id="nt-kind" onchange="noteKindChange()" class="${INP}"><option value="texto">Texto</option><option value="lista">Lista (com itens marcáveis)</option></select></div>`}
-                    <div id="nt-text-wrap" class="${kind === 'texto' ? '' : 'hidden'}"><label class="${LBL}">Texto</label><textarea id="nt-text" rows="8" class="${INP}">${esc(c.text || '')}</textarea></div>
+                    <div id="nt-text-wrap" class="${kind === 'texto' ? '' : 'hidden'}"><label class="${LBL}">Texto</label><textarea id="nt-text" rows="14" style="min-height:42vh" class="${INP}">${esc(c.text || '')}</textarea></div>
                     <div id="nt-list-wrap" class="${kind === 'lista' ? '' : 'hidden'} space-y-2"><label class="${LBL}">Itens</label>
                         <div id="nt-items" class="space-y-2">${(c.items || []).map(noteItemRow).join('')}</div>
                         <button type="button" onclick="noteAddItem()" class="text-xs font-bold text-teal-600"><i class="fa-solid fa-plus mr-1"></i>Adicionar item</button></div>
@@ -7175,6 +7273,7 @@
                     <div class="flex gap-3"><button type="submit" class="flex-1 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar nota</button>
                     ${base ? `<button type="button" onclick="deleteNote('${id}')" class="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-rose-600 text-sm font-bold"><i class="fa-solid fa-trash"></i></button>` : ''}</div>
                 </form>`);
+            { const mc = document.getElementById('modal-content'); mc.classList.remove('max-w-lg'); mc.classList.add('max-w-4xl'); }
             if (!base) setTimeout(() => { const e = document.getElementById('nt-title'); if (e) e.focus(); }, 50);
         }
         async function saveNote(e) {
@@ -7622,6 +7721,7 @@
             else if (typeof saudeVacOpen !== 'undefined' && saudeVacOpen) closeVac();
             else if (typeof saudeCareOpen !== 'undefined' && saudeCareOpen) closeCare();
             else if (typeof habEvoOpen !== 'undefined' && habEvoOpen) closeEvoView();
+            else if (typeof habBudOpen !== 'undefined' && habBudOpen) closeBudView();
             else if (typeof finFilterOpen !== 'undefined' && finFilterOpen) finToggleFilter();
             else done = false;
             if (done) { e.preventDefault(); if (document.activeElement && document.activeElement.blur && document.activeElement.tagName !== 'BODY') document.activeElement.blur(); }
@@ -7661,12 +7761,12 @@
             }
             return { inv, gross, ir, liq: gross - ir };
         }
-        function openAnalise() {
+        function anFormHtml() {
             const s = anLoad();
             const v = (k, def) => s[k] !== undefined ? s[k] : def;
             const inp = 'w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
             const lab = 'block text-[11px] font-bold text-slate-500 uppercase mb-1';
-            showModal('Análise de Investimentos', `
+            return `
                 <div class="space-y-3" oninput="anCalc()" onchange="anCalc()">
                     <div class="grid grid-cols-2 gap-3">
                         <div class="col-span-2"><label class="${lab}">Tipo de rendimento</label>
@@ -7692,10 +7792,9 @@
                     </div>
                     <div id="an-out"></div>
                     <p class="text-[10px] text-slate-400 leading-snug">O CDI de 14,90% é um valor padrão e você pode editá-lo: ajuste para o CDI atual, porque o resultado depende dele. O valor digitado fica salvo no aparelho. É uma estimativa: não considera IOF, taxas nem inflação e supõe a taxa constante no período. Aportes são feitos no início de cada mês a partir do 2º; o IR regressivo é calculado por aporte (22,5% até 180 dias, 20% até 360, 17,5% até 720, 15% acima); a poupança usa 0,5% ao mês.</p>
-                </div>`);
-            document.getElementById('modal-content').classList.replace('max-w-lg', 'max-w-2xl');
-            anCalc();
+                </div>`;
         }
+        function openAnalise() { showModal('Cálculo de Investimentos', anFormHtml()); document.getElementById('modal-content').classList.replace('max-w-lg', 'max-w-2xl'); anCalc(); }
         function anCalc() {
             const g = id => document.getElementById(id); if (!g('an-out')) return;
             const tipo = g('an-tipo').value;
@@ -7813,7 +7912,7 @@
                                 <button onclick="openFinCols()" title="Reordenar / esconder colunas" class="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-table-columns mr-1"></i>Colunas</button>
                                 <button onclick="finToggleFilter()" class="px-3 py-2 rounded-xl text-xs font-bold ${finFilterOpen || nAct ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid fa-filter mr-1"></i>Filtro${nAct ? ' (' + nAct + ')' : ''}<i class="fa-solid fa-chevron-${finFilterOpen ? 'up' : 'down'} ml-1.5 text-[9px]"></i></button>
                                 <button onclick="finSet('hab', !finF.hab)" title="${finF.hab ? 'Mostrando só movimentações Habitacional (toque para ver tudo)' : 'Ver só movimentações Habitacional'}" class="w-9 h-9 rounded-xl flex items-center justify-center ${finF.hab ? 'bg-amber-500 text-white shadow' : 'bg-slate-100 dark:bg-slate-700 text-amber-600'}"><i class="fa-solid fa-hammer"></i></button>
-                                <button onclick="openAnalise()" class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5"><i class="fa-solid fa-chart-line"></i><span>Análise</span></button>
+                                
                                 <button onclick="openFinanceModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center space-x-2"><i class="fa-solid fa-plus"></i><span>Inserir Transação</span></button>
                                 <button onclick="openExtratoImport()" class="bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5"><i class="fa-solid fa-file-import"></i><span>Extrato</span></button>
                             </div>
@@ -8441,9 +8540,9 @@
 
         // ---------- casca da tela ----------
         const PL_TABS = [
-            ['orcamento', 'Orçamento', 'fa-bullseye'], ['fluxo', 'Fluxo projetado', 'fa-chart-line'], ['recorrentes', 'Recorrentes', 'fa-repeat'], ['vencimentos', 'Vencimentos', 'fa-calendar-days'],
+            ['orcamento', 'Orçamento', 'fa-bullseye'], ['fluxo', 'Fluxo projetado', 'fa-chart-line'], ['calcinv', 'Cálculo Invest.', 'fa-chart-line'], ['recorrentes', 'Recorrentes', 'fa-repeat'], ['vencimentos', 'Vencimentos', 'fa-calendar-days'],
             ['metas', 'Metas', 'fa-flag-checkered'], ['patrimonio', 'Patrimônio', 'fa-landmark'], ['investimentos', 'Investimentos', 'fa-seedling'], ['dividas', 'Dívidas', 'fa-hand-holding-dollar'],
-            ['casal', 'Casal', 'fa-user-group'], ['analise', 'Análise', 'fa-chart-pie'], ['ir', 'Imposto de Renda', 'fa-file-invoice']
+            ['casal', 'Cálculo', 'fa-calculator'], ['analise', 'Análise', 'fa-chart-pie'], ['ir', 'Imposto de Renda', 'fa-file-invoice']
         ];
         function plSetTab(t) { plTab = t; plDay = ''; renderCurrentTabContent(); window.scrollTo(0, 0); }
         function plNavMonth(d) { plMonth = ymAdd(plMonth, d); plDay = ''; renderCurrentTabContent(); }
@@ -8451,7 +8550,7 @@
             plRecAuto();
             const P = plano();
             const vistas = [['todos', 'Todos'], ['p1', P.people[0].name], ['p2', P.people[1].name], ['casa', 'Casa']];
-            const fns = { orcamento: plRenderOrcamento, fluxo: plRenderFluxo, recorrentes: plRenderRecs, vencimentos: plRenderVenc, metas: plRenderMetas, patrimonio: plRenderPatrimonio, investimentos: plRenderInvest, dividas: plRenderDividas, casal: plRenderCasal, analise: plRenderAnalise, ir: plRenderIR };
+            const fns = { orcamento: plRenderOrcamento, fluxo: plRenderFluxo, calcinv: plRenderCalcInv, recorrentes: plRenderRecs, vencimentos: plRenderVenc, metas: plRenderMetas, patrimonio: plRenderPatrimonio, investimentos: plRenderInvest, dividas: plRenderDividas, casal: plRenderCasal, analise: plRenderAnalise, ir: plRenderIR };
             let body = '';
             try { body = (fns[plTab] || plRenderOrcamento)(); } catch (e) { console.error(e); body = '<p class="text-sm text-rose-600">Erro ao montar esta tela: ' + esc(e.message) + '</p>'; }
             container.innerHTML = `<div class="space-y-4 max-w-7xl mx-auto ${plView === 'rows' ? 'pl-v-rows' : ''}" onclick="plItemClick(event)">
@@ -8462,6 +8561,7 @@
                 <div class="flex justify-end"><div class="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-bold" title="Como ver as listas desta área"><button onclick="plSetView('cards')" class="px-3 py-1.5 ${plView === 'cards' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}"><i class="fa-solid fa-table-cells-large mr-1"></i>Cartões</button><button onclick="plSetView('rows')" class="px-3 py-1.5 ${plView === 'rows' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}"><i class="fa-solid fa-list mr-1"></i>Linhas</button></div></div>
                 <div id="pl-body">${body}</div></div>`;
             plMarkItems(container);
+            if (plTab === 'calcinv') anCalc();
         }
         function plMonthNav() {
             return `<div class="flex items-center gap-2"><button onclick="plNavMonth(-1)" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700"><i class="fa-solid fa-chevron-left text-xs"></i></button>
@@ -8984,28 +9084,95 @@
             const P = plano(); P.people.forEach((p, i) => { p.name = document.getElementById('pp-n' + i).value.trim() || p.name; p.renda = document.getElementById('pp-r' + i).value.trim(); });
             P.split = document.getElementById('pp-split').value; saveAppData(); renderCurrentTabContent();
         }
+        const AN_IDS = ['tipo', 'taxa', 'cdi', 'ipca', 'ir', 'ini', 'aporte', 'prazo', 'un'];
+        function anSaved() { const P = plano(); if (!Array.isArray(P.calcInv)) P.calcInv = []; return P.calcInv; }
+        function anGravar() {
+            const g = id => document.getElementById('an-' + id); if (!g('tipo')) return;
+            const f = {}; AN_IDS.forEach(k => f[k] = g(k).value);
+            const prazo = Math.max(0, Math.floor(anNum('an-prazo'))), m = f.un === 'a' ? prazo * 12 : prazo;
+            const p = { tipo: f.tipo, taxa: anNum('an-taxa'), cdi: anNum('an-cdi'), ipca: anNum('an-ipca'), isento: f.ir === 'isento', ini: anNum('an-ini'), aporte: anNum('an-aporte') };
+            if (!m || (!p.ini && !p.aporte)) { showToast('Preencha valor e prazo antes de gravar.', 'warning'); return; }
+            const r = anSim(p, m), tn = { cdi: f.taxa + '% do CDI', pre: f.taxa + '% a.a.', ipca: 'IPCA + ' + f.taxa + '%', poup: 'Poupança' }[f.tipo] || '';
+            const nome = prompt('Nome para este cálculo:', tn + ' · ' + (f.un === 'a' ? prazo + (prazo === 1 ? ' ano' : ' anos') : prazo + (prazo === 1 ? ' mês' : ' meses')));
+            if (nome === null) return;
+            anSaved().unshift({ id: uid(), name: nome.trim() || tn, date: localDateStr(), f, inv: r.inv, liq: r.liq });
+            saveAppData(); renderCurrentTabContent(); showToast('Cálculo gravado!', 'success');
+        }
+        function anAbrir(id) {
+            const it = anSaved().find(x => x.id === id); if (!it) return;
+            AN_IDS.forEach(k => { const el = document.getElementById('an-' + k); if (el && it.f[k] !== undefined) el.value = it.f[k]; });
+            anCalc(); window.scrollTo(0, 0);
+        }
+        function anExcluir(id) { if (!confirm('Excluir este cálculo gravado?')) return; const P = plano(); P.calcInv = anSaved().filter(x => x.id !== id); saveAppData(); renderCurrentTabContent(); }
+        function plRenderCalcInv() {
+            const L = anSaved();
+            return `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                <div class="${PL_CARD}"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2 mb-1"><i class="fa-solid fa-chart-line text-teal-500"></i>Cálculo de investimentos</h3>
+                    <p class="text-sm text-slate-500 mb-4">Simule o rendimento (CDI, prefixado, IPCA+ ou poupança) com aporte mensal e imposto de renda.</p>${anFormHtml()}
+                    <button onclick="anGravar()" class="${PL_BTN} mt-4"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Gravar</button></div>
+                <div class="${PL_CARD}"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2 mb-3"><i class="fa-solid fa-bookmark text-amber-500"></i>Cálculos gravados <span class="text-xs font-normal text-slate-400">(${L.length})</span></h3>
+                    ${L.length ? `<div class="space-y-2">${L.map(x => `<div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="font-bold text-sm truncate">${esc(x.name)}</p><p class="text-[11px] text-slate-400">${fmtBR(x.date)} · inicial R$ ${esc(x.f.ini)}${x.f.aporte && anNumStr(x.f.aporte) ? ' + R$ ' + esc(x.f.aporte) + '/mês' : ''}</p></div>
+                        <div class="whitespace-nowrap"><button onclick="anAbrir('${x.id}')" title="Carregar na calculadora" class="px-2 py-1 bg-white dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-arrow-up-right-from-square"></i></button> <button onclick="anExcluir('${x.id}')" class="px-2 py-1 bg-white dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button></div></div>
+                        <div class="grid grid-cols-3 gap-2 mt-2 text-center text-xs"><div><p class="text-[10px] uppercase text-slate-400 font-bold">Investido</p><b>R$ ${anM2(x.inv)}</b></div><div><p class="text-[10px] uppercase text-slate-400 font-bold">Líquido final</p><b class="text-teal-700 dark:text-teal-300">R$ ${anM2(x.liq)}</b></div><div><p class="text-[10px] uppercase text-slate-400 font-bold">Rendimento</p><b class="text-emerald-600">R$ ${anM2(x.liq - x.inv)}</b></div></div></div>`).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-8">Nada gravado ainda. Faça um cálculo e toque em <b>Gravar</b> para guardar aqui.</p>'}
+                </div></div>`;
+        }
+        function anM2(v) { return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+        function anNumStr(v) { return anNumFrom(v) > 0; }
+        function anNumFrom(v) { const t = String(v || '').trim().replace(/\./g, '').replace(',', '.'); return Number(t) || 0; }
+
+        // ---------- Cálculo (divisão de despesas, tudo digitado na hora) ----------
+        let plCalcEdit = '';
+        function plCalc() { const P = plano(); if (!P.calc) P.calc = { people: [], items: [] }; if (!P.calc.people) P.calc.people = []; if (!P.calc.items) P.calc.items = []; return P.calc; }
+        function plCalcAddPerson() { const el = document.getElementById('cc-pn'), n = el.value.trim(); if (!n) return; const C = plCalc(); if (C.people.some(x => normKey(x.name) === normKey(n))) { showToast('Esse nome já está na lista.', 'warning'); return; } C.people.push({ id: uid(), name: n }); saveAppData(); renderCurrentTabContent(); }
+        function plCalcDelPerson(id) { const C = plCalc(); if (C.items.some(i => i.payer === id || (i.split || []).includes(id)) && !confirm('Essa pessoa está em despesas. Remover mesmo assim (ela sai delas)?')) return; C.people = C.people.filter(x => x.id !== id); C.items.forEach(i => { if (i.payer === id) i.payer = ''; i.split = (i.split || []).filter(x => x !== id); }); saveAppData(); renderCurrentTabContent(); }
+        function plCalcSaveItem(e) {
+            e.preventDefault(); const C = plCalc(), g = id => document.getElementById(id);
+            const split = [...document.querySelectorAll('.cc-sp:checked')].map(x => x.value), amount = recNum(g('cc-v').value);
+            if (!(amount > 0)) { showToast('Informe o valor.', 'warning'); return; } if (!split.length) { showToast('Marque entre quem a despesa é dividida.', 'warning'); return; }
+            const o = { desc: g('cc-d').value.trim(), amount, payer: g('cc-p').value, split };
+            if (plCalcEdit) { Object.assign(C.items.find(i => i.id === plCalcEdit), o); plCalcEdit = ''; } else C.items.push(Object.assign({ id: uid() }, o));
+            saveAppData(); renderCurrentTabContent();
+        }
+        function plCalcEditItem(id) { plCalcEdit = id; renderCurrentTabContent(); window.scrollTo(0, 0); }
+        function plCalcDelItem(id) { const C = plCalc(); C.items = C.items.filter(i => i.id !== id); if (plCalcEdit === id) plCalcEdit = ''; saveAppData(); renderCurrentTabContent(); }
+        function plCalcClear() { if (!confirm('Limpar todas as despesas e pessoas deste cálculo?')) return; const P0 = plano(); P0.calc = { people: [], items: [] }; plCalcEdit = ''; saveAppData(); renderCurrentTabContent(); }
+        function plCalcClearItems() { if (!confirm('Limpar só as despesas (mantém as pessoas)?')) return; plCalc().items = []; plCalcEdit = ''; saveAppData(); renderCurrentTabContent(); }
+        function plCalcResult() {
+            const C = plCalc(), bal = {}, paid = {}, owed = {}; C.people.forEach(p => { bal[p.id] = 0; paid[p.id] = 0; owed[p.id] = 0; }); let total = 0, semPag = 0;
+            C.items.forEach(i => {
+                const sp = (i.split || []).filter(x => x in bal); if (!sp.length) return; total += i.amount;
+                if (!(i.payer in bal)) { semPag += i.amount; return; }   // sem quem pagou: não entra na divisão
+                paid[i.payer] += i.amount; bal[i.payer] += i.amount; sp.forEach(x => { owed[x] += i.amount / sp.length; bal[x] -= i.amount / sp.length; });
+            });
+            const cr = C.people.filter(p => bal[p.id] > 0.005).map(p => ({ p, v: bal[p.id] })).sort((a, b) => b.v - a.v), db = C.people.filter(p => bal[p.id] < -0.005).map(p => ({ p, v: -bal[p.id] })).sort((a, b) => b.v - a.v), tr = [];
+            let i = 0, j = 0; while (i < db.length && j < cr.length) { const m = Math.min(db[i].v, cr[j].v); tr.push({ from: db[i].p, to: cr[j].p, v: m }); db[i].v -= m; cr[j].v -= m; if (db[i].v < 0.005) i++; if (cr[j].v < 0.005) j++; }
+            return { bal, paid, owed, total, semPag, tr };
+        }
         function plRenderCasal() {
-            const P = plano(), [a, b] = P.people, A = plAcerto(plMonth), [ra, rb] = [A.ra, A.rb];
-            const who = A.netA > 0.005 ? `<b>${esc(b.name)}</b> deve <b class="text-rose-600">${R$(A.netA)}</b> a <b>${esc(a.name)}</b>` : A.netA < -0.005 ? `<b>${esc(a.name)}</b> deve <b class="text-rose-600">${R$(-A.netA)}</b> a <b>${esc(b.name)}</b>` : 'Tudo certo: ninguém deve nada.';
-            const acs = P.acertos.filter(x => (x.date || '').startsWith(plMonth));
-            const inp = 'px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            const C = plCalc(), R = plCalcResult(), ed = plCalcEdit ? C.items.find(i => i.id === plCalcEdit) : null, nm = id => { const p = C.people.find(x => x.id === id); return p ? esc(p.name) : '—'; };
+            const inp = 'w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            const splitSel = ed ? (ed.split || []) : C.people.map(p => p.id);
             return `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div class="${PL_CARD}"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><i class="fa-solid fa-scale-balanced text-teal-500"></i>Acerto de contas</h3>${plMonthNav()}</div>
-                    <p class="text-xs text-slate-500 mb-3">Considera as despesas da <b>Casa (conjunta)</b>, incluindo cartões compartilhados. Marque no lançamento "De quem" e "Quem pagou".</p>
-                    <div class="grid grid-cols-3 gap-2 mb-3 text-center"><div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase text-slate-400 font-bold">Despesas da casa</p><b class="text-sm">${R$(A.T)}</b></div>
-                        <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase text-slate-400 font-bold">${esc(a.name)} pagou</p><b class="text-sm">${R$(A.pa)}</b><p class="text-[10px] text-slate-400">cota ${Math.round(ra * 100)}% = ${R$(A.T * ra)}</p></div>
-                        <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-700/40"><p class="text-[10px] uppercase text-slate-400 font-bold">${esc(b.name)} pagou</p><b class="text-sm">${R$(A.pb)}</b><p class="text-[10px] text-slate-400">cota ${Math.round(rb * 100)}% = ${R$(A.T * rb)}</p></div></div>
-                    <div class="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 text-sm">${who}</div>
-                    ${A.sem > 0.005 ? `<p class="text-[11px] text-amber-700 mt-2"><i class="fa-solid fa-circle-info mr-1"></i>${R$(A.sem)} em despesas da casa sem "quem pagou" informado (não entram no acerto).</p>` : ''}
-                    <button onclick="plAcertoOpen()" class="${PL_BTN} mt-3"><i class="fa-solid fa-handshake mr-1"></i>Registrar acerto</button>
-                    ${acs.length ? `<div class="mt-3 text-xs text-slate-500 space-y-0.5">${acs.map(x => `<div class="flex justify-between"><span>${fmtBR(x.date)} · ${esc(plPersonName(x.from))} → ${esc(plPersonName(x.to))}</span><span><b>${R$(x.amount)}</b> <button onclick="plDel('acertos','${x.id}')" class="text-slate-300 hover:text-rose-600 ml-1"><i class="fa-solid fa-xmark"></i></button></span></div>`).join('')}</div>` : ''}</div>
-                <div class="${PL_CARD}"><h3 class="font-bold text-slate-800 dark:text-white mb-3">Como dividir</h3>
-                    <div class="grid grid-cols-2 gap-2 mb-2">${P.people.map((p, i) => `<div><label class="${LBL}">Nome</label><input id="pp-n${i}" value="${esc(p.name)}" class="${inp} w-full"><label class="${LBL} mt-1">Renda mensal (R$)</label><input id="pp-r${i}" inputmode="decimal" value="${esc(p.renda || '')}" class="${inp} w-full" placeholder="para divisão proporcional"></div>`).join('')}</div>
-                    <label class="${LBL}">Regra da divisão</label><select id="pp-split" class="${inp} w-full"><option value="meio" ${P.split === 'meio' ? 'selected' : ''}>Meio a meio (50% / 50%)</option><option value="renda" ${P.split === 'renda' ? 'selected' : ''}>Proporcional à renda</option></select>
-                    <button onclick="plPeopleSave()" class="${PL_BTN} mt-3">Salvar</button>
-                    <p class="text-[11px] text-slate-400 mt-3">Use o seletor <b>Todos / ${esc(a.name)} / ${esc(b.name)} / Casa</b> no alto da tela para ver cada visão separada, com o mesmo login.</p></div>
-                <div class="${PL_CARD} lg:col-span-2"><h3 class="font-bold text-slate-800 dark:text-white mb-3">Despesas da casa em ${fmtYM(plMonth)}</h3>
-                    ${A.items.length ? `<div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-[11px] uppercase text-slate-400"><tr><th class="py-1.5">Data</th><th>Descrição</th><th class="text-right">Valor</th><th>Quem pagou</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-700">${A.items.sort((x, y) => (y.r.date || '').localeCompare(x.r.date || '')).map(({ r, who }) => `<tr><td class="py-1.5 whitespace-nowrap">${fmtBR(r.date)}</td><td>${esc(r.desc)}${r.src === 'card' ? ' <i class="fa-solid fa-credit-card text-indigo-400 text-[10px]"></i>' : ''}</td><td class="text-right whitespace-nowrap">${R$(r.amount)}</td><td class="text-xs">${who.length ? who.map(([w, v]) => esc(w === 'a' ? a.name : b.name) + (who.length > 1 ? ' ' + R$(v) : '')).join(' + ') : '<span class="text-amber-600">não informado</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400 text-center py-6">Nenhuma despesa da casa neste mês.</p>'}</div></div>`;
+                <div class="${PL_CARD}"><h3 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2 mb-1"><i class="fa-solid fa-calculator text-teal-500"></i>Cálculo de divisão</h3>
+                    <p class="text-xs text-slate-500 mb-3">Tela de consulta: digite as pessoas e as despesas, e veja quanto cada um deve. Não puxa nada do Financeiro.</p>
+                    <label class="${LBL}">Pessoas</label>
+                    <form onsubmit="event.preventDefault();plCalcAddPerson()" class="flex gap-2 mb-2"><input id="cc-pn" placeholder="Nome (ex.: Ana)" class="${inp}"><button class="${PL_BTN}">Adicionar</button></form>
+                    <div class="flex flex-wrap gap-1.5 mb-4">${C.people.map(p => `<span class="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-sm font-semibold">${esc(p.name)}<button onclick="plCalcDelPerson('${p.id}')" class="w-5 h-5 rounded-full text-slate-400 hover:text-rose-600"><i class="fa-solid fa-xmark text-[10px]"></i></button></span>`).join('') || '<span class="text-xs text-slate-400">Nenhuma pessoa ainda.</span>'}</div>
+                    ${C.people.length >= 2 ? `<form onsubmit="plCalcSaveItem(event)" class="space-y-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/40">
+                        <p class="text-[11px] font-bold uppercase text-slate-400">${ed ? 'Editando despesa' : 'Nova despesa'}</p>
+                        <div class="grid grid-cols-2 gap-2"><input id="cc-d" placeholder="Descrição (opcional)" value="${esc(ed ? ed.desc : '')}" class="${inp}"><input id="cc-v" inputmode="decimal" required placeholder="Valor (R$)" value="${ed ? String(ed.amount).replace('.', ',') : ''}" class="${inp}"></div>
+                        <div><label class="${LBL}">Quem pagou</label><select id="cc-p" class="${inp}"><option value="">Não informado (fora da divisão)</option>${C.people.map(p => `<option value="${p.id}" ${ed && ed.payer === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+                        <div><label class="${LBL}">Dividir entre</label><div class="flex flex-wrap gap-x-4 gap-y-1">${C.people.map(p => `<label class="flex items-center gap-1.5 text-sm"><input type="checkbox" class="cc-sp" value="${p.id}" ${splitSel.includes(p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('')}</div></div>
+                        <div class="flex gap-2"><button class="${PL_BTN}">${ed ? 'Salvar' : 'Adicionar despesa'}</button>${ed ? `<button type="button" onclick="plCalcEdit='';renderCurrentTabContent()" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-600 text-xs font-bold">Cancelar</button>` : ''}</div></form>` : '<p class="text-xs text-slate-400">Adicione pelo menos 2 pessoas para lançar despesas.</p>'}
+                </div>
+                <div class="${PL_CARD}"><h3 class="font-bold text-lg text-slate-800 dark:text-white mb-3">Resultado</h3>
+                    ${C.items.length ? `<div class="space-y-1.5 mb-3">${C.people.map(p => { const v = R.bal[p.id]; return `<div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40 text-sm"><span class="font-bold">${esc(p.name)}</span><span class="text-xs text-slate-500">pagou ${R$(R.paid[p.id])} · cota ${R$(R.owed[p.id])}</span><b class="${v > 0.005 ? 'text-emerald-600' : v < -0.005 ? 'text-rose-600' : 'text-slate-400'}">${v > 0.005 ? 'recebe ' + R$(v) : v < -0.005 ? 'deve ' + R$(-v) : 'quite'}</b></div>`; }).join('')}</div>
+                    <div class="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 text-sm space-y-1">${R.tr.length ? R.tr.map(t => `<p><b>${esc(t.from.name)}</b> paga <b class="text-rose-600">${R$(t.v)}</b> a <b>${esc(t.to.name)}</b></p>`).join('') : '<p>Tudo certo: ninguém deve nada.</p>'}</div>
+                    <p class="text-[11px] text-slate-400 mt-2">Total das despesas na divisão: <b>${R$(R.total - R.semPag)}</b>${R.semPag > 0.005 ? ` · ${R$(R.semPag)} sem "quem pagou" ficou fora` : ''}</p>` : '<p class="text-sm text-slate-400 py-6 text-center">Lance as despesas ao lado para ver a divisão.</p>'}
+                </div>
+                ${C.items.length ? `<div class="${PL_CARD} lg:col-span-2"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-slate-800 dark:text-white">Despesas lançadas (${C.items.length})</h3><div class="flex gap-3 text-xs"><button onclick="plCalcClearItems()" class="underline text-slate-500">Limpar despesas</button><button onclick="plCalcClear()" class="underline text-rose-500">Limpar tudo</button></div></div>
+                    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-[11px] uppercase text-slate-400"><tr><th class="py-1.5">Descrição</th><th class="text-right">Valor</th><th class="pl-4">Quem pagou</th><th>Dividida entre</th><th></th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-700">${C.items.map(i => `<tr><td class="py-2">${esc(i.desc || '—')}</td><td class="text-right font-bold">${R$(i.amount)}</td><td class="pl-4">${nm(i.payer)}</td><td class="text-xs text-slate-500">${(i.split || []).map(nm).join(', ')}</td><td class="text-right whitespace-nowrap"><button onclick="plCalcEditItem('${i.id}')" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button> <button onclick="plCalcDelItem('${i.id}')" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs hover:text-rose-600"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('')}</tbody></table></div></div>` : ''}
+            </div>`;
         }
 
         // ---------- 10) Análise: comparativo, taxa de poupança, 50/30/20 ----------
