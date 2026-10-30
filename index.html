@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 74</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 75</div>
             </div>
         </aside>
 
@@ -4122,25 +4122,32 @@
         function openBudPdf() {
             const H = appData.habitacao, groups = H.budgetGroups || [], loose = H.budgets.filter(b => !groups.some(g => g.id === b.groupId));
             if (!H.budgets.length) { showToast('Nenhum orçamento cadastrado.', 'warning'); return; }
-            const row = b => `<label class="flex items-center gap-2 text-sm py-1 pl-2"><input type="checkbox" class="bpdf-b" data-g="${b.groupId || ''}" value="${b.id}"> <span class="flex-1 truncate">${esc(b.title)} <span class="text-[11px] text-slate-400">${esc(b.supplier || '')}</span></span><span class="text-xs text-amber-600 font-bold">R$ ${money(Number(b.amount) || 0)}</span></label>`;
+            const row = b => `<label class="flex items-center gap-2 text-sm py-1 pl-2"><input type="checkbox" class="bpdf-b" data-g="${b.groupId || ''}" value="${b.id}"> <span class="flex-1 truncate">${esc(b.title)} <span class="text-[11px] text-slate-400">${esc(b.supplier || '')}</span></span><span class="text-right leading-tight"><span class="block text-xs text-amber-600 font-bold">R$ ${money(Number(b.amount) || 0)}</span>${(Number(b.amount) || 0) - (Number(b.paidAmount) || 0) > 0.004 ? `<span class="block text-[10px] text-rose-500 font-semibold">a pagar R$ ${money((Number(b.amount) || 0) - (Number(b.paidAmount) || 0))}</span>` : '<span class="block text-[10px] text-emerald-600 font-semibold">quitado</span>'}</span></label>`;
             const c = document.getElementById('modal-content');
             showModal('Baixar orçamentos em PDF', `<p class="text-xs text-slate-500 mb-3">Marque o que quer no PDF. Marcar um <b>grupo</b> inclui todos os orçamentos dele.</p>
-                <label class="flex items-center gap-2 text-sm font-bold mb-2"><input type="checkbox" onchange="document.querySelectorAll('#modal-content input[type=checkbox]').forEach(x=>x.checked=this.checked)"> Selecionar tudo</label>
-                <div class="max-h-[50vh] overflow-y-auto space-y-2">${groups.map(g => { const all = H.budgets.filter(b => b.groupId === g.id); return `<div class="rounded-xl border border-amber-200 dark:border-amber-900/60 p-2"><label class="flex items-center gap-2 text-sm font-bold"><input type="checkbox" onchange="document.querySelectorAll('#modal-content .bpdf-b[data-g=&quot;${g.id}&quot;]').forEach(x=>x.checked=this.checked)"> <i class="fa-solid fa-layer-group text-amber-500"></i> ${esc(g.name)} <span class="text-[11px] font-normal text-slate-400">(${all.length})</span></label>${all.map(row).join('')}</div>`; }).join('')}
+                <label class="flex items-center gap-2 text-sm font-bold mb-2"><input type="checkbox" onchange="document.querySelectorAll('#modal-content input[type=checkbox]').forEach(x=>x.checked=this.checked);budPdfSum()"> Selecionar tudo</label>
+                <div id="bpdf-sum" class="sticky top-0 z-10 mb-2 p-3 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-xs flex flex-wrap gap-x-5 gap-y-1"></div>
+                <div class="max-h-[50vh] overflow-y-auto space-y-2" onchange="budPdfSum()">${groups.map(g => { const all = H.budgets.filter(b => b.groupId === g.id); return `<div class="rounded-xl border border-amber-200 dark:border-amber-900/60 p-2"><label class="flex items-center gap-2 text-sm font-bold"><input type="checkbox" onchange="document.querySelectorAll('#modal-content .bpdf-b[data-g=&quot;${g.id}&quot;]').forEach(x=>x.checked=this.checked);budPdfSum()"> <i class="fa-solid fa-layer-group text-amber-500"></i> ${esc(g.name)} <span class="text-[11px] font-normal text-slate-400">(${all.length})</span></label>${all.map(row).join('')}</div>`; }).join('')}
                     ${loose.length ? `<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-2"><p class="text-[11px] font-bold uppercase text-slate-400 mb-1">Sem grupo</p>${loose.map(row).join('')}</div>` : ''}</div>
                 <button onclick="budPdfGo()" class="w-full mt-4 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow"><i class="fa-solid fa-file-arrow-down mr-1.5"></i>Gerar PDF</button>`);
-            c.classList.remove('max-w-lg'); c.classList.add('max-w-2xl');
+            c.classList.remove('max-w-lg'); c.classList.add('max-w-2xl'); budPdfSum();
+        }
+        function budPdfSum() {
+            const el = document.getElementById('bpdf-sum'); if (!el) return;
+            const ids = new Set([...document.querySelectorAll('#modal-content .bpdf-b:checked')].map(x => x.value)), sel = appData.habitacao.budgets.filter(b => ids.has(b.id));
+            const T = sumBudgets(sel, 'amount'), P = sumBudgets(sel, 'paidAmount'), A = sel.reduce((s, b) => s + Math.max(0, (Number(b.amount) || 0) - (Number(b.paidAmount) || 0)), 0);
+            el.innerHTML = `<span><b>${sel.length}</b> selecionado(s)</span><span>Total <b class="text-amber-600">R$ ${money(T)}</b></span><span>Pago <b class="text-emerald-600">R$ ${money(P)}</b></span><span>A pagar <b class="text-rose-600 text-sm">R$ ${money(A)}</b></span>`;
         }
         function budPdfGo() {
             const H = appData.habitacao, ids = new Set([...document.querySelectorAll('#modal-content .bpdf-b:checked')].map(x => x.value));
             if (!ids.size) { showToast('Marque ao menos um orçamento.', 'warning'); return; }
-            const line = b => [b.title, (b.supplier || '') + (b.brand ? ' / ' + b.brand : ''), fmtBR(b.date), b.status || '', 'R$ ' + money(Number(b.amount) || 0), 'R$ ' + money(Number(b.paidAmount) || 0)];
+            const line = b => [b.title, (b.supplier || '') + (b.brand ? ' / ' + b.brand : ''), fmtBR(b.date), b.status || '', 'R$ ' + money(Number(b.amount) || 0), 'R$ ' + money(Number(b.paidAmount) || 0), 'R$ ' + money(Math.max(0, (Number(b.amount) || 0) - (Number(b.paidAmount) || 0)))];
             const rows = []; let T = 0, P = 0;
-            (H.budgetGroups || []).forEach(g => { const sel = H.budgets.filter(b => b.groupId === g.id && ids.has(b.id)); if (!sel.length) return; rows.push({ group: 1, text: 'Grupo: ' + g.name + (g.supplier ? '  -  ' + g.supplier : '') + '   |   total R$ ' + money(sumBudgets(sel, 'amount')) + '   pago R$ ' + money(sumBudgets(sel, 'paidAmount')) }); sel.forEach(b => rows.push(line(b))); });
+            (H.budgetGroups || []).forEach(g => { const sel = H.budgets.filter(b => b.groupId === g.id && ids.has(b.id)); if (!sel.length) return; rows.push({ group: 1, text: 'Grupo: ' + g.name + (g.supplier ? '  -  ' + g.supplier : '') + '   |   total R$ ' + money(sumBudgets(sel, 'amount')) + '   pago R$ ' + money(sumBudgets(sel, 'paidAmount')) + '   a pagar R$ ' + money(sel.reduce((a, b) => a + Math.max(0, (Number(b.amount) || 0) - (Number(b.paidAmount) || 0)), 0)) }); sel.forEach(b => rows.push(line(b))); });
             H.budgets.filter(b => !(H.budgetGroups || []).some(g => g.id === b.groupId) && ids.has(b.id)).forEach(b => rows.push(line(b)));
             const chosen = H.budgets.filter(b => ids.has(b.id)); T = sumBudgets(chosen, 'amount'); P = sumBudgets(chosen, 'paidAmount');
-            rows.push({ group: 1, text: 'TOTAL: R$ ' + money(T) + '   |   pago R$ ' + money(P) + '   |   em aberto R$ ' + money(Math.max(0, T - P)) });
-            closeModal(); isisTablePdf('Orçamentos - Habitação', chosen.length + ' orçamento(s)', [{ h: 'Orçamento', w: 4 }, { h: 'Fornecedor / Marca', w: 3 }, { h: 'Data', w: 1.4 }, { h: 'Status', w: 1.4 }, { h: 'Valor total', w: 1.8 }, { h: 'Pago', w: 1.8 }], rows, 'orcamentos');
+            rows.push({ group: 1, text: 'TOTAL: R$ ' + money(T) + '   |   pago R$ ' + money(P) + '   |   A PAGAR R$ ' + money(chosen.reduce((a, b) => a + Math.max(0, (Number(b.amount) || 0) - (Number(b.paidAmount) || 0)), 0)) });
+            closeModal(); isisTablePdf('Orçamentos - Habitação', chosen.length + ' orçamento(s)', [{ h: 'Orçamento', w: 4 }, { h: 'Fornecedor / Marca', w: 3 }, { h: 'Data', w: 1.4 }, { h: 'Status', w: 1.4 }, { h: 'Valor total', w: 1.8 }, { h: 'Pago', w: 1.8 }, { h: 'A pagar', w: 1.8 }], rows, 'orcamentos');
         }
         let supEditId = '', supQ = '';
         function supContactRow(c, ph) { return `<div class="sup-extra grid grid-cols-[1fr_1fr_auto] gap-2"><input type="text" class="sup-xc px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs" placeholder="Outro contato (pessoa)" value="${esc((c && c.contact) || '')}"><input type="text" class="sup-xp px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs" placeholder="Telefone" value="${esc((c && c.phone) || '')}"><button type="button" onclick="this.parentElement.remove()" class="px-2 text-rose-500" title="Remover contato"><i class="fa-solid fa-xmark"></i></button></div>`; }
