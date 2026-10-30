@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 73</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 74</div>
             </div>
         </aside>
 
@@ -3290,7 +3290,7 @@
                                 <i class="fa-solid fa-file-invoice"></i>
                                 <span>Orçamentos</span>
                             </button>
-                            <button onclick="openSupplierModal()" class="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
+                            <button onclick="supEditId='';supQ='';openSupplierModal()" class="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-2 text-sm">
                                 <i class="fa-solid fa-address-book"></i>
                                 <span>Fornecedores</span>
                             </button>
@@ -4117,7 +4117,7 @@
         }
         function supplierPdf() {
             const L = appData.habitacao.suppliers || []; if (!L.length) { showToast('Nenhum fornecedor cadastrado.', 'warning'); return; }
-            isisTablePdf('Fornecedores - Habitação', L.length + ' cadastrado(s)', [{ h: 'Fornecedor', w: 3 }, { h: 'Contato', w: 2.5 }, { h: 'Telefone', w: 2 }, { h: 'Observação', w: 4 }], L.slice().sort((a, b) => normKey(a.name).localeCompare(normKey(b.name))).map(x => [x.name, x.contact, x.phone, x.obs || '']), 'fornecedores');
+            isisTablePdf('Fornecedores - Habitação', L.length + ' cadastrado(s)', [{ h: 'Fornecedor', w: 3 }, { h: 'Contato', w: 2.5 }, { h: 'Telefone', w: 2 }, { h: 'Observação', w: 4 }], L.slice().sort((a, b) => normKey(a.name).localeCompare(normKey(b.name))).map(x => [x.name, [x.contact].concat((x.extra || []).map(e => e.contact)).filter(Boolean).join(' / '), [x.phone].concat((x.extra || []).map(e => e.phone)).filter(Boolean).join(' / '), x.obs || '']), 'fornecedores');
         }
         function openBudPdf() {
             const H = appData.habitacao, groups = H.budgetGroups || [], loose = H.budgets.filter(b => !groups.some(g => g.id === b.groupId));
@@ -4142,34 +4142,44 @@
             rows.push({ group: 1, text: 'TOTAL: R$ ' + money(T) + '   |   pago R$ ' + money(P) + '   |   em aberto R$ ' + money(Math.max(0, T - P)) });
             closeModal(); isisTablePdf('Orçamentos - Habitação', chosen.length + ' orçamento(s)', [{ h: 'Orçamento', w: 4 }, { h: 'Fornecedor / Marca', w: 3 }, { h: 'Data', w: 1.4 }, { h: 'Status', w: 1.4 }, { h: 'Valor total', w: 1.8 }, { h: 'Pago', w: 1.8 }], rows, 'orcamentos');
         }
-        function openSupplierModal() {
+        let supEditId = '', supQ = '';
+        function supContactRow(c, ph) { return `<div class="sup-extra grid grid-cols-[1fr_1fr_auto] gap-2"><input type="text" class="sup-xc px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs" placeholder="Outro contato (pessoa)" value="${esc((c && c.contact) || '')}"><input type="text" class="sup-xp px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs" placeholder="Telefone" value="${esc((c && c.phone) || '')}"><button type="button" onclick="this.parentElement.remove()" class="px-2 text-rose-500" title="Remover contato"><i class="fa-solid fa-xmark"></i></button></div>`; }
+        function supAddContact() { document.getElementById('sup-extras').insertAdjacentHTML('beforeend', supContactRow()); }
+        function supListHtml() {
+            const q = normKey(supQ), L = (appData.habitacao.suppliers || []).filter(x => !q || normKey([x.name, x.contact, x.phone, x.obs, (x.extra || []).map(e => e.contact + ' ' + e.phone).join(' ')].join(' ')).includes(q)).sort((a, b) => normKey(a.name).localeCompare(normKey(b.name)));
+            if (!L.length) return `<p class="text-xs text-slate-400">${q ? 'Nenhum fornecedor encontrado.' : 'Nenhum fornecedor cadastrado.'}</p>`;
+            return L.map(s => `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 flex justify-between items-start gap-2 text-xs">
+                <div class="min-w-0"><p class="font-bold text-slate-800 dark:text-white">${esc(s.name)}</p>
+                    ${[{ contact: s.contact, phone: s.phone }].concat(s.extra || []).filter(c => c.contact || c.phone).map(c => `<p class="text-slate-500"><i class="fa-solid fa-phone mr-1"></i>${esc(c.contact || '')}${c.contact && c.phone ? ' · ' : ''}${esc(c.phone || '')}</p>`).join('')}
+                    ${s.obs ? `<p class="text-slate-400">Obs: ${esc(s.obs)}</p>` : ''}</div>
+                <div class="whitespace-nowrap"><button onclick="editSupplier('${s.id}')" title="Editar" class="p-1.5 text-slate-500 hover:text-teal-600"><i class="fa-solid fa-pen"></i></button><button onclick="deleteSupplier('${s.id}')" title="Excluir" class="text-rose-500 hover:text-rose-700 p-1.5"><i class="fa-solid fa-trash"></i></button></div></div>`).join('');
+        }
+        function supSearch(v) { supQ = v; const el = document.getElementById('sup-list'); if (el) el.innerHTML = supListHtml(); }
+        function editSupplier(id) { supEditId = id; openSupplierModal(); }
+        function openSupplierModal(keepEdit) {
+            const ed = supEditId ? (appData.habitacao.suppliers || []).find(x => x.id === supEditId) : null; if (!ed) supEditId = '';
+            const I = 'px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs';
             showModal('Cadastro de Fornecedores', `
                 <div class="flex justify-end -mt-2 mb-2"><button onclick="supplierPdf()" title="Baixar todos os fornecedores em PDF" class="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow flex items-center gap-1.5"><i class="fa-solid fa-arrow-down"></i> Baixar PDF</button></div>
                 <div class="space-y-6">
-                    <form onsubmit="saveSupplier(event)" class="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
-                        <h4 class="font-bold text-xs text-slate-500 uppercase">Novo Fornecedor</h4>
+                    <form onsubmit="saveSupplier(event)" class="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border ${ed ? 'border-amber-300' : 'border-slate-100 dark:border-slate-700'}">
+                        <h4 class="font-bold text-xs text-slate-500 uppercase">${ed ? 'Editando fornecedor' : 'Novo Fornecedor'}</h4>
                         <div class="grid grid-cols-2 gap-3">
-                            <input type="text" id="sup-name" placeholder="Nome do Fornecedor" required class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs">
-                            <input type="text" id="sup-contact" placeholder="Contato (Pessoa)" required class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs">
+                            <input type="text" id="sup-name" placeholder="Nome do Fornecedor" required value="${esc(ed ? ed.name : '')}" class="${I}">
+                            <input type="text" id="sup-contact" placeholder="Contato (Pessoa)" value="${esc(ed ? ed.contact || '' : '')}" class="${I}">
                         </div>
                         <div class="grid grid-cols-2 gap-3">
-                            <input type="text" id="sup-phone" placeholder="Número / Telefone" required class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs">
-                            <input type="text" id="sup-obs" placeholder="Observação (Ex: Materiais de Construção)" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs">
+                            <input type="text" id="sup-phone" placeholder="Número / Telefone" value="${esc(ed ? ed.phone || '' : '')}" class="${I}">
+                            <input type="text" id="sup-obs" placeholder="Observação (Ex: Materiais de Construção)" value="${esc(ed ? ed.obs || '' : '')}" class="${I}">
                         </div>
-                        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-teal-950 py-2 rounded-xl font-bold text-xs shadow">Salvar Fornecedor</button>
+                        <div id="sup-extras" class="space-y-2">${(ed && ed.extra || []).map(supContactRow).join('')}</div>
+                        <button type="button" onclick="supAddContact()" class="text-xs font-bold text-teal-600 flex items-center gap-1"><span class="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center">+</span> Adicionar outro contato</button>
+                        <div class="flex gap-2"><button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-600 text-teal-950 py-2 rounded-xl font-bold text-xs shadow">${ed ? 'Salvar alterações' : 'Salvar Fornecedor'}</button>${ed ? `<button type="button" onclick="supEditId='';openSupplierModal()" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-xs font-bold">Cancelar</button>` : ''}</div>
                     </form>
-
-                    <div class="space-y-3 max-h-[45vh] overflow-y-auto">
+                    <div class="space-y-3">
                         <h4 class="font-bold text-xs text-slate-500 uppercase">Lista de Fornecedores Cadastrados</h4>
-                        ${(!appData.habitacao.suppliers || appData.habitacao.suppliers.length === 0) ? '<p class="text-xs text-slate-400">Nenhum fornecedor cadastrado.</p>' : appData.habitacao.suppliers.map(s => `
-                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 flex justify-between items-center text-xs">
-                                <div>
-                                    <p class="font-bold text-slate-800 dark:text-white">${s.name} <span class="text-[10px] text-amber-600">(${s.contact})</span></p>
-                                    <p class="text-slate-500"><i class="fa-solid fa-phone mr-1"></i> ${s.phone} \vert{} Obs:${s.obs || '-'}</p>
-                                </div>
-                                <button onclick="deleteSupplier('${s.id}')" class="text-rose-500 hover:text-rose-700 p-1"><i class="fa-solid fa-trash"></i></button>
-                            </div>
-                        `).join('')}
+                        <input type="search" id="sup-q" value="${esc(supQ)}" oninput="supSearch(this.value)" placeholder="Pesquisar por nome, contato, telefone ou observação…" class="w-full ${I}">
+                        <div id="sup-list" class="space-y-3 max-h-[40vh] overflow-y-auto">${supListHtml()}</div>
                     </div>
                 </div>
             `);
@@ -4178,16 +4188,16 @@
 
         function saveSupplier(e) {
             e.preventDefault();
-            const name = document.getElementById('sup-name').value;
-            const contact = document.getElementById('sup-contact').value;
-            const phone = document.getElementById('sup-phone').value;
-            const obs = document.getElementById('sup-obs').value;
-
+            const g = id => document.getElementById(id).value.trim();
+            const extra = [...document.querySelectorAll('#sup-extras .sup-extra')].map(r => ({ contact: r.querySelector('.sup-xc').value.trim(), phone: r.querySelector('.sup-xp').value.trim() })).filter(c => c.contact || c.phone);
+            const o = { name: g('sup-name'), contact: g('sup-contact'), phone: g('sup-phone'), obs: g('sup-obs'), extra };
             if (!appData.habitacao.suppliers) appData.habitacao.suppliers = [];
-            appData.habitacao.suppliers.push({ id: Date.now().toString(), name, contact, phone, obs });
-            saveAppData();
-            openSupplierModal();
-            showToast("Fornecedor cadastrado com sucesso!", "success");
+            if (supEditId) {
+                const cur = appData.habitacao.suppliers.find(x => x.id === supEditId);
+                if (cur) { if (cur.name !== o.name) (appData.habitacao.budgets || []).forEach(b => { if (b.supplier === cur.name) b.supplier = o.name; }); Object.assign(cur, o); }
+                supEditId = ''; showToast('Fornecedor atualizado!', 'success');
+            } else { appData.habitacao.suppliers.push(Object.assign({ id: Date.now().toString() }, o)); showToast('Fornecedor cadastrado com sucesso!', 'success'); }
+            saveAppData(); openSupplierModal();
         }
 
         function deleteSupplier(id) {
