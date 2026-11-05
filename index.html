@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 80</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 82</div>
             </div>
         </aside>
 
@@ -4587,6 +4587,7 @@
 
             if (id) {
                 const tr = appData.financeiro.transactions.find(x => x.id === id);
+                const FK = ['type', 'desc', 'category', 'accId', 'toAccId', 'habitacional', 'habPerson'], fb = {}; if (tr) FK.forEach(k => fb[k] = tr[k]);
                 if (tr) {
                     tr.type = type; tr.status = status; tr.desc = desc; tr.amount = amount; tr.category = category; tr.date = date; tr.accId = accId; tr.toAccId = toAccId;
                     if (!tr.cardInvoice) { if (habitacional) { tr.habitacional = true; tr.habPerson = habPerson; } else { delete tr.habitacional; delete tr.habPerson; } }
@@ -4594,6 +4595,10 @@
                     toRemove.forEach(rid => deleteStoredFile(rid));
                     tr.attachments = (tr.attachments || []).filter(a => !toRemove.includes(a.id)).concat(newAtts);
                     finApplyExtra(tr);
+                    if (tr.installment && appData.financeiro.transactions.some(x => x !== tr && x.installment && x.installment.group === tr.installment.group)) {
+                        const ch = FK.filter(k => (fb[k] || '') !== (tr[k] || ''));
+                        if (ch.length) { sibAsk('fin', tr.id, ch); return; }
+                    }
                 }
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(document.getElementById('fin-installments').value) || 1));
@@ -5328,7 +5333,7 @@
                     <div><label class="${LBL}">Dedutível no IR</label><select id="ce-ded" class="${INP}"><option value="">Não</option>${Object.entries(PL_IR).map(([k, l]) => `<option value="${k}" ${e.dedutivel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
                     <div><label class="${LBL}"><i class="fa-solid fa-hammer text-amber-500 mr-1"></i>Habitacional (obra)</label><select id="ce-hab" class="${INP}"><option value="">Não é da obra</option>${(appData.habitacao.people || []).map(p => `<option value="${p.id}" ${e.habitacional && e.habPerson === p.id ? 'selected' : ''}>Gasto de ${esc(p.name)}</option>`).join('')}<option value="__none" ${e.habitacional && !e.habPerson ? 'selected' : ''}>Da obra, sem pessoa (previsão)</option></select><p class="text-[10px] text-slate-400 mt-1">Aparece em Habitação › Movimentações. Vira gasto quando a fatura for paga; antes disso fica como previsão.</p></div>
                     <div><label class="${LBL}">Observação</label><textarea id="ce-obs" rows="2" class="${INP}">${esc(e.obs || '')}</textarea></div>
-                    ${sib > 1 ? `<label class="flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" id="ce-all"> Aplicar nome, categoria e observação às outras ${sib - 1} parcelas</label>` : ''}
+                    
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>`);
             cePayerRender();
@@ -5372,6 +5377,23 @@
             const card = cardById(document.getElementById('ce-card').value), d = document.getElementById('ce-date').value;
             if (card && d) document.getElementById('ce-inv').value = cardInvoiceKey(card, d);
         }
+        // ---- editou uma parcela: perguntar se as outras ficam iguais ----
+        const SIB_LABELS = { name: 'nome', desc: 'nome', category: 'categoria', obs: 'observação', cardId: 'cartão', owner: 'de quem', dedutivel: 'dedutível', habitacional: 'habitacional', habPerson: 'pessoa da obra', type: 'tipo', accId: 'conta', toAccId: 'conta de destino' };
+        function sibAsk(kind, id, keys) {
+            window._sib = { kind, id, keys };
+            const lab = [...new Set(keys.map(k => SIB_LABELS[k] || k))].join(', ');
+            showModal('Editar as outras parcelas?', `<p class="text-sm text-slate-600 dark:text-slate-300 mb-1">Você alterou: <b>${esc(lab)}</b>.</p>
+                <p class="text-xs text-slate-400 mb-4">Quer aplicar o mesmo nas outras parcelas? Valor, data e status de cada parcela não mudam.</p>
+                <div class="space-y-2"><button onclick="sibGo(true)" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Sim, em todas as parcelas</button>
+                <button onclick="sibGo(false)" class="w-full bg-slate-100 dark:bg-slate-700 py-3 rounded-xl font-bold text-sm">Só nesta parcela</button></div>`);
+        }
+        function sibGo(yes) {
+            const S = window._sib; if (!S) return; window._sib = null;
+            const list = S.kind === 'card' ? appData.cartao.entries : appData.financeiro.transactions, en = list.find(x => x.id === S.id);
+            if (yes && en && en.installment) list.forEach(x => { if (x !== en && x.installment && x.installment.group === en.installment.group) S.keys.forEach(k => { if (en[k] === undefined) delete x[k]; else x[k] = en[k]; }); });
+            if (S.kind === 'card') { cardCommit(yes ? 'Todas as parcelas atualizadas!' : 'Lançamento salvo!'); }
+            else { saveAppData(); closeModal(); renderCurrentTabContent(); showToast(yes ? 'Todas as parcelas atualizadas!' : 'Salvo!', 'success'); }
+        }
         function saveCardEntry(ev, id) {
             ev.preventDefault();
             const C = appData.cartao, g = k => document.getElementById(k);
@@ -5396,11 +5418,14 @@
             }
             const payFor = amt => !(payCard && payCard.shared) ? undefined : (splits ? splits.map(x => Object.assign({}, x)) : (payer ? [{ name: payer, amount: Math.abs(amt) }] : undefined));
             if (id) {
-                const en = C.entries.find(x => x.id === id);
+                const en = C.entries.find(x => x.id === id), KEYS = ['name', 'category', 'obs', 'cardId', 'owner', 'dedutivel', 'habitacional', 'habPerson'], before = {};
+                KEYS.forEach(k => before[k] = en[k]);
                 Object.assign(en, base, { amount }); applyWho(en);
                 if (payCard && payCard.shared) en.pagoPor = payFor(amount); else delete en.pagoPor;
-                const all = g('ce-all');
-                if (all && all.checked && en.installment) C.entries.forEach(x => { if (x !== en && x.installment && x.installment.group === en.installment.group) Object.assign(x, { name: base.name, category: base.category, obs: base.obs, cardId: base.cardId }); if (en.habitacional) { x.habitacional = true; x.habPerson = en.habPerson || ''; } else { delete x.habitacional; delete x.habPerson; }; });
+                if (en.installment && C.entries.some(x => x !== en && x.installment && x.installment.group === en.installment.group)) {
+                    const changed = KEYS.filter(k => (before[k] || '') !== (en[k] || ''));
+                    if (changed.length) { sibAsk('card', en.id, changed); return; }
+                }
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(g('ce-inst').value) || 1));
                 if (n === 1) C.entries.push(applyWho(Object.assign({ id: uid(), amount, pagoPor: payFor(amount) }, base)));
@@ -7228,7 +7253,7 @@
                 const L = cg[k].slice().sort((x, y) => (x.date || '').localeCompare(y.date || '')), f = L[0], n = f.installment ? (f.installment.total || L.length) : 1;
                 const ok = f.habPerson && H.people.some(p => p.id === f.habPerson);
                 const pago = L.every(e => { const tx = typeof cardInvoiceTx === 'function' ? cardInvoiceTx(e.cardId, e.invoice) : null; return !!(tx && tx.status === 'pago'); }) && L.length >= n, prev = !ok || !pago;
-                want[k] = { personId: ok ? f.habPerson : '', type: prev ? 'pendente' : 'retirada', fin: !prev, amount: Math.round(L.reduce((s, e) => s + (Number(e.amount) || 0), 0) * 100) / 100, date: f.date, desc: 'Cartão: ' + (f.name || '') + (n > 1 ? ' (em ' + n + 'x)' : ''), parc: n > 1 ? (() => { const pg = L.filter(e => { const tx = typeof cardInvoiceTx === 'function' ? cardInvoiceTx(e.cardId, e.invoice) : null; return !!(tx && tx.status === 'pago'); }); return { n, pagas: pg.length, pagoAmt: Math.round(pg.reduce((a, e) => a + (Number(e.amount) || 0), 0) * 100) / 100 }; })() : null };
+                want[k] = { personId: ok ? f.habPerson : '', type: prev ? 'pendente' : 'retirada', fin: !prev, amount: Math.round(L.reduce((s, e) => s + (Number(e.amount) || 0), 0) * 100) / 100, date: f.date, desc: (f.name || '') + (n > 1 ? ' (em ' + n + 'x)' : '') + ' via Cartão', parc: n > 1 ? (() => { const pg = L.filter(e => { const tx = typeof cardInvoiceTx === 'function' ? cardInvoiceTx(e.cardId, e.invoice) : null; return !!(tx && tx.status === 'pago'); }); return { n, pagas: pg.length, pagoAmt: Math.round(pg.reduce((a, e) => a + (Number(e.amount) || 0), 0) * 100) / 100 }; })() : null };
             });
             H.contributions = H.contributions.filter(c => !c.linkKey || want[c.linkKey]);
             Object.keys(want).forEach(k => {
