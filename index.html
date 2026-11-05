@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 76</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 79</div>
             </div>
         </aside>
 
@@ -377,7 +377,7 @@
         let lembreteFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
         let hobbyFilter = 'ativos'; // 'todos', 'ativos', 'finalizados'
         let financeFilterDate = localDateStr().slice(0, 7); // padrão: mês atual; '' = todos os meses
-        let obraFilterStatus = 'todos', obraHidePend = false, obraHideOther = false, obraPerson = '', obraSel = new Set(), obraVisible = [];
+        let obraFilterStatus = 'todos', obraHidePend = (() => { try { return localStorage.getItem('isis_obra_hide') === 'pend'; } catch (e) { return false; } })(), obraHideOther = (() => { try { return localStorage.getItem('isis_obra_hide') === 'other'; } catch (e) { return false; } })(), obraPerson = '', obraSel = new Set(), obraVisible = [];
         let obraSortOrder = 'date-desc';
         let budgetFilterStatus = 'todos';
         let finFilterOpen = false, finSort = { k: 'date', dir: 1 };
@@ -3244,10 +3244,10 @@
             // Filtro e Ordenação de Movimentações
             let contributionsList = [...appData.habitacao.contributions];
             if (obraFilterStatus !== 'todos') {
-                contributionsList = contributionsList.filter(c => c.type === obraFilterStatus);
+                contributionsList = contributionsList.filter(c => obraFilterStatus === 'parcelado' ? !!c.parc : obraFilterStatus === 'pendente' ? (c.type === 'pendente' && !c.parc) : c.type === obraFilterStatus);
             }
             if (obraPerson) contributionsList = contributionsList.filter(c => obraPerson === '__none' ? !c.personId : c.personId === obraPerson);
-            if (obraHidePend) contributionsList = contributionsList.filter(c => c.type !== 'pendente');
+            if (obraHidePend) contributionsList = contributionsList.filter(c => c.type !== 'pendente' || !!c.parc);
             if (obraHideOther) contributionsList = contributionsList.filter(c => c.type === 'pendente');
             contributionsList = sortContribs(contributionsList);
             obraVisible = contributionsList.map(c => c.id);
@@ -3348,8 +3348,8 @@
                                     <i class="fa-solid fa-plus"></i>
                                     <span>Inserir Valor</span>
                                 </button>
-                                <button onclick="obraHidePend=!obraHidePend;if(obraHidePend)obraHideOther=false;renderCurrentTabContent()" title="Ocultar as movimentações pendentes (previsão)" class="px-3 py-1.5 rounded-xl text-xs font-bold border ${obraHidePend ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${obraHidePend ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${obraHidePend ? 'Pendentes ocultos' : 'Ocultar pendentes'}</button>
-                                <button onclick="obraHideOther=!obraHideOther;if(obraHideOther)obraHidePend=false;renderCurrentTabContent()" title="Ocultar aportes e retiradas (mostrar só pendentes)" class="px-3 py-1.5 rounded-xl text-xs font-bold border ${obraHideOther ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${obraHideOther ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${obraHideOther ? 'Demais ocultos' : 'Ocultar demais'}</button>
+                                <button onclick="obraHidePend=!obraHidePend;if(obraHidePend)obraHideOther=false;obraHideSave();renderCurrentTabContent()" title="Ocultar as movimentações pendentes (previsão)" class="px-3 py-1.5 rounded-xl text-xs font-bold border ${obraHidePend ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${obraHidePend ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${obraHidePend ? 'Pendentes ocultos' : 'Ocultar pendentes'}</button>
+                                <button onclick="obraHideOther=!obraHideOther;if(obraHideOther)obraHidePend=false;obraHideSave();renderCurrentTabContent()" title="Ocultar aportes e retiradas (mostrar só pendentes)" class="px-3 py-1.5 rounded-xl text-xs font-bold border ${obraHideOther ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}"><i class="fa-solid ${obraHideOther ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${obraHideOther ? 'Demais ocultos' : 'Ocultar demais'}</button>
                                 <select onchange="obraPerson=this.value;renderCurrentTabContent()" title="Filtrar por pessoa" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
                                     <option value="">Todas as pessoas</option>${(appData.habitacao.people || []).map(p => `<option value="${p.id}" ${obraPerson === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}<option value="__none" ${obraPerson === '__none' ? 'selected' : ''}>Sem pessoa (previsões)</option>
                                 </select>
@@ -3358,6 +3358,7 @@
                                     <option value="aporte" ${obraFilterStatus === 'aporte' ? 'selected' : ''}>Aportes</option>
                                     <option value="retirada" ${obraFilterStatus === 'retirada' ? 'selected' : ''}>Retiradas</option>
                                     <option value="pendente" ${obraFilterStatus === 'pendente' ? 'selected' : ''}>Pendentes (previsão)</option>
+                                    <option value="parcelado" ${obraFilterStatus === 'parcelado' ? 'selected' : ''}>Parcelados (cartão)</option>
                                 </select>
                             </div>
                         </div>
@@ -3384,8 +3385,8 @@
                                                 <tr class="hover:bg-slate-50/50">
                                                     <td class="p-3.5"><input type="checkbox" ${obraSel.has(c.id) ? 'checked' : ''} onchange="obraSelToggle('${c.id}',this.checked)"></td>
                                                     <td class="p-3.5 font-bold text-slate-800 dark:text-white">${person.name}</td>
-                                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? 'Pendente' : c.fin ? 'Gasto' : 'Retirada'}</span></td>
-                                                    <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}${c.linkKey ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">via Financeiro</span>' : ''}</td>
+                                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? (c.parc ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700') : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? (c.parc ? 'Parcelado ' + c.parc.pagas + '/' + c.parc.n : 'Pendente') : c.fin ? 'Gasto' : 'Retirada'}</span></td>
+                                                    <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}${c.linkKey ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">via ' + (String(c.linkKey).endsWith('|card') ? 'Cartão' : 'Financeiro') + '</span>' : ''}</td>
                                                     <td class="p-3.5 text-slate-500">${c.date}</td>
                                                     <td class="p-3.5 font-bold ${c.type === 'aporte' ? 'text-emerald-600' : c.type === 'pendente' ? 'text-amber-600' : 'text-rose-600'}">R$ ${Number(c.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                                                     <td class="p-3.5 text-right space-x-1">
@@ -3581,6 +3582,7 @@
         function obraSelToggle(id, on) { if (on) obraSel.add(id); else obraSel.delete(id); obraSelRefresh(); }
         function obraSelAll(on) { obraVisible.forEach(i => { if (on) obraSel.add(i); else obraSel.delete(i); }); renderCurrentTabContent(); }
         function obraSelClear() { obraSel.clear(); renderCurrentTabContent(); }
+        function obraHideSave() { try { localStorage.setItem('isis_obra_hide', obraHidePend ? 'pend' : obraHideOther ? 'other' : ''); } catch (e) {} }
         function setObraFilter(val) { obraFilterStatus = val; renderCurrentTabContent(); }
         function setObraSort(val) { obraSortOrder = val; renderCurrentTabContent(); }
         function setBudgetFilter(val) { budgetFilterStatus = val; renderCurrentTabContent(); }
@@ -4960,12 +4962,12 @@
         }
         function editHabitacaoContrib(id) {
             const c = appData.habitacao.contributions.find(x => x.id === id);
-            if (c && c.linkKey) { showToast('Esta movimentação vem do Financeiro. Edite por lá (marque/desmarque “Habitacional”).', 'warning'); return; }
+            if (c && c.linkKey) { showToast(String(c.linkKey).endsWith('|card') ? 'Esta movimentação vem do Cartão de Crédito. Edite o lançamento por lá (campo Habitacional).' : 'Esta movimentação vem do Financeiro. Edite por lá (marque/desmarque “Habitacional”).', 'warning'); return; }
             openHabitacaoContribModal(id);
         }
         function deleteHabitacaoContrib(id) {
             const c = appData.habitacao.contributions.find(x => x.id === id);
-            if (c && c.linkKey) { showToast('Esta movimentação vem do Financeiro. Exclua ou desmarque “Habitacional” por lá.', 'warning'); return; }
+            if (c && c.linkKey) { showToast(String(c.linkKey).endsWith('|card') ? 'Esta movimentação vem do Cartão de Crédito. Exclua ou desmarque “Habitacional” no lançamento do cartão.' : 'Esta movimentação vem do Financeiro. Exclua ou desmarque “Habitacional” por lá.', 'warning'); return; }
             if (!confirm('Excluir esta movimentação?')) return;
             appData.habitacao.contributions = appData.habitacao.contributions.filter(c => c.id !== id); saveAppData(); renderCurrentTabContent(); }
 
@@ -5138,7 +5140,7 @@
                         ${entries.map(e => `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
                             <td class="p-3"><input type="checkbox" class="card-sel" data-id="${e.id}" data-amt="${Number(e.amount) || 0}" onchange="cardSelUpdate()"></td>
                             <td class="p-3 text-slate-500 whitespace-nowrap">${fmtBR(e.date)}${wide ? `<span class="block text-[10px] text-slate-400">fatura ${esc(fmtYM(e.invoice))}</span>` : ''}</td>
-                            <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}${(e.pagoPor || []).length ? `<div class="mt-1 flex flex-wrap gap-1">${e.pagoPor.map(p => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">${esc(p.name)} R$ ${money(p.amount)}</span>`).join('')}</div>` : ''}</td>
+                            <td class="p-3 font-medium text-slate-800 dark:text-white">${esc(e.name)}${e.habitacional ? ' <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Também aparece em Habitação"><i class="fa-solid fa-hammer"></i></span>' : ''}${(e.pagoPor || []).length ? `<div class="mt-1 flex flex-wrap gap-1">${e.pagoPor.map(p => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">${esc(p.name)} R$ ${money(p.amount)}</span>`).join('')}</div>` : ''}</td>
                             <td class="p-3"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(e.category)}</span></td>
                             <td class="p-3">${e.installment ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${e.installment.n}/${e.installment.total}</span>` : '<span class="text-slate-300">—</span>'}</td>
                             <td class="p-3 text-slate-500 text-xs max-w-[220px] truncate" title="${esc(e.obs || '')}">${esc(e.obs || '')}</td>
@@ -5324,6 +5326,7 @@
                     <div><label class="${LBL}">Categoria</label>${catSelectHtml(e.category)}</div>
                     <div class="grid grid-cols-2 gap-4"><div><label class="${LBL}">De quem</label><select id="ce-owner" class="${INP}"><option value="">Padrão do cartão</option><option value="casa" ${e.owner === 'casa' ? 'selected' : ''}>Casa (conjunta)</option>${plano().people.map(p => `<option value="${p.id}" ${e.owner === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
                     <div><label class="${LBL}">Dedutível no IR</label><select id="ce-ded" class="${INP}"><option value="">Não</option>${Object.entries(PL_IR).map(([k, l]) => `<option value="${k}" ${e.dedutivel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+                    <div><label class="${LBL}"><i class="fa-solid fa-hammer text-amber-500 mr-1"></i>Habitacional (obra)</label><select id="ce-hab" class="${INP}"><option value="">Não é da obra</option>${(appData.habitacao.people || []).map(p => `<option value="${p.id}" ${e.habitacional && e.habPerson === p.id ? 'selected' : ''}>Gasto de ${esc(p.name)}</option>`).join('')}<option value="__none" ${e.habitacional && !e.habPerson ? 'selected' : ''}>Da obra, sem pessoa (previsão)</option></select><p class="text-[10px] text-slate-400 mt-1">Aparece em Habitação › Movimentações. Vira gasto quando a fatura for paga; antes disso fica como previsão.</p></div>
                     <div><label class="${LBL}">Observação</label><textarea id="ce-obs" rows="2" class="${INP}">${esc(e.obs || '')}</textarea></div>
                     ${sib > 1 ? `<label class="flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" id="ce-all"> Aplicar nome, categoria e observação às outras ${sib - 1} parcelas</label>` : ''}
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
@@ -5379,7 +5382,8 @@
             }
             const base = { cardId: g('ce-card').value, name: g('ce-name').value.trim(), date: g('ce-date').value, invoice: g('ce-inv').value, category, obs: g('ce-obs').value.trim() };
             const ceOwner = g('ce-owner').value, ceDed = g('ce-ded').value;
-            const applyWho = x => { if (ceOwner) x.owner = ceOwner; else delete x.owner; if (ceDed && x.amount > 0) x.dedutivel = ceDed; else delete x.dedutivel; return x; };
+            const ceHab = g('ce-hab') ? g('ce-hab').value : '';
+            const applyWho = x => { if (ceHab && x.amount > 0) { x.habitacional = true; x.habPerson = ceHab === '__none' ? '' : ceHab; } else { delete x.habitacional; delete x.habPerson; } if (ceOwner) x.owner = ceOwner; else delete x.owner; if (ceDed && x.amount > 0) x.dedutivel = ceDed; else delete x.dedutivel; return x; };
             const sgn = g('ce-kind').value === 'credito' ? -1 : 1;
             const amount = sgn * Math.abs(Number(g('ce-amount').value) || 0);
             const payCard = cardById(base.cardId), payer = g('ce-payer') ? g('ce-payer').value : null;
@@ -5396,7 +5400,7 @@
                 Object.assign(en, base, { amount }); applyWho(en);
                 if (payCard && payCard.shared) en.pagoPor = payFor(amount); else delete en.pagoPor;
                 const all = g('ce-all');
-                if (all && all.checked && en.installment) C.entries.forEach(x => { if (x !== en && x.installment && x.installment.group === en.installment.group) Object.assign(x, { name: base.name, category: base.category, obs: base.obs, cardId: base.cardId }); });
+                if (all && all.checked && en.installment) C.entries.forEach(x => { if (x !== en && x.installment && x.installment.group === en.installment.group) Object.assign(x, { name: base.name, category: base.category, obs: base.obs, cardId: base.cardId }); if (en.habitacional) { x.habitacional = true; x.habPerson = en.habPerson || ''; } else { delete x.habitacional; delete x.habPerson; }; });
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(g('ce-inst').value) || 1));
                 if (n === 1) C.entries.push(applyWho(Object.assign({ id: uid(), amount, pagoPor: payFor(amount) }, base)));
@@ -7188,6 +7192,17 @@
                     want[t.id + '|' + side] = { personId: pid, type: t.status === 'pendente' ? 'pendente' : ty, amount: t.amount, date: t.date, desc: 'Transf. Financeiro: ' + (t.desc || '') };
                 });
             });
+            const cg = {};   // compras do cartão marcadas como da obra: parceladas viram UMA movimentação com o valor inteiro
+            ((appData.cartao && appData.cartao.entries) || []).forEach(e => {
+                if (!e.habitacional || !(Number(e.amount) > 0)) return;
+                const k = (e.installment && e.installment.group ? e.installment.group : e.id) + '|card'; (cg[k] = cg[k] || []).push(e);
+            });
+            Object.keys(cg).forEach(k => {
+                const L = cg[k].slice().sort((x, y) => (x.date || '').localeCompare(y.date || '')), f = L[0], n = f.installment ? (f.installment.total || L.length) : 1;
+                const ok = f.habPerson && H.people.some(p => p.id === f.habPerson);
+                const pago = L.every(e => { const tx = typeof cardInvoiceTx === 'function' ? cardInvoiceTx(e.cardId, e.invoice) : null; return !!(tx && tx.status === 'pago'); }) && L.length >= n, prev = !ok || !pago;
+                want[k] = { personId: ok ? f.habPerson : '', type: prev ? 'pendente' : 'retirada', fin: !prev, amount: Math.round(L.reduce((s, e) => s + (Number(e.amount) || 0), 0) * 100) / 100, date: f.date, desc: 'Cartão: ' + (f.name || '') + (n > 1 ? ' (em ' + n + 'x)' : ''), parc: n > 1 ? (() => { const pg = L.filter(e => { const tx = typeof cardInvoiceTx === 'function' ? cardInvoiceTx(e.cardId, e.invoice) : null; return !!(tx && tx.status === 'pago'); }); return { n, pagas: pg.length, pagoAmt: Math.round(pg.reduce((a, e) => a + (Number(e.amount) || 0), 0) * 100) / 100 }; })() : null };
+            });
             H.contributions = H.contributions.filter(c => !c.linkKey || want[c.linkKey]);
             Object.keys(want).forEach(k => {
                 const c = H.contributions.find(x => x.linkKey === k);
@@ -8404,13 +8419,14 @@
 
         // ---------- Tela inicial: Fundo de Obra por pessoa ----------
         // Uma única conta para o Fundo de Obra: a tela Habitação e a tela inicial usam exatamente a mesma
+        function ok_(c) { return !!c.personId && (appData.habitacao.people || []).some(p => p.id === c.personId); }
         function habSummary() {
             const H = appData.habitacao, balances = {}, spent = {}, aportado = {};
             (H.people || []).forEach(p => { balances[p.id] = Number(p.initialBalance) || 0; });
             let totalAportes = 0, totalRetiradas = 0, totalPrev = 0, totalGastoFin = 0;
             H.contributions.forEach(c => {
                 const v = Number(c.amount) || 0;
-                if (c.type === 'pendente') { totalPrev += v; return; }
+                if (c.type === 'pendente') { const pa = c.parc && ok_(c) ? Math.min(v, Number(c.parc.pagoAmt) || 0) : 0; if (pa > 0) { spent[c.personId] = (spent[c.personId] || 0) + pa; totalGastoFin += pa; } totalPrev += v - pa; return; }
                 if (c.fin) { if (c.type === 'retirada') { spent[c.personId] = (spent[c.personId] || 0) + v; totalGastoFin += v; } return; }   // gasto lançado pelo Financeiro: só soma no GASTO, não mexe em saldo
                 if (!balances[c.personId]) balances[c.personId] = 0;
                 if (c.type === 'aporte') { balances[c.personId] += v; totalAportes += v; aportado[c.personId] = (aportado[c.personId] || 0) + v; }
