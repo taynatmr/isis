@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 82</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 85</div>
             </div>
         </aside>
 
@@ -3385,8 +3385,8 @@
                                                 <tr class="hover:bg-slate-50/50">
                                                     <td class="p-3.5"><input type="checkbox" ${obraSel.has(c.id) ? 'checked' : ''} onchange="obraSelToggle('${c.id}',this.checked)"></td>
                                                     <td class="p-3.5 font-bold text-slate-800 dark:text-white">${person.name}</td>
-                                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? (c.parc ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700') : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? (c.parc ? 'Parcelado ' + c.parc.pagas + '/' + c.parc.n : 'Pendente') : c.fin ? 'Gasto' : 'Retirada'}</span></td>
-                                                    <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}${c.linkKey ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">via ' + (String(c.linkKey).endsWith('|card') ? 'Cartão' : 'Financeiro') + '</span>' : ''}</td>
+                                                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold ${c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? (c.parc ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700') : 'bg-rose-100 text-rose-700'}">${c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? (c.parc ? 'Pago ' + c.parc.pagas + '/' + c.parc.n : 'Pendente') : (c.fin && !c.parc) ? 'Gasto' : 'Retirada'}</span></td>
+                                                    <td class="p-3.5 text-slate-600 dark:text-slate-300">${c.desc}${c.linkKey ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ' + (String(c.linkKey).endsWith('|card') ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700') + '">via ' + (String(c.linkKey).endsWith('|card') ? 'Cartão' : 'Financeiro') + '</span>' : ''}</td>
                                                     <td class="p-3.5 text-slate-500">${c.date}</td>
                                                     <td class="p-3.5 font-bold ${c.type === 'aporte' ? 'text-emerald-600' : c.type === 'pendente' ? 'text-amber-600' : 'text-rose-600'}">R$ ${Number(c.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                                                     <td class="p-3.5 text-right space-x-1">
@@ -7245,15 +7245,18 @@
                 });
             });
             const cg = {};   // compras do cartão marcadas como da obra: parceladas viram UMA movimentação com o valor inteiro
-            ((appData.cartao && appData.cartao.entries) || []).forEach(e => {
-                if (!e.habitacional || !(Number(e.amount) > 0)) return;
+            const cEnt = (appData.cartao && appData.cartao.entries) || [], habGroups = new Set(cEnt.filter(e => e.habitacional && Number(e.amount) > 0 && e.installment && e.installment.group).map(e => e.installment.group));
+            cEnt.forEach(e => {
+                if (!(Number(e.amount) > 0)) return;
+                const inG = e.installment && e.installment.group && habGroups.has(e.installment.group);
+                if (!inG && !e.habitacional) return;
                 const k = (e.installment && e.installment.group ? e.installment.group : e.id) + '|card'; (cg[k] = cg[k] || []).push(e);
             });
             Object.keys(cg).forEach(k => {
-                const L = cg[k].slice().sort((x, y) => (x.date || '').localeCompare(y.date || '')), f = L[0], n = f.installment ? (f.installment.total || L.length) : 1;
+                const L = cg[k].slice().sort((x, y) => (x.date || '').localeCompare(y.date || '')), f = L.find(e => e.habitacional) || L[0], n = f.installment ? (f.installment.total || L.length) : 1;
                 const ok = f.habPerson && H.people.some(p => p.id === f.habPerson);
                 const pago = L.every(e => { const tx = typeof cardInvoiceTx === 'function' ? cardInvoiceTx(e.cardId, e.invoice) : null; return !!(tx && tx.status === 'pago'); }) && L.length >= n, prev = !ok || !pago;
-                want[k] = { personId: ok ? f.habPerson : '', type: prev ? 'pendente' : 'retirada', fin: !prev, amount: Math.round(L.reduce((s, e) => s + (Number(e.amount) || 0), 0) * 100) / 100, date: f.date, desc: (f.name || '') + (n > 1 ? ' (em ' + n + 'x)' : '') + ' via Cartão', parc: n > 1 ? (() => { const pg = L.filter(e => { const tx = typeof cardInvoiceTx === 'function' ? cardInvoiceTx(e.cardId, e.invoice) : null; return !!(tx && tx.status === 'pago'); }); return { n, pagas: pg.length, pagoAmt: Math.round(pg.reduce((a, e) => a + (Number(e.amount) || 0), 0) * 100) / 100 }; })() : null };
+                want[k] = { personId: ok ? f.habPerson : '', type: prev ? 'pendente' : 'retirada', fin: !prev, amount: Math.round(L.reduce((s, e) => s + (Number(e.amount) || 0), 0) * (n > L.length ? n / L.length : 1) * 100) / 100, date: L[0].date, desc: (f.name || '') + (n > 1 ? ' (em ' + n + 'x)' : ''), parc: n > 1 ? (() => { const pg = L.filter(e => { const tx = typeof cardInvoiceTx === 'function' ? cardInvoiceTx(e.cardId, e.invoice) : null; return !!(tx && tx.status === 'pago'); }); return { n, pagas: pg.length, pagoAmt: Math.round(pg.reduce((a, e) => a + (Number(e.amount) || 0), 0) * 100) / 100 }; })() : null };
             });
             H.contributions = H.contributions.filter(c => !c.linkKey || want[c.linkKey]);
             Object.keys(want).forEach(k => {
