@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 79</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 80</div>
             </div>
         </aside>
 
@@ -5542,6 +5542,17 @@
             }
             return out;
         }
+        // parcelado na fatura: "BANHEIRA 1/10", "PARC 03/12", "LOJA (2/6)", "ITEM 4 DE 10"
+        function ciParseInst(name) {
+            const t = String(name || ''), kw = /parc/i.test(t);
+            const m = t.match(/\(?\b(?:parc(?:ela)?\.?\s*)?(\d{1,2})\s*(?:\/|\bde\b)\s*(\d{1,2})\)?\s*$/i) || (kw ? t.match(/\b(?:parc(?:ela)?\.?\s*)(\d{1,2})\s*(?:\/|\bde\b)\s*(\d{1,2})\b/i) : null);
+            if (!m) return null; const n = +m[1], total = +m[2]; if (!(total >= 2 && total <= 60 && n >= 1 && n <= total)) return null;
+            const base = t.replace(m[0], ' ').replace(/\s{2,}/g, ' ').replace(/[\s\-–*]+$/, '').trim() || t.trim();
+            return { n, total, base, kw };
+        }
+        function ciInstDup(name, amount, inst) {   // a mesma parcela já lançada (ex.: veio das parcelas futuras de um import anterior)
+            return appData.cartao.entries.some(e => e.installment && e.installment.n === inst.n && e.installment.total === inst.total && Math.abs(Math.abs(e.amount) - amount) < 0.005 && normKey(e.name) === normKey(inst.base));
+        }
         function buildImportRows(raw) {
             // Descobre qual sinal representa compra (a maioria dos lançamentos)
             // o sinal de "compra" é o da maioria dos lançamentos que NÃO são estorno/desconto/pagamento
@@ -5557,8 +5568,9 @@
                 const isPay = /pagamento|pagto|pgto|saldo (anterior|restante)|total (da )?fatura|valor da fatura|fatura anterior/i.test(r.name) && !/estorno|desconto|devolu/i.test(r.name);
                 const credit = !isPay && (!isPurchase || /estorno|desconto|devolu[cç]|cr[eé]dito em|cashback|reembolso|cancelamento/i.test(r.name));
                 const skip = isPay;
-                const dup = appData.cartao.entries.some(e => e.cardId === card.id && e.date === r.date && Math.abs(Math.abs(e.amount) - amount) < 0.005 && (Number(e.amount) < 0) === credit && normKey(e.name) === normKey(r.name));
-                return { on: !skip && !dup, credit, note: dup ? 'já lançado' : (skip ? 'pagamento/saldo' : ''), date: r.date, name: r.name, amount, category: guessCardCategory(r.name) };
+                const inst = credit || skip ? null : ciParseInst(r.name);
+                const dup = appData.cartao.entries.some(e => e.cardId === card.id && e.date === r.date && Math.abs(Math.abs(e.amount) - amount) < 0.005 && (Number(e.amount) < 0) === credit && normKey(e.name) === normKey(r.name)) || (inst && ciInstDup(r.name, amount, inst));
+                return { on: !skip && !dup, credit, note: dup ? 'já lançado' : (skip ? 'pagamento/saldo' : ''), date: r.date, name: r.name, amount, category: guessCardCategory(r.name), inst };
             });
             renderCardImportPreview();
         }
@@ -5598,20 +5610,35 @@
         }
         function updateImportCount() { const n = cardImportRows.filter(r => r.on).length, el = document.getElementById('ci-count'); if (el) el.textContent = `${n} lançamento(s)`; }
         function confirmCardImport() {
-            const card = cardById(document.getElementById('ci-card').value), force = document.getElementById('ci-inv').value;
             const rows = cardImportRows.filter(r => r.on && r.date && r.amount > 0);
             if (!rows.length) { showToast('Nenhum lançamento selecionado.', 'warning'); return; }
-            const M = cardImportMeta;
+            const card = cardById(document.getElementById('ci-card').value), force = document.getElementById('ci-inv').value;
+            window._ciPend = { card: card.id, force, rows };
+            // venda parcelada identificada (ex.: BANHEIRA 1/10): pergunta se lança as próximas parcelas
+            const cand = rows.filter(r => r.inst && r.inst.n < r.inst.total && !appData.cartao.entries.some(e => e.installment && e.installment.total === r.inst.total && e.installment.n === r.inst.n + 1 && Math.abs(Math.abs(e.amount) - r.amount) < 0.005 && normKey(e.name) === normKey(r.inst.base)));
+            if (!cand.length) { ciDoImport([]); return; }
+            window._ciCand = cand;
+            showModal('Compras parceladas identificadas', `<p class="text-xs text-slate-500 mb-3">Encontrei compras parceladas na fatura. Quer lançar também as próximas parcelas, cada uma na sua fatura (mês a mês)?</p>
+                <div class="space-y-2 max-h-[50vh] overflow-y-auto">${cand.map((r, i) => `<label class="flex items-start gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 text-sm cursor-pointer"><input type="checkbox" class="ci-fut mt-0.5" data-i="${i}" ${r.inst.n === 1 || r.inst.kw ? 'checked' : ''}>
+                    <span class="flex-1 min-w-0"><b class="block truncate">${esc(r.inst.base)} ${r.inst.n}/${r.inst.total}</b><span class="text-xs text-slate-500">R$ ${money(r.amount)} por parcela · lançar as próximas <b>${r.inst.total - r.inst.n}</b> (${r.inst.n + 1}/${r.inst.total} a ${r.inst.total}/${r.inst.total})</span></span></label>`).join('')}</div>
+                <button onclick="ciFutGo()" class="w-full mt-4 bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Importar</button>
+                <button onclick="ciDoImport([])" class="w-full mt-2 bg-slate-100 dark:bg-slate-700 py-2.5 rounded-xl text-xs font-bold">Importar sem lançar as próximas</button>`);
+        }
+        function ciFutGo() { const idx = [...document.querySelectorAll('.ci-fut:checked')].map(x => +x.dataset.i); ciDoImport(idx.map(i => window._ciCand[i])); }
+        function ciDoImport(expandRows) {
+            const P = window._ciPend; if (!P) return; const card = cardById(P.card), force = P.force, rows = P.rows, M = cardImportMeta; let extra = 0;
             rows.forEach(r => {
                 let cat = r.category || 'Outros'; const ex = appData.cartao.categories.find(c => normKey(c) === normKey(cat));
                 if (ex) cat = ex; else appData.cartao.categories.push(cat);
-                const en = { id: uid(), cardId: card.id, name: r.name, amount: (r.credit ? -1 : 1) * r.amount, date: r.date, invoice: force || cardInvoiceKey(card, r.date), category: cat, obs: 'Importado da fatura' };
-                if (M.owner) en.owner = M.owner; if (M.ded && !r.credit) en.dedutivel = M.ded;
-                appData.cartao.entries.push(en);
+                const inv0 = force || cardInvoiceKey(card, r.date), mk = (extraObj, k) => { const en = Object.assign({ id: uid(), cardId: card.id, name: r.inst ? r.inst.base : r.name, amount: (r.credit ? -1 : 1) * r.amount, date: addMonthsToDate(r.date, k), invoice: ymAdd(inv0, k), category: cat, obs: k ? 'Parcela futura (criada na importação)' : 'Importado da fatura' }, extraObj); if (M.owner) en.owner = M.owner; if (M.ded && !r.credit) en.dedutivel = M.ded; return en; };
+                if (r.inst && !r.credit) {
+                    const group = uid(), fut = expandRows.includes(r) ? r.inst.total - r.inst.n : 0;
+                    for (let k = 0; k <= fut; k++) { appData.cartao.entries.push(mk({ installment: { group, n: r.inst.n + k, total: r.inst.total } }, k)); if (k) extra++; }
+                } else appData.cartao.entries.push(mk({}, 0));
             });
             cardSelectedId = card.id; cardInvMonth = force || cardInvoiceKey(card, rows[0].date);
-            cardImportRows = [];
-            cardCommit(`${rows.length} lançamento(s) importado(s)!`);
+            cardImportRows = []; window._ciPend = null; closeModal();
+            cardCommit(`${rows.length} lançamento(s) importado(s)${extra ? ' + ' + extra + ' parcela(s) futura(s)' : ''}!`);
         }
 
         // =====================================================
