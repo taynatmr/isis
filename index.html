@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 85</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 86</div>
             </div>
         </aside>
 
@@ -7227,21 +7227,21 @@
                 if ((t.type === 'despesa' || t.type === 'receita') && isHabId(t.accId) && !t.cardInvoice) {
                     const pid = t.accId.slice(4);
                     if (H.people.some(p => p.id === pid)) {
-                        want[t.id + '|acc'] = { personId: pid, type: t.status === 'pendente' ? 'pendente' : (t.type === 'receita' ? 'aporte' : 'retirada'), fin: false, amount: t.amount, date: t.date, desc: 'Financeiro: ' + (t.desc || '') };
+                        want[t.id + '|acc'] = { personId: pid, type: t.status === 'pendente' ? 'pendente' : (t.type === 'receita' ? 'aporte' : 'retirada'), fin: false, amount: t.amount, date: t.date, desc: (t.desc || '') };
                         return;
                     }
                 }
                 if (t.habitacional && t.type === 'despesa' && !t.cardInvoice) {
                     const ok = t.habPerson && H.people.some(p => p.id === t.habPerson);
                     const prev = !ok || t.status === 'pendente';
-                    want[t.id + '|hab'] = { personId: ok ? t.habPerson : '', type: prev ? 'pendente' : 'retirada', fin: !prev, amount: t.amount, date: t.date, desc: 'Financeiro: ' + (t.desc || '') };
+                    want[t.id + '|hab'] = { personId: ok ? t.habPerson : '', type: prev ? 'pendente' : 'retirada', fin: !prev, amount: t.amount, date: t.date, desc: (t.desc || '') };
                     return;
                 }
                 if (t.type !== 'transferencia') return;
                 [['from', t.accId, 'retirada'], ['to', t.toAccId, 'aporte']].forEach(([side, id, ty]) => {
                     if (!isHabId(id)) return;
                     const pid = id.slice(4); if (!H.people.some(p => p.id === pid)) return;
-                    want[t.id + '|' + side] = { personId: pid, type: t.status === 'pendente' ? 'pendente' : ty, amount: t.amount, date: t.date, desc: 'Transf. Financeiro: ' + (t.desc || '') };
+                    want[t.id + '|' + side] = { personId: pid, type: t.status === 'pendente' ? 'pendente' : ty, amount: t.amount, date: t.date, desc: 'Transf.: ' + (t.desc || '') };
                 });
             });
             const cg = {};   // compras do cartão marcadas como da obra: parceladas viram UMA movimentação com o valor inteiro
