@@ -41,12 +41,14 @@
 
         #global-modal, #global-modal * { touch-action: pan-y !important; }
         #global-modal { overscroll-behavior: contain; overflow-x: hidden; }
-        #modal-content { overscroll-behavior: contain; max-width: 100%; }
+        #modal-content { overscroll-behavior: contain; }
 
         /* telas de cadastro / notificação menores (zoom não dispara o zoom automático do iPhone nos campos) */
-        #modal-content { zoom: 0.94; }
+        @media (min-width: 768px) { #modal-content { zoom: 0.94; max-height: calc(96vh / 0.94) !important; } }
+        @media (min-width: 768px) and (max-height: 820px) { #modal-content { zoom: 0.88; max-height: calc(96vh / 0.88) !important; } }
+        @media (max-width: 767px) { #modal-content { zoom: 0.86; } }
         @media (max-width: 767px) {
-            #modal-content { zoom: 0.86; padding: 0.9rem 1rem !important; }
+            #modal-content { padding: 0.9rem 1rem !important; }
             #modal-content input:not([type=checkbox]):not([type=radio]), #modal-content select, #modal-content textarea { padding-top: 0.4rem !important; padding-bottom: 0.4rem !important; }
         }
 
@@ -298,7 +300,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 97</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 98</div>
             </div>
         </aside>
 
