@@ -265,7 +265,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 86</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 87</div>
             </div>
         </aside>
 
@@ -4509,6 +4509,18 @@
                     </div>
                     ${(plano().debts || []).length ? `<div id="fin-debt-wrap" class="${t.type === 'despesa' ? '' : 'hidden'}"><label class="${LBL}">Pagamento de dívida (abate da tabela de Dívidas)</label><select id="fin-debt" class="${INP}"><option value="">Não é pagamento de dívida</option>${plano().debts.map(x => `<option value="${x.id}" ${t.debtId === x.id ? 'selected' : ''}>${esc(x.name)} · falta ${R$(x.saldo)}</option>`).join('')}</select><p class="text-[11px] text-slate-400 mt-1">Quando o lançamento ficar <b>pago</b>, o saldo e as parcelas da dívida são ajustados sozinhos. Valor igual à parcela = parcela paga; outro valor = amortização.</p></div>` : ''}
                     <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Observação</label>
+                        <textarea id="fin-obs" rows="2" placeholder="Anotações sobre este lançamento (opcional)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">${esc(t.obs || '')}</textarea>
+                    </div>
+                    <div>
+                        <button type="button" onclick="finItemsToggle()" class="text-xs font-bold px-3 py-2 rounded-xl bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-900/50"><i class="fa-solid fa-plus mr-1"></i>Itens</button>
+                        <div id="fin-items-box" class="${(t.items || []).length ? '' : 'hidden'} mt-2 rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                            <div id="fin-items-rows" class="space-y-2">${(t.items || []).map(it => finItemRow(it.name, it.value)).join('')}</div>
+                            <button type="button" onclick="finItemAdd()" class="text-xs font-bold text-teal-700 dark:text-teal-300"><i class="fa-solid fa-plus mr-1"></i>Adicionar item</button>
+                            <p id="fin-items-sum" class="text-xs text-slate-500"></p>
+                        </div>
+                    </div>
+                    <div>
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Anexos (recibo, nota, comprovante)</label>
                         <input type="file" id="fin-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
                         ${atts.length ? `
@@ -4560,11 +4572,35 @@
         }
 
         function finWhoUi() { const o = document.getElementById('fin-owner').value; document.getElementById('fin-payer-wrap').classList.toggle('hidden', o !== ''); }
+        function finItemRow(name, val) {
+            const INPc = 'px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            return `<div class="fin-item-row flex gap-2 items-center"><input type="text" placeholder="Item" value="${esc(name || '')}" class="fin-it-n flex-1 min-w-0 ${INPc}"><input type="number" step="0.01" min="0" placeholder="Valor" value="${val === undefined || val === '' ? '' : esc(String(val))}" oninput="finItemsSync()" class="fin-it-v w-28 ${INPc}"><button type="button" onclick="this.parentNode.remove();finItemsSync()" class="text-rose-500 px-1" title="Remover item"><i class="fa-solid fa-xmark"></i></button></div>`;
+        }
+        function finItemsToggle() {
+            const b = document.getElementById('fin-items-box'); if (!b) return;
+            const open = b.classList.contains('hidden'); b.classList.toggle('hidden', !open);
+            if (open && !b.querySelector('.fin-item-row')) finItemAdd();
+        }
+        function finItemAdd() {
+            const r = document.getElementById('fin-items-rows'); if (!r) return;
+            r.insertAdjacentHTML('beforeend', finItemRow('', '')); const n = r.querySelectorAll('.fin-it-n'); n[n.length - 1].focus();
+        }
+        function finItemsSync() {
+            const vs = [...document.querySelectorAll('#fin-items-rows .fin-it-v')], sum = Math.round(vs.reduce((a, i) => a + (Number(i.value) || 0), 0) * 100) / 100;
+            const am = document.getElementById('fin-amount'), note = document.getElementById('fin-items-sum');
+            if (vs.some(i => i.value !== '') && am) { am.value = sum.toFixed(2); if (typeof updateInstallmentPreview === 'function') updateInstallmentPreview(); }
+            if (note) note.innerHTML = vs.length ? 'Soma dos itens: <b>R$ ' + money(sum) + '</b> · o Valor total acima é preenchido automaticamente e pode ser ajustado.' : '';
+        }
+        function finItemsRead() {
+            return [...document.querySelectorAll('#fin-items-rows .fin-item-row')].map(r => ({ name: r.querySelector('.fin-it-n').value.trim(), value: Math.round((Number(r.querySelector('.fin-it-v').value) || 0) * 100) / 100 })).filter(i => i.name || i.value);
+        }
         function finApplyExtra(o) {
             const ow = document.getElementById('fin-owner'), pa = document.getElementById('fin-payer'), de = document.getElementById('fin-ded'); if (!ow) return o;
             if (ow.value) o.owner = ow.value; else delete o.owner;
             if (!ow.value && pa && pa.value) o.payer = pa.value; else delete o.payer;
             if (de && de.value) o.dedutivel = de.value; else delete o.dedutivel;
+            const ob = document.getElementById('fin-obs'); if (ob) { if (ob.value.trim()) o.obs = ob.value.trim(); else delete o.obs; }
+            if (document.getElementById('fin-items-rows')) { const it = finItemsRead(); if (it.length) o.items = it.map(x => Object.assign({}, x)); else delete o.items; }
             const db = document.getElementById('fin-debt'); if (db) { if (db.value && o.type === 'despesa') o.debtId = db.value; else delete o.debtId; }
             return o;
         }
@@ -7982,7 +8018,7 @@
                                 const sg = tDir === 'mid' ? '⇄' : (tDir === 'in' || (!isT && t.type === 'receita')) ? '+' : '-';
                                 const CELL = {
                                     chk: `<td class="p-3.5"><input type="checkbox" ${finSel.has(t.id) ? 'checked' : ''} onchange="finSelToggle('${t.id}', this.checked)"></td>`,
-                                    desc: `<td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}
+                                    desc: `<td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}${(t.items && t.items.length) || t.obs ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 cursor-help" title="${esc((t.items || []).map(i => i.name + ': R$ ' + money(i.value)).join('\n') + (t.obs ? ((t.items || []).length ? '\n\n' : '') + t.obs : ''))}"><i class="fa-solid fa-${(t.items && t.items.length) ? 'list-ul' : 'note-sticky'}"></i>${(t.items && t.items.length) ? ' ' + t.items.length : ''}</span>` : ''}
                                         ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
                                         ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}${t.habitacional ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Também aparece em Habitação"><i class="fa-solid fa-hammer"></i></span>` : ''}${t.casaId ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Também aparece em Habitação › Despesas da casa"><i class="fa-solid fa-house-chimney"></i></span>` : ''}
                                         ${isT ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">transf.</span>` : ''}</td>`,
