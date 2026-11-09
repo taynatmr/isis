@@ -300,7 +300,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 100</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 101</div>
             </div>
         </aside>
 
@@ -3268,6 +3268,30 @@
         }
 
         // --- HABITAÇÃO / CONSTRUÇÃO COM ORÇAMENTOS E ARQUIVOS ---
+        let habPersonId = '', habPersonQ = '', habPersonAp = false;
+        function openHabPerson(pid) {
+            habPersonId = pid; habPersonQ = ''; habPersonAp = false;
+            const p = appData.habitacao.people.find(x => x.id === pid); if (!p) return;
+            showModal('Movimentos · ' + p.name, `<div class="space-y-3">
+                <div class="flex gap-2"><input type="text" id="hpm-q" oninput="habPersonQ=this.value;habPersonRender()" placeholder="Filtrar por descrição, valor ou data" class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                <button type="button" id="hpm-ap" onclick="habPersonAp=!habPersonAp;habPersonRender()" class="px-3 py-2 rounded-xl text-sm font-bold border"><i class="fa-solid fa-arrow-trend-up mr-1"></i>Aportes</button></div>
+                <div id="hpm-body"></div></div>`);
+            habPersonRender();
+        }
+        function habPersonRender() {
+            const body = document.getElementById('hpm-body'); if (!body) return;
+            const ap = document.getElementById('hpm-ap'); if (ap) ap.className = 'px-3 py-2 rounded-xl text-sm font-bold border ' + (habPersonAp ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-800 text-emerald-700 border-emerald-300');
+            const q = habPersonQ.trim().toLowerCase();
+            let L = appData.habitacao.contributions.filter(c => c.personId === habPersonId);
+            if (habPersonAp) L = L.filter(c => c.type === 'aporte');
+            if (q) L = L.filter(c => ((c.desc || '') + ' ' + fmtBR(c.date) + ' ' + money(c.amount) + ' ' + (c.type || '')).toLowerCase().includes(q));
+            L.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.desc || '').localeCompare(String(b.desc || '')));
+            const tAp = L.filter(c => c.type === 'aporte').reduce((s, c) => s + (Number(c.amount) || 0), 0), tSp = L.filter(c => c.type !== 'aporte').reduce((s, c) => s + (Number(c.amount) || 0), 0);
+            const lab = c => c.type === 'aporte' ? 'Aporte' : c.type === 'pendente' ? (c.parc ? 'Pago ' + c.parc.pagas + '/' + c.parc.n : 'Pendente') : (c.fin && !c.parc) ? 'Gasto' : 'Retirada';
+            const cls = c => c.type === 'aporte' ? 'bg-emerald-100 text-emerald-700' : c.type === 'pendente' ? (c.parc ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700') : 'bg-rose-100 text-rose-700';
+            body.innerHTML = L.length ? `<div class="flex justify-between text-xs text-slate-500 px-1"><span>${L.length} movimento(s)</span><span>Aportes <b class="text-emerald-600">R$ ${money(tAp)}</b>${habPersonAp ? '' : ' · Saídas <b class="text-rose-600">R$ ' + money(tSp) + '</b>'}</span></div>
+                <div class="max-h-[55vh] overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">${L.map(c => `<div class="flex items-center gap-3 px-3 py-2 text-sm"><span class="text-xs text-slate-400 w-20 shrink-0">${fmtBR(c.date)}</span><span class="flex-1 min-w-0 break-words">${esc(c.desc || '')}</span><span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${cls(c)} shrink-0">${lab(c)}</span><span class="font-bold whitespace-nowrap ${c.type === 'aporte' ? 'text-emerald-600' : 'text-slate-800 dark:text-white'}">R$ ${money(c.amount)}</span></div>`).join('')}</div>` : '<p class="text-sm text-slate-400 text-center py-6">Nenhum movimento encontrado.</p>';
+        }
         function renderHabitacao(container) {
             if (habDocsOpen) { renderHabDocs(container); return; }
             if (habLibOpen) { renderHabLib(container); return; }
@@ -3346,7 +3370,7 @@
                                         <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 flex items-center justify-center font-bold text-lg">${p.name.charAt(0)}</div>
                                         <span class="text-xs font-bold text-slate-400 uppercase">Investidor(a)</span>
                                     </div>
-                                    <h3 class="font-bold text-xl text-slate-800 dark:text-white">${p.name}</h3>
+                                    <h3 class="font-bold text-xl text-slate-800 dark:text-white"><button type="button" onclick="openHabPerson('${p.id}')" title="Ver todos os movimentos de ${esc(p.name)}" class="text-left hover:text-teal-600 underline decoration-dotted underline-offset-4">${esc(p.name)}</button></h3>
                                     <p class="text-2xl font-extrabold text-amber-600 mt-2">R$ ${(balances[p.id] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                                     <p class="text-[10px] text-slate-400 mt-0.5">gasto até agora: R$ ${money(spent[p.id] || 0)}</p>
                                 </div>
