@@ -21,6 +21,19 @@
             .dash-metrics .w-12.h-12 { width: 1.75rem !important; height: 1.75rem !important; font-size: .8rem !important; border-radius: .6rem !important; }
             .dash-metrics h3 span { font-size: 10px !important; }
         }
+
+        @media (min-width: 768px) {
+            #fin-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.55rem 1rem; align-items: start; }
+            #fin-form input:not([type=checkbox]), #fin-form select, #fin-form textarea { padding-top: 0.4rem !important; padding-bottom: 0.4rem !important; }
+            #fin-form label.block { margin-bottom: 0.1rem !important; }
+            #fin-form textarea { height: 2.6rem; resize: vertical; }
+            #fin-form > button[type=submit] { padding-top: 0.55rem; padding-bottom: 0.55rem; }
+            #fin-form > * { grid-column: span 4; margin-top: 0 !important; margin-block-start: 0 !important; margin-block-end: 0 !important; }
+            #fin-form > .grid:not(.fin-who) { display: contents; }
+            #fin-form > .grid:not(.fin-who) > * { grid-column: span 2; }
+            #fin-form > #fin-hab-wrap, #fin-form > #fin-share-wrap, #fin-form > #fin-rec-wrap, #fin-form > .fin-half { grid-column: span 2; }
+            #fin-form > .fin-who.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); display: grid; gap: 1rem; }
+        }
 </style>
     <title>Sistema ISIS</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23FFD54A'/%3E%3Cstop offset='.55' stop-color='%23FFB800'/%3E%3Cstop offset='1' stop-color='%23E89B00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='16' r='4.2' fill='%23fff'/%3E%3Crect x='28.8' y='25' width='6.4' height='24' rx='3.2' fill='%23fff'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round'%3E%3Cpath d='M29 31C21 31 14.500 28 10 21'/%3E%3Cpath d='M29 38C22.500 38 17 35.500 12.500 30'/%3E%3Cpath d='M29 45C24 45 19.500 43 15.500 39'/%3E%3Cpath d='M35 31C43 31 49.500 28 54 21'/%3E%3Cpath d='M35 38C41.500 38 47 35.500 51.500 30'/%3E%3Cpath d='M35 45C40 45 44.500 43 48.500 39'/%3E%3C/g%3E%3C/svg%3E">
@@ -265,7 +278,7 @@
                     <button onclick="triggerManualSave()" class="hover:text-white underline">Salvar</button>
                 </div>
                 <div class="text-[10px] text-teal-400/70 truncate" id="current-folder-label">Armazenamento Local Ativo</div>
-                <div class="text-[10px] text-teal-400/50 mt-1">Versão 87</div>
+                <div class="text-[10px] text-teal-400/50 mt-1">Versão 90</div>
             </div>
         </aside>
 
@@ -4331,6 +4344,7 @@
         function showModal(title, htmlContent) {
             const modal = document.getElementById('global-modal');
             const content = document.getElementById('modal-content');
+            content.style.maxHeight = ''; content.style.padding = '';
             content.classList.remove('max-w-3xl', 'max-w-2xl', 'max-w-5xl', 'max-w-4xl'); content.classList.add('max-w-lg');
             content.innerHTML = `
                 <div class="flex justify-between items-center mb-4">
@@ -4426,7 +4440,7 @@
             const st = t.status || 'pago';
             const atts = t.attachments || [];
             showModal(id ? 'Editar Transação' : (preset ? 'Duplicar Transação' : 'Inserir Transação'), `
-                <form onsubmit="saveFinance(event, '${id || ''}')" class="space-y-4">
+                <form id="fin-form" onsubmit="saveFinance(event, '${id || ''}')" class="space-y-4">
                     ${t.cardInvoice ? `<div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-xs text-indigo-800 dark:text-indigo-200">
                         <i class="fa-solid fa-credit-card mr-1"></i><b>Fatura do cartão de crédito.</b> Escolha abaixo o banco/conta de onde sai o pagamento e o status. Valor, data e descrição vêm das compras do cartão.
                         <button type="button" onclick="closeModal(); cardSelectedId='${t.cardInvoice.cardId}'; cardInvMonth='${t.cardInvoice.inv}'; switchTab('cartao')" class="ml-1 font-bold underline">Ver compras desta fatura</button>
@@ -4451,8 +4465,14 @@
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Descrição</label>
                         <input type="text" id="fin-desc" value="${esc(t.desc)}" ${id ? '' : 'onchange="finDescSuggest()"'} required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                     </div>
-                    ${finAccHtml(t)}
-                    <datalist id="fin-cat-list"><option value="Despesa da casa">${catAllNames().map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+                    <div>
+                        <button type="button" onclick="finItemsToggle()" class="text-xs font-bold px-3 py-2 rounded-xl bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-900/50"><i class="fa-solid fa-plus mr-1"></i>Itens</button>
+                        <div id="fin-items-box" class="${(t.items || []).length ? '' : 'hidden'} mt-2 rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                            <div id="fin-items-rows" class="space-y-2">${(t.items || []).map(it => finItemRow(it.name, it.value)).join('')}</div>
+                            <button type="button" onclick="finItemAdd()" class="text-xs font-bold text-teal-700 dark:text-teal-300"><i class="fa-solid fa-plus mr-1"></i>Adicionar item</button>
+                            <p id="fin-items-sum" class="text-xs text-slate-500"></p>
+                        </div>
+                    </div>
                     <div id="fin-hab-wrap" class="${t.type !== 'despesa' || t.cardInvoice ? 'hidden' : ''} rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-3">
                         <label class="flex items-center gap-2 text-sm font-bold text-amber-800 dark:text-amber-300 cursor-pointer"><input type="checkbox" id="fin-hab" ${t.habitacional ? 'checked' : ''} onchange="document.getElementById('fin-hab-person-wrap').classList.toggle('hidden', !this.checked)" class="rounded w-4 h-4"> <i class="fa-solid fa-hammer"></i> Habitacional</label>
                         <div id="fin-hab-person-wrap" class="${t.habitacional ? '' : 'hidden'} mt-2">
@@ -4463,10 +4483,18 @@
                             <p class="text-[11px] text-amber-700/80 dark:text-amber-300/70 mt-1.5">Aparece também em Habitação (Obra). Com cartão/conta comum, o valor sai dele e não mexe nos saldos de aportes: com um nome, soma só no GASTO dele; sem nome, fica como previsão. Escolhendo a conta “Habitacional …” acima, movimenta o saldo dessa pessoa.</p>
                         </div>
                     </div>
+                    ${!id ? `<div id="fin-share-wrap" class="${t.type === 'transferencia' ? 'hidden' : ''} rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/50 dark:bg-violet-950/20 p-3">
+                        <label class="flex items-center gap-2 text-sm font-bold text-violet-800 dark:text-violet-300 cursor-pointer"><input type="checkbox" id="fin-share" onchange="finShareUi()"> Pgto Compartilhado <span class="font-normal text-xs">(pagar com mais de uma conta)</span></label>
+                        <div id="fin-share-box" class="hidden mt-3 space-y-2"><div id="fin-share-rows" class="space-y-2"></div>
+                            <button type="button" onclick="finShareAdd()" class="text-xs font-bold text-violet-700 dark:text-violet-300"><i class="fa-solid fa-plus mr-1"></i>Conta</button>
+                            <p id="fin-share-sum" class="text-xs text-slate-500"></p></div>
+                    </div>` : ''}
+                    ${finAccHtml(t)}
+                    <datalist id="fin-cat-list"><option value="Despesa da casa">${catAllNames().map(c => `<option value="${esc(c)}">`).join('')}</datalist>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">${!id ? 'Valor total (R$)' : 'Valor (R$)'}</label>
-                            <input type="number" step="0.01" min="0" id="fin-amount" value="${t.amount}" required oninput="updateInstallmentPreview()" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                            <input type="number" step="0.01" min="0" id="fin-amount" value="${t.amount}" required oninput="updateInstallmentPreview();finShareSync()" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Categoria</label>
@@ -4475,9 +4503,15 @@
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">${!id ? 'Data (1ª parcela)' : 'Data'}</label>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">${!id ? 'Vencimento (1ª parcela)' : 'Vencimento'}</label>
                             <input type="date" id="fin-date" value="${t.date}" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
                         </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Data de pagamento</label>
+                            <input type="date" id="fin-paydate" value="${t.payDate || ''}" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        </div>
+                    </div>
+                    <div class="fin-half">
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Parcelas</label>
                             ${id ? `
@@ -4502,25 +4536,17 @@
                     ${!id ? `<div id="fin-instmode-wrap" class="hidden -mt-2 space-y-3"><div><label class="${LBL}">Como parcelar?</label><select id="fin-instmode" onchange="updateInstallmentPreview()" class="${INP}"><option value="dividir">Dividir o valor total nas parcelas (valor ÷ vezes)</option><option value="igual">Mesmo valor em cada parcela (valor × vezes)</option></select></div>
                         <div><label class="${LBL}">Iniciar a partir de qual parcela?</label><input type="number" id="fin-startn" min="1" value="1" oninput="updateInstallmentPreview()" class="${INP}"><p class="text-[11px] text-slate-400 mt-1">Ex.: compra em 10x que já está na 4ª parcela → informe 4. A data acima é a da parcela inicial e só as parcelas restantes são lançadas.</p></div></div>
                     <p id="fin-inst-preview" class="text-xs text-slate-500 -mt-2 hidden"></p>` : ''}
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
+                    <div class="fin-who grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
                         <div><label class="${LBL}">De quem</label><select id="fin-owner" onchange="finWhoUi()" class="${INP}">${PL_OWNERS().map(([k, l]) => `<option value="${k}" ${(t.owner || '') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
                         <div id="fin-payer-wrap" class="${(t.owner || '') === '' ? '' : 'hidden'}"><label class="${LBL}">Quem pagou</label><select id="fin-payer" class="${INP}"><option value="">—</option>${plano().people.map(p => `<option value="${p.id}" ${t.payer === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
                         <div><label class="${LBL}">Dedutível no IR</label><select id="fin-ded" class="${INP}"><option value="">Não</option>${Object.entries(PL_IR).map(([k, l]) => `<option value="${k}" ${t.dedutivel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
                     </div>
                     ${(plano().debts || []).length ? `<div id="fin-debt-wrap" class="${t.type === 'despesa' ? '' : 'hidden'}"><label class="${LBL}">Pagamento de dívida (abate da tabela de Dívidas)</label><select id="fin-debt" class="${INP}"><option value="">Não é pagamento de dívida</option>${plano().debts.map(x => `<option value="${x.id}" ${t.debtId === x.id ? 'selected' : ''}>${esc(x.name)} · falta ${R$(x.saldo)}</option>`).join('')}</select><p class="text-[11px] text-slate-400 mt-1">Quando o lançamento ficar <b>pago</b>, o saldo e as parcelas da dívida são ajustados sozinhos. Valor igual à parcela = parcela paga; outro valor = amortização.</p></div>` : ''}
-                    <div>
+                    <div class="fin-half">
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Observação</label>
                         <textarea id="fin-obs" rows="2" placeholder="Anotações sobre este lançamento (opcional)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">${esc(t.obs || '')}</textarea>
                     </div>
-                    <div>
-                        <button type="button" onclick="finItemsToggle()" class="text-xs font-bold px-3 py-2 rounded-xl bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-900/50"><i class="fa-solid fa-plus mr-1"></i>Itens</button>
-                        <div id="fin-items-box" class="${(t.items || []).length ? '' : 'hidden'} mt-2 rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
-                            <div id="fin-items-rows" class="space-y-2">${(t.items || []).map(it => finItemRow(it.name, it.value)).join('')}</div>
-                            <button type="button" onclick="finItemAdd()" class="text-xs font-bold text-teal-700 dark:text-teal-300"><i class="fa-solid fa-plus mr-1"></i>Adicionar item</button>
-                            <p id="fin-items-sum" class="text-xs text-slate-500"></p>
-                        </div>
-                    </div>
-                    <div>
+                    <div class="fin-half">
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Anexos (recibo, nota, comprovante)</label>
                         <input type="file" id="fin-files" multiple class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs">
                         ${atts.length ? `
@@ -4535,6 +4561,7 @@
                     <button type="submit" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-sm shadow">Salvar</button>
                 </form>
             `);
+            { const mc = document.getElementById('modal-content'); mc.classList.remove('max-w-lg'); mc.classList.add('max-w-4xl'); mc.style.maxHeight = '96vh'; mc.style.padding = '0.8rem 1.5rem'; }
             finHabAccUi();
             if (t.cardInvoice) {
                 ['fin-type', 'fin-desc', 'fin-amount', 'fin-category', 'fin-date'].forEach(i => { const el = document.getElementById(i); if (el) el.disabled = true; });
@@ -4572,6 +4599,31 @@
         }
 
         function finWhoUi() { const o = document.getElementById('fin-owner').value; document.getElementById('fin-payer-wrap').classList.toggle('hidden', o !== ''); }
+        function finShareRow(n, acc, val) {
+            const INPc = 'px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
+            return `<div class="fin-share-row flex gap-2 items-center"><span class="fin-share-n text-[11px] font-bold text-slate-400 w-14 shrink-0">Conta ${n}</span><select class="fin-sh-a flex-1 min-w-0 ${INPc}" onchange="finShareSync()">${finAccOpts(acc || '', false)}</select><input type="number" step="0.01" min="0" placeholder="Valor" value="${val === undefined ? '' : val}" oninput="finShareSync()" class="fin-sh-v w-28 ${INPc}"><button type="button" onclick="this.parentNode.remove();finShareSync()" class="text-rose-500 px-1" title="Remover"><i class="fa-solid fa-xmark"></i></button></div>`;
+        }
+        function finShareAdd() {
+            const r = document.getElementById('fin-share-rows'); if (!r) return;
+            const amt = Number(document.getElementById('fin-amount').value) || 0, used = [...r.querySelectorAll('.fin-sh-v')].reduce((a, i) => a + (Number(i.value) || 0), 0);
+            r.insertAdjacentHTML('beforeend', finShareRow(r.children.length + 1, '', amt > used ? (Math.round((amt - used) * 100) / 100) : undefined)); finShareSync();
+        }
+        function finShareUi() {
+            const on = document.getElementById('fin-share').checked, box = document.getElementById('fin-share-box'), r = document.getElementById('fin-share-rows');
+            box.classList.toggle('hidden', !on);
+            const g = document.getElementById('fin-acc'); if (g) g.closest('.grid').classList.toggle('hidden', on);
+            if (on && !r.children.length) { finShareAdd(); finShareAdd(); }
+        }
+        function finShareSync() {
+            const r = document.getElementById('fin-share-rows'), note = document.getElementById('fin-share-sum'); if (!r || !note) return;
+            [...r.querySelectorAll('.fin-share-n')].forEach((e, i) => e.textContent = 'Conta ' + (i + 1));
+            const sum = Math.round([...r.querySelectorAll('.fin-sh-v')].reduce((a, i) => a + (Number(i.value) || 0), 0) * 100) / 100, tot = Number(document.getElementById('fin-amount').value) || 0, d = Math.round((tot - sum) * 100) / 100;
+            note.innerHTML = 'Soma das contas: <b>R$ ' + money(sum) + '</b> de R$ ' + money(tot) + (Math.abs(d) < 0.005 ? ' <span class="text-emerald-600 font-bold">✓ fecha</span>' : ' · <span class="text-amber-600 font-bold">' + (d > 0 ? 'faltam R$ ' + money(d) : 'passou R$ ' + money(-d)) + '</span>');
+        }
+        function finShareRead() {
+            const cb = document.getElementById('fin-share'); if (!cb || !cb.checked) return null;
+            return [...document.querySelectorAll('#fin-share-rows .fin-share-row')].map(r => ({ accId: r.querySelector('.fin-sh-a').value, amount: Math.round((Number(r.querySelector('.fin-sh-v').value) || 0) * 100) / 100 })).filter(x => x.amount > 0);
+        }
         function finItemRow(name, val) {
             const INPc = 'px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm';
             return `<div class="fin-item-row flex gap-2 items-center"><input type="text" placeholder="Item" value="${esc(name || '')}" class="fin-it-n flex-1 min-w-0 ${INPc}"><input type="number" step="0.01" min="0" placeholder="Valor" value="${val === undefined || val === '' ? '' : esc(String(val))}" oninput="finItemsSync()" class="fin-it-v w-28 ${INPc}"><button type="button" onclick="this.parentNode.remove();finItemsSync()" class="text-rose-500 px-1" title="Remover item"><i class="fa-solid fa-xmark"></i></button></div>`;
@@ -4588,7 +4640,7 @@
         function finItemsSync() {
             const vs = [...document.querySelectorAll('#fin-items-rows .fin-it-v')], sum = Math.round(vs.reduce((a, i) => a + (Number(i.value) || 0), 0) * 100) / 100;
             const am = document.getElementById('fin-amount'), note = document.getElementById('fin-items-sum');
-            if (vs.some(i => i.value !== '') && am) { am.value = sum.toFixed(2); if (typeof updateInstallmentPreview === 'function') updateInstallmentPreview(); }
+            if (vs.some(i => i.value !== '') && am) { am.value = sum.toFixed(2); if (typeof updateInstallmentPreview === 'function') updateInstallmentPreview(); finShareSync(); }
             if (note) note.innerHTML = vs.length ? 'Soma dos itens: <b>R$ ' + money(sum) + '</b> · o Valor total acima é preenchido automaticamente e pode ser ajustado.' : '';
         }
         function finItemsRead() {
@@ -4599,6 +4651,7 @@
             if (ow.value) o.owner = ow.value; else delete o.owner;
             if (!ow.value && pa && pa.value) o.payer = pa.value; else delete o.payer;
             if (de && de.value) o.dedutivel = de.value; else delete o.dedutivel;
+            const pdEl = document.getElementById('fin-paydate'); if (pdEl) { if (pdEl.value && o.status !== 'pendente') o.payDate = pdEl.value; else delete o.payDate; }
             const ob = document.getElementById('fin-obs'); if (ob) { if (ob.value.trim()) o.obs = ob.value.trim(); else delete o.obs; }
             if (document.getElementById('fin-items-rows')) { const it = finItemsRead(); if (it.length) o.items = it.map(x => Object.assign({}, x)); else delete o.items; }
             const db = document.getElementById('fin-debt'); if (db) { if (db.value && o.type === 'despesa') o.debtId = db.value; else delete o.debtId; }
@@ -4611,7 +4664,7 @@
             const desc = document.getElementById('fin-desc').value;
             const amount = document.getElementById('fin-amount').value;
             const category = catResolveNew(document.getElementById('fin-category').value);
-            const date = document.getElementById('fin-date').value;
+            const date = document.getElementById('fin-date').value, payDate = (document.getElementById('fin-paydate') || {}).value || '';
             const accId = document.getElementById('fin-acc').value;
             const toAccId = type === 'transferencia' ? document.getElementById('fin-to').value : '';
             if (type === 'transferencia' && (!accId || !toAccId || accId === toAccId)) { showToast('Na transferência, escolha duas contas diferentes (origem e destino).', 'warning'); return; }
@@ -4638,7 +4691,19 @@
                 }
             } else {
                 const n = Math.max(1, Math.min(60, parseInt(document.getElementById('fin-installments').value) || 1));
-                if (n === 1) {
+                const shr = finShareRead();
+                if (shr) {
+                    const tot = Math.round(Number(amount) * 100) / 100, sum = Math.round(shr.reduce((a, x) => a + x.amount, 0) * 100) / 100;
+                    if (shr.length < 2) { showToast('No pagamento compartilhado, informe pelo menos 2 contas com valor.', 'warning'); return; }
+                    if (shr.some(x => !x.accId)) { showToast('Escolha a conta de cada parte do pagamento.', 'warning'); return; }
+                    if (Math.abs(sum - tot) > 0.005) { showToast('A soma das contas (R$ ' + money(sum) + ') precisa fechar com o valor total (R$ ' + money(tot) + ').', 'warning'); return; }
+                    if (n > 1 || (document.getElementById('fin-rec') && document.getElementById('fin-rec').checked)) { showToast('Pgto compartilhado não pode ser parcelado nem recorrente.', 'warning'); return; }
+                    const grp = uid();
+                    shr.forEach((p, i) => {
+                        const hAcc = isHabId(p.accId), hab = hAcc || !!(hb && hb.checked && type === 'despesa'), hp = hAcc ? p.accId.slice(4) : (hab ? (document.getElementById('fin-hab-person').value || '') : '');
+                        appData.financeiro.transactions.push(finApplyExtra(Object.assign({ id: uid(), type, status, desc, amount: p.amount.toFixed(2), category, date, accId: p.accId, toAccId: '', attachments: i === 0 ? newAtts : [], share: { group: grp, n: i + 1, total: shr.length } }, hab ? { habitacional: true, habPerson: hp } : {})));
+                    });
+                } else if (n === 1) {
                     const recOn = !!(document.getElementById('fin-rec') && document.getElementById('fin-rec').checked) && type !== 'transferencia';
                     if (recOn) {
                         const u = document.getElementById('fin-rec-until').value, ed = document.getElementById('fin-rec-date').value;
@@ -7495,7 +7560,7 @@
             const cs = contasData();
             const isT = t.type === 'transferencia';
             const opt = v => finAccOpts(v, isT);
-            return `<div class="grid grid-cols-2 gap-4">
+            return `<div class="fin-who grid grid-cols-2 gap-4">
                 <div><label class="${LBL}" id="fin-acc-lbl">${isT ? 'Conta de origem' : 'Cartão / Conta'}</label><select id="fin-acc" onchange="finHabAccUi()" class="${INP}">${opt(t.accId || '')}</select></div>
                 <div id="fin-to-wrap" class="${isT ? '' : 'hidden'}"><label class="${LBL}">Conta de destino</label><select id="fin-to" class="${INP}">${opt(t.toAccId || '')}</select></div>
             </div><p id="fin-acc-note" class="hidden text-[11px] text-amber-700 dark:text-amber-300 -mt-2"></p>${cs.length ? '' : '<p class="text-[11px] text-amber-600 -mt-2">Nenhum cartão cadastrado ainda. Cadastre no menu "Cartão".</p>'}`;
@@ -7526,6 +7591,7 @@
             document.getElementById('fin-to-wrap').classList.toggle('hidden', ty !== 'transferencia');
             const hw = document.getElementById('fin-hab-wrap'); if (hw) hw.classList.toggle('hidden', ty !== 'despesa'); finHabAccUi();
             const dw = document.getElementById('fin-debt-wrap'); if (dw) dw.classList.toggle('hidden', ty !== 'despesa');
+            const shw = document.getElementById('fin-share-wrap'); if (shw) { shw.classList.toggle('hidden', ty === 'transferencia'); if (ty === 'transferencia' && document.getElementById('fin-share').checked) { document.getElementById('fin-share').checked = false; finShareUi(); } }
             const rw = document.getElementById('fin-rec-wrap'); if (rw) { rw.classList.toggle('hidden', ty === 'transferencia'); if (ty === 'transferencia') { document.getElementById('fin-rec').checked = false; finRecUi(); } }
             document.getElementById('fin-acc-lbl').textContent = ty === 'transferencia' ? 'Conta de origem' : 'Cartão / Conta';
             const c = document.getElementById('fin-category');
@@ -8020,7 +8086,7 @@
                                     chk: `<td class="p-3.5"><input type="checkbox" ${finSel.has(t.id) ? 'checked' : ''} onchange="finSelToggle('${t.id}', this.checked)"></td>`,
                                     desc: `<td class="p-3.5 font-medium text-slate-800 dark:text-white">${esc(t.desc)}${(t.items && t.items.length) || t.obs ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 cursor-help" title="${esc((t.items || []).map(i => i.name + ': R$ ' + money(i.value)).join('\n') + (t.obs ? ((t.items || []).length ? '\n\n' : '') + t.obs : ''))}"><i class="fa-solid fa-${(t.items && t.items.length) ? 'list-ul' : 'note-sticky'}"></i>${(t.items && t.items.length) ? ' ' + t.items.length : ''}</span>` : ''}
                                         ${t.cardInvoice ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="fa-solid fa-credit-card mr-1"></i>fatura</span>` : ''}
-                                        ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}${t.habitacional ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Também aparece em Habitação"><i class="fa-solid fa-hammer"></i></span>` : ''}${t.casaId ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Também aparece em Habitação › Despesas da casa"><i class="fa-solid fa-house-chimney"></i></span>` : ''}
+                                        ${t.installment ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${t.installment.n}/${t.installment.total}</span>` : ''}${t.share ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700" title="Pagamento compartilhado entre contas">compart. ${t.share.n}/${t.share.total}</span>` : ''}${t.habitacional ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Também aparece em Habitação"><i class="fa-solid fa-hammer"></i></span>` : ''}${t.casaId ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Também aparece em Habitação › Despesas da casa"><i class="fa-solid fa-house-chimney"></i></span>` : ''}
                                         ${isT ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">transf.</span>` : ''}</td>`,
                                     category: `<td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-700">${esc(t.category)}</span></td>`,
                                     acc: `<td class="p-3.5 text-xs text-slate-500 whitespace-nowrap">${acc}</td>`,
